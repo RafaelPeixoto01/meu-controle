@@ -34,9 +34,9 @@ export default function ExpenseTable({
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
 
   const createExpense = useCreateExpense(year, month);
-  const updateExpense = useUpdateExpense(year, month);
-  const deleteExpense = useDeleteExpense(year, month);
-  const duplicateExpense = useDuplicateExpense(year, month);
+  const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
+  const duplicateExpense = useDuplicateExpense();
 
   function handleCreate(data: ExpenseCreate) {
     createExpense.mutate(data);

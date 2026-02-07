@@ -14,7 +14,7 @@ export function useCreateExpense(year: number, month: number) {
   });
 }
 
-export function useUpdateExpense(year: number, month: number) {
+export function useUpdateExpense() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: ExpenseUpdate }) =>
@@ -25,7 +25,7 @@ export function useUpdateExpense(year: number, month: number) {
   });
 }
 
-export function useDeleteExpense(year: number, month: number) {
+export function useDeleteExpense() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.deleteExpense(id),
@@ -35,7 +35,7 @@ export function useDeleteExpense(year: number, month: number) {
   });
 }
 
-export function useDuplicateExpense(year: number, month: number) {
+export function useDuplicateExpense() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.duplicateExpense(id),

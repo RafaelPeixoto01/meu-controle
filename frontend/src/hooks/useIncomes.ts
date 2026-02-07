@@ -14,7 +14,7 @@ export function useCreateIncome(year: number, month: number) {
   });
 }
 
-export function useUpdateIncome(year: number, month: number) {
+export function useUpdateIncome() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: IncomeUpdate }) =>
@@ -25,7 +25,7 @@ export function useUpdateIncome(year: number, month: number) {
   });
 }
 
-export function useDeleteIncome(year: number, month: number) {
+export function useDeleteIncome() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.deleteIncome(id),

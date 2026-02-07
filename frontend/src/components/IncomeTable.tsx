@@ -27,8 +27,8 @@ export default function IncomeTable({
   const [deletingIncome, setDeletingIncome] = useState<Income | null>(null);
 
   const createIncome = useCreateIncome(year, month);
-  const updateIncome = useUpdateIncome(year, month);
-  const deleteIncome = useDeleteIncome(year, month);
+  const updateIncome = useUpdateIncome();
+  const deleteIncome = useDeleteIncome();
 
   function handleCreate(data: IncomeCreate) {
     createIncome.mutate(data);
