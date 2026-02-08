@@ -6,16 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from app.database import engine, Base
 from app.routers import expenses, incomes, months
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: criar todas as tabelas
-    Base.metadata.create_all(bind=engine)
+    # Startup: migrations gerenciadas pelo Alembic (ver CR-001)
     yield
-    # Shutdown: nada a limpar para SQLite
 
 
 app = FastAPI(
