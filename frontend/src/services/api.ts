@@ -11,10 +11,58 @@ import type {
 const BASE_URL = "/api";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  // CR-002: incluir token de auth se disponivel
+  const token = localStorage.getItem("access_token");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${BASE_URL}${url}`, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
+
+  // CR-002: interceptar 401 para tentar refresh
+  if (response.status === 401 && token) {
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (refreshToken) {
+      try {
+        const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (refreshResponse.ok) {
+          const tokens = await refreshResponse.json();
+          localStorage.setItem("access_token", tokens.access_token);
+          localStorage.setItem("refresh_token", tokens.refresh_token);
+          // Retry original request com novo token
+          headers["Authorization"] = `Bearer ${tokens.access_token}`;
+          const retryResponse = await fetch(`${BASE_URL}${url}`, {
+            headers,
+            ...options,
+          });
+          if (!retryResponse.ok) {
+            const error = await retryResponse.json().catch(() => ({}));
+            throw new Error(error.detail || `HTTP ${retryResponse.status}`);
+          }
+          if (retryResponse.status === 204) return undefined as T;
+          return retryResponse.json();
+        }
+      } catch {
+        // Refresh falhou — limpar tokens e redirecionar
+      }
+    }
+    // Refresh token invalido ou ausente
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    window.location.href = "/login";
+    throw new Error("Sessao expirada");
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || `HTTP ${response.status}`);

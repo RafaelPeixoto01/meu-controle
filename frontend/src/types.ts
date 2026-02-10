@@ -72,3 +72,36 @@ export interface MonthlySummary {
   expenses: Expense[];
   incomes: Income[];
 }
+
+// ========== Auth Types (CR-002) ==========
+
+export interface User {
+  id: string;
+  nome: string;
+  email: string;
+  avatar_url: string | null;
+  email_verified: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface RegisterData {
+  nome: string;
+  email: string;
+  password: string;
+}
+
+export interface TokenResponse extends AuthTokens {
+  user?: User;
+}
