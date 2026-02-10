@@ -1,10 +1,11 @@
-# Plano de Implementacao — Meu Controle (Fase 1)
+# Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 1.0
-**Data:** 2026-02-06
-**PRD Ref:** 01-PRD v1.0
-**Arquitetura Ref:** 02-ARCHITECTURE v1.0
-**Spec Ref:** 03-SPEC v1.0
+**Versao:** 2.0
+**Data:** 2026-02-09
+**PRD Ref:** 01-PRD v2.0
+**Arquitetura Ref:** 02-ARCHITECTURE v2.0
+**Spec Ref:** 03-SPEC v2.0
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao)
 
 ---
 
@@ -19,6 +20,9 @@
 | 5     | Frontend: Aplicacao      | T-019 a T-035 | Concluido |
 | 6     | Verificacao              | T-036 a T-038 | Concluido |
 | CR-001 | Migracao PostgreSQL + Alembic | CR-T-01 a CR-T-09 | Concluido |
+| CR-002-AR | Arquitetura: Auth Foundation (Backend + Frontend) | CR2-AR-01 a CR2-AR-18 | Pendente |
+| CR-002-FN | Funcionalidade: Endpoints, Paginas, Integracao    | CR2-FN-01 a CR2-FN-15 | Pendente |
+| CR-002-VL | Validacao: Regressao, Testes, Documentacao         | CR2-VL-01 a CR2-VL-11 | Pendente |
 
 ---
 
@@ -198,5 +202,256 @@ graph LR
 
 ---
 
+## Grupo CR-002-AR: Arquitetura — Auth Foundation (Backend + Frontend)
+
+> Ref: `/docs/changes/CR-002-multi-usuario-autenticacao.md`
+>
+> Infraestrutura que precisa existir ANTES de qualquer feature nova. Inclui models, schemas, auth module, migration, CRUD changes, dependencias, auth context. IDs usam prefixo `CR2-` para evitar colisao com CR-001.
+>
+> **Regra:** FN depende de AR. Nenhuma tarefa FN pode iniciar ate que as tarefas AR das quais depende estejam concluidas.
+
+| ID | Tarefa | Arquivos | CR-002 Ref | Depende de | Done When |
+|----|--------|----------|------------|------------|-----------|
+| CR2-AR-01 | Adicionar 5 deps de auth ao `requirements.txt` (`python-jose[cryptography]`, `passlib[bcrypt]`, `python-multipart`, `httpx`, `sendgrid`) | `backend/requirements.txt` | CR-T-01 | — | `pip install -r requirements.txt` instala 5 pacotes novos sem erros |
+| CR2-AR-02 | Criar modelos `User` e `RefreshToken`; adicionar FK `user_id` + relationship em `Expense` e `Income` | `backend/app/models.py` | CR-T-02 | CR2-AR-01 | Modelos definem todas colunas conforme Spec v2.0. `Expense.user_id` e `Income.user_id` sao `String(36) NOT NULL FK`. Relationships `User.expenses`, `User.incomes` definidas |
+| CR2-AR-03 | Adicionar schemas Pydantic de auth em `schemas.py` | `backend/app/schemas.py` | CR-T-03 | CR2-AR-02 | Schemas compilam: `UserCreate`, `UserUpdate`, `UserResponse`, `TokenResponse`, `LoginRequest`, `GoogleAuthRequest`, `ForgotPasswordRequest`, `ResetPasswordRequest`, `ChangePasswordRequest` |
+| CR2-AR-04 | Criar modulo `auth.py` (JWT, hashing, `get_current_user` dependency) | `backend/app/auth.py` | CR-T-04 | CR2-AR-03 | Funcoes: `hash_password`, `verify_password`, `create_access_token`, `create_refresh_token`, `verify_token`, `get_current_user`. python-jose HS256. Vars: `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES=15`, `REFRESH_TOKEN_EXPIRE_DAYS=7` |
+| CR2-AR-05 | Criar migration Alembic `002_add_users_and_auth.py` | `backend/alembic/versions/002_add_users_and_auth.py` | CR-T-05 | CR2-AR-02 | `alembic upgrade head` cria tabelas `users` e `refresh_tokens`, apaga dados existentes, adiciona FK `user_id` + indices compostos. `alembic downgrade 001` reverte. Funciona em SQLite e PostgreSQL |
+| CR2-AR-06 | Atualizar `alembic/env.py` para importar `User` e `RefreshToken` | `backend/alembic/env.py` | CR-T-06 | CR2-AR-02 | `User` e `RefreshToken` importados ao lado de `Expense` e `Income`. Metadata completo para autogenerate |
+| CR2-AR-07 | Criar `email_service.py` com integracao SendGrid | `backend/app/email_service.py` | CR-T-07 | CR2-AR-01 | `send_password_reset_email(to_email, reset_token, user_name)` envia email via SendGrid API. Degradacao graciosa se `SENDGRID_API_KEY` nao configurada (loga warning) |
+| CR2-AR-08 | Adicionar 9 funcoes CRUD para `User` e `RefreshToken` | `backend/app/crud.py` | CR-T-11 | CR2-AR-05 | Funcoes: `get_user_by_email`, `get_user_by_id`, `get_user_by_google_id`, `create_user`, `update_user`, `create_refresh_token`, `get_refresh_token_by_hash`, `delete_refresh_token`, `delete_user_refresh_tokens` |
+| CR2-AR-09 | Adicionar parametro `user_id` a todas funcoes CRUD existentes | `backend/app/crud.py` | CR-T-12 | CR2-AR-05, CR2-AR-08 | `get_expenses_by_month(db, mes, user_id)` filtra por ambos. `get_expense_by_id(db, id, user_id)` retorna None se pertence a outro usuario. Idem para incomes e `count_expenses_by_month` |
+| CR2-AR-10 | Adicionar parametro `user_id` as funcoes de `services.py` | `backend/app/services.py` | CR-T-13 | CR2-AR-09 | `generate_month_data(db, target_mes, user_id)` passa `user_id` a todas chamadas CRUD e seta `user_id` nas novas instancias. `get_monthly_summary(db, mes, user_id)` propaga `user_id` |
+| CR2-AR-11 | Adicionar `react-router-dom` e `jwt-decode` ao `package.json` | `frontend/package.json` | CR-T-17 | — | `npm install` sucede. Ambos pacotes disponiveis para import |
+| CR2-AR-12 | Adicionar tipos TypeScript de auth em `types.ts` | `frontend/src/types.ts` | CR-T-18 | CR2-AR-11 | Tipos compilam: `User`, `AuthTokens`, `LoginCredentials`, `RegisterData`, `TokenResponse` |
+| CR2-AR-13 | Criar `authApi.ts` com funcoes de API de auth | `frontend/src/services/authApi.ts` | CR-T-19 | CR2-AR-12 | 10 funcoes compilam: `loginUser`, `registerUser`, `googleAuth`, `refreshTokenApi`, `logoutUser`, `forgotPassword`, `resetPassword`, `getProfile`, `updateProfile`, `changePassword` |
+| CR2-AR-14 | Atualizar `api.ts` com auth header + interceptor 401 | `frontend/src/services/api.ts` | CR-T-20 | CR2-AR-12 | `request()` le token de localStorage e adiciona `Authorization: Bearer`. Em 401, tenta refresh. Se refresh falhar, limpa tokens e redireciona para `/login` |
+| CR2-AR-15 | Criar `AuthContext.tsx` com `AuthProvider` | `frontend/src/contexts/AuthContext.tsx` | CR-T-21 | CR2-AR-13, CR2-AR-14 | AuthContext prove: `user`, `isAuthenticated`, `isLoading`, `login()`, `register()`, `loginWithGoogle()`, `logout()`, `updateUser()`. No mount: checa localStorage, valida token via jwt-decode |
+| CR2-AR-16 | Criar `useAuth.ts` hook de conveniencia | `frontend/src/hooks/useAuth.ts` | CR-T-22 | CR2-AR-15 | `useAuth()` retorna `useContext(AuthContext)` com erro se usado fora do provider |
+| CR2-AR-17 | Criar `ProtectedRoute.tsx` | `frontend/src/components/ProtectedRoute.tsx` | CR-T-23 | CR2-AR-16 | Loading = spinner. Nao autenticado = `Navigate to="/login"`. Autenticado = `Outlet` |
+| CR2-AR-18 | Envolver app com `BrowserRouter` em `main.tsx` | `frontend/src/main.tsx` | CR-T-24 | CR2-AR-11 | `main.tsx` envolve `<App />` com `<BrowserRouter>` dentro de `QueryClientProvider` |
+
+---
+
+## Grupo CR-002-FN: Funcionalidade — Endpoints, Paginas, Integracao
+
+> Features novas que usam a arquitetura do Grupo AR. Endpoints de autenticacao, paginas de auth, integracao de auth nos routers existentes.
+>
+> **Regra:** Todas tarefas FN dependem de tarefas AR especificas. VL depende de FN.
+
+| ID | Tarefa | Arquivos | CR-002 Ref | Depende de | Done When |
+|----|--------|----------|------------|------------|-----------|
+| CR2-FN-01 | Criar `routers/auth.py` com 7 endpoints de autenticacao | `backend/app/routers/auth.py` | CR-T-08 | CR2-AR-04, CR2-AR-07, CR2-AR-08 | Endpoints funcionam: register (201+tokens), login (200+tokens), google (troca code), refresh (rotaciona), logout (invalida), forgot-password (envia email), reset-password (atualiza hash) |
+| CR2-FN-02 | Criar `routers/users.py` com 3 endpoints de perfil | `backend/app/routers/users.py` | CR-T-09 | CR2-AR-04, CR2-AR-08 | `GET /api/users/me` retorna perfil. `PATCH /api/users/me` atualiza nome/email (check unicidade). `PATCH /api/users/me/password` valida senha atual e atualiza (rejeita Google-only) |
+| CR2-FN-03 | Registrar routers `auth` e `users` em `main.py` | `backend/app/main.py` | CR-T-10 | CR2-FN-01, CR2-FN-02 | `main.py` inclui ambos routers. Aparecem no Swagger UI em `/docs` |
+| CR2-FN-04 | Adicionar `Depends(get_current_user)` ao router expenses + ownership | `backend/app/routers/expenses.py` | CR-T-14 | CR2-AR-04, CR2-AR-09 | 4 endpoints requerem auth. `create_expense` seta `user_id=current_user.id`. `update/delete/duplicate` verificam ownership via `get_expense_by_id(db, id, user_id)` |
+| CR2-FN-05 | Adicionar `Depends(get_current_user)` ao router incomes + ownership | `backend/app/routers/incomes.py` | CR-T-15 | CR2-AR-04, CR2-AR-09 | 3 endpoints requerem auth com verificacao de ownership |
+| CR2-FN-06 | Adicionar `Depends(get_current_user)` ao router months + user_id | `backend/app/routers/months.py` | CR-T-16 | CR2-AR-04, CR2-AR-10 | `get_monthly_view` passa `current_user.id` a `services.get_monthly_summary()` |
+| CR2-FN-07 | Criar `LoginPage.tsx` | `frontend/src/pages/LoginPage.tsx` | CR-T-25 | CR2-AR-16 | Inputs email/senha, botao "Entrar", botao Google, link "Esqueci minha senha" → `/forgot-password`, link "Criar conta" → `/register`. Submit chama `login()`, redireciona para `/` |
+| CR2-FN-08 | Criar `RegisterPage.tsx` | `frontend/src/pages/RegisterPage.tsx` | CR-T-26 | CR2-AR-16 | Inputs nome/email/senha/confirmacao, botao "Criar Conta", link "Ja tenho conta" → `/login`. Valida match de senha client-side. Submit chama `register()`, redireciona para `/` |
+| CR2-FN-09 | Criar `ForgotPasswordPage.tsx` | `frontend/src/pages/ForgotPasswordPage.tsx` | CR-T-27 | CR2-AR-13 | Input email, botao "Enviar link de recuperacao", link "Voltar para login". Submit chama `forgotPassword()`, mostra mensagem "Email enviado" (sempre, por seguranca) |
+| CR2-FN-10 | Criar `ResetPasswordPage.tsx` | `frontend/src/pages/ResetPasswordPage.tsx` | CR-T-28 | CR2-AR-13 | Le `token` de URL query params. Inputs nova senha/confirmacao. Submit chama `resetPassword(token, newPassword)`, redireciona para `/login` |
+| CR2-FN-11 | Criar `ProfilePage.tsx` | `frontend/src/pages/ProfilePage.tsx` | CR-T-29 | CR2-AR-16, CR2-AR-13 | Mostra info do usuario (nome, email). Modo edicao com form. Secao separada para troca de senha. Rota protegida |
+| CR2-FN-12 | Criar `UserMenu.tsx` | `frontend/src/components/UserMenu.tsx` | CR-T-30 | CR2-AR-16 | Dropdown no header: nome do usuario, "Perfil" (link `/profile`), "Sair" (chama `logout()`). Estilizado consistente com header |
+| CR2-FN-13 | Reestruturar `App.tsx` com `AuthProvider` e rotas React Router | `frontend/src/App.tsx` | CR-T-31 | CR2-AR-15, CR2-AR-17, CR2-FN-07 a CR2-FN-12 | App envolve tudo em `AuthProvider`. Rotas publicas: `/login`, `/register`, `/forgot-password`, `/reset-password`. Protegidas (ProtectedRoute): `/` (MonthlyView), `/profile`. Header com UserMenu so quando autenticado |
+| CR2-FN-14 | Implementar fluxo Google OAuth no frontend | `frontend/src/pages/LoginPage.tsx` | CR-T-32 | CR2-FN-07 | Botao Google abre tela de consentimento (redirect com `client_id`, `redirect_uri`, `scope`). Callback captura `code` da URL, chama `loginWithGoogle(code)`. Var `VITE_GOOGLE_CLIENT_ID` |
+| CR2-FN-15 | Atualizar `index.css` para estilos de auth | `frontend/src/index.css` | CR-T-33 | CR2-FN-07 | Adicionada cor `--color-google: #4285f4` ao bloco `@theme`. Convencoes Tailwind v4 mantidas |
+
+---
+
+## Grupo CR-002-VL: Validacao — Regressao, Testes, Documentacao
+
+> Regressao (5 tarefas) + testes de feature (5 tarefas) + documentacao (1 tarefa).
+>
+> **Cobertura de regressao:** Cada area de AR tem teste de regressao associado:
+> - VL-01 cobre AR-02, AR-05, AR-06 (migration/modelos)
+> - VL-02 cobre AR-08, AR-09 (CRUD)
+> - VL-03 cobre AR-10 (services)
+> - VL-04 cobre AR-14 (api.ts)
+> - VL-05 cobre AR-18, FN-13 (BrowserRouter/routing)
+
+### Testes de Regressao
+
+| ID | Tarefa | CR-002 Ref | Depende de | Done When |
+|----|--------|------------|------------|-----------|
+| CR2-VL-01 | Regressao: migration upgrade/downgrade | — | CR2-AR-05 | `alembic upgrade head` e `alembic downgrade 001` executam sem erros em SQLite e PostgreSQL. Tabelas `users`, `refresh_tokens` criadas. FK `user_id` adicionada. Indices compostos criados |
+| CR2-VL-02 | Regressao: CRUD com `user_id` retorna dados corretos | — | CR2-AR-09, CR2-AR-10 | `get_expenses_by_month(db, mes, user_id)` filtra corretamente. `get_expense_by_id(db, id, user_id)` retorna None para outro usuario. Idem incomes e count |
+| CR2-VL-03 | Regressao: transicao de mes e auto-status com `user_id` | — | CR2-AR-10 | `generate_month_data` replica apenas dados do usuario. `apply_status_auto_detection` funciona. `get_monthly_summary` com `user_id` retorna dados corretos |
+| CR2-VL-04 | Regressao: `api.ts` nao quebra chamadas existentes | — | CR2-AR-14 | `fetchMonthlySummary`, `createExpense`, `updateExpense`, `deleteExpense` continuam funcionando. Token adicionado ao header. 401 interceptado corretamente |
+| CR2-VL-05 | Regressao: BrowserRouter + MonthlyView renderiza | — | CR2-AR-18, CR2-FN-13 | App renderiza sem erros com BrowserRouter. MonthlyView funciona em `/`. Navegacao de meses preservada. SPA fallback serve `index.html` para rotas client-side |
+
+### Testes de Feature
+
+| ID | Tarefa | CR-002 Ref | Depende de | Done When |
+|----|--------|------------|------------|-----------|
+| CR2-VL-06 | Testar endpoints de auth no backend (Swagger UI) | CR-T-34 | CR2-FN-03 a CR2-FN-06 | 10 endpoints respondem: register 201+tokens, login 200+tokens, email duplicado 409, credenciais invalidas 401, refresh funciona, logout invalida token, forgot-password envia email (ou loga), reset-password funciona |
+| CR2-VL-07 | Testar isolamento de dados multi-usuario | CR-T-35 | CR2-FN-04 a CR2-FN-06 | 2 usuarios registrados. User A cria expenses/incomes. User B nao ve/edita/deleta dados de User A. Transicao de mes so replica dados do proprio usuario |
+| CR2-VL-08 | Testar fluxo de auth no frontend end-to-end | CR-T-36 | CR2-FN-13 | Fluxo completo: registrar → auto-login → dashboard vazio → criar dados → logout → login → ver mesmos dados. Rotas protegidas redirecionam. Login redireciona quando ja autenticado |
+| CR2-VL-09 | Testar fluxo Google OAuth | CR-T-37 | CR2-FN-14 | Google login cria usuario (ou vincula email existente), retorna tokens, usuario ve dashboard. Perfil mostra avatar_url se disponivel |
+| CR2-VL-10 | Testar recuperacao de senha + refresh token | CR-T-38, CR-T-39 | CR2-FN-09, CR2-FN-10, CR2-AR-14 | Forgot password envia email (checar SendGrid ou logs). Link de reset funciona. Access token expira → frontend renova via refresh. Refresh token expirado → redireciona para login |
+
+### Documentacao
+
+| ID | Tarefa | CR-002 Ref | Depende de | Done When |
+|----|--------|------------|------------|-----------|
+| CR2-VL-11 | Atualizar documentacao do projeto (CLAUDE.md) | CR-T-40 | CR2-VL-08 | CLAUDE.md atualiza contexto atual, CRs ativos (CR-002), estrutura de pastas com novos arquivos |
+
+---
+
+## Tabela de Rastreabilidade: CR-002 → Plano
+
+> Mapeamento bidirecional entre os IDs originais do CR-002 e os IDs do Plano de Implementacao.
+> Nota: CR-002 reutiliza o range `CR-T-01` a `CR-T-40`, que colide com CR-001 (`CR-T-01` a `CR-T-09`).
+> O prefixo `CR2-` no plano resolve a ambiguidade.
+
+| CR-002 ID | Plano ID | Grupo |
+|-----------|----------|-------|
+| CR-T-01 | CR2-AR-01 | AR |
+| CR-T-02 | CR2-AR-02 | AR |
+| CR-T-03 | CR2-AR-03 | AR |
+| CR-T-04 | CR2-AR-04 | AR |
+| CR-T-05 | CR2-AR-05 | AR |
+| CR-T-06 | CR2-AR-06 | AR |
+| CR-T-07 | CR2-AR-07 | AR |
+| CR-T-08 | CR2-FN-01 | FN |
+| CR-T-09 | CR2-FN-02 | FN |
+| CR-T-10 | CR2-FN-03 | FN |
+| CR-T-11 | CR2-AR-08 | AR |
+| CR-T-12 | CR2-AR-09 | AR |
+| CR-T-13 | CR2-AR-10 | AR |
+| CR-T-14 | CR2-FN-04 | FN |
+| CR-T-15 | CR2-FN-05 | FN |
+| CR-T-16 | CR2-FN-06 | FN |
+| CR-T-17 | CR2-AR-11 | AR |
+| CR-T-18 | CR2-AR-12 | AR |
+| CR-T-19 | CR2-AR-13 | AR |
+| CR-T-20 | CR2-AR-14 | AR |
+| CR-T-21 | CR2-AR-15 | AR |
+| CR-T-22 | CR2-AR-16 | AR |
+| CR-T-23 | CR2-AR-17 | AR |
+| CR-T-24 | CR2-AR-18 | AR |
+| CR-T-25 | CR2-FN-07 | FN |
+| CR-T-26 | CR2-FN-08 | FN |
+| CR-T-27 | CR2-FN-09 | FN |
+| CR-T-28 | CR2-FN-10 | FN |
+| CR-T-29 | CR2-FN-11 | FN |
+| CR-T-30 | CR2-FN-12 | FN |
+| CR-T-31 | CR2-FN-13 | FN |
+| CR-T-32 | CR2-FN-14 | FN |
+| CR-T-33 | CR2-FN-15 | FN |
+| CR-T-34 | CR2-VL-06 | VL |
+| CR-T-35 | CR2-VL-07 | VL |
+| CR-T-36 | CR2-VL-08 | VL |
+| CR-T-37 | CR2-VL-09 | VL |
+| CR-T-38 + CR-T-39 | CR2-VL-10 | VL |
+| CR-T-40 | CR2-VL-11 | VL |
+| (novo) | CR2-VL-01 a CR2-VL-05 | VL (regressao) |
+
+---
+
+## Diagrama de Dependencias — CR-002
+
+```mermaid
+graph TD
+    subgraph "CR-002-AR: Arquitetura Backend"
+        AR01[CR2-AR-01: requirements.txt] --> AR02[CR2-AR-02: models.py]
+        AR02 --> AR03[CR2-AR-03: schemas.py]
+        AR03 --> AR04[CR2-AR-04: auth.py]
+        AR02 --> AR05[CR2-AR-05: migration 002]
+        AR02 --> AR06[CR2-AR-06: alembic env.py]
+        AR01 --> AR07[CR2-AR-07: email_service.py]
+        AR05 --> AR08[CR2-AR-08: CRUD User/RefreshToken]
+        AR05 --> AR09[CR2-AR-09: user_id CRUD existente]
+        AR08 --> AR09
+        AR09 --> AR10[CR2-AR-10: user_id services.py]
+    end
+
+    subgraph "CR-002-AR: Arquitetura Frontend"
+        AR11[CR2-AR-11: package.json] --> AR12[CR2-AR-12: types.ts]
+        AR12 --> AR13[CR2-AR-13: authApi.ts]
+        AR12 --> AR14[CR2-AR-14: api.ts auth header]
+        AR13 --> AR15[CR2-AR-15: AuthContext.tsx]
+        AR14 --> AR15
+        AR15 --> AR16[CR2-AR-16: useAuth.ts]
+        AR16 --> AR17[CR2-AR-17: ProtectedRoute.tsx]
+        AR11 --> AR18[CR2-AR-18: BrowserRouter main.tsx]
+    end
+
+    subgraph "CR-002-FN: Funcionalidade Backend"
+        AR04 --> FN01[CR2-FN-01: routers/auth.py]
+        AR07 --> FN01
+        AR08 --> FN01
+        AR04 --> FN02[CR2-FN-02: routers/users.py]
+        AR08 --> FN02
+        FN01 --> FN03[CR2-FN-03: main.py register]
+        FN02 --> FN03
+        AR04 --> FN04[CR2-FN-04: expenses auth]
+        AR09 --> FN04
+        AR04 --> FN05[CR2-FN-05: incomes auth]
+        AR09 --> FN05
+        AR04 --> FN06[CR2-FN-06: months auth]
+        AR10 --> FN06
+    end
+
+    subgraph "CR-002-FN: Funcionalidade Frontend"
+        AR16 --> FN07[CR2-FN-07: LoginPage]
+        AR16 --> FN08[CR2-FN-08: RegisterPage]
+        AR13 --> FN09[CR2-FN-09: ForgotPasswordPage]
+        AR13 --> FN10[CR2-FN-10: ResetPasswordPage]
+        AR16 --> FN11[CR2-FN-11: ProfilePage]
+        AR13 --> FN11
+        AR16 --> FN12[CR2-FN-12: UserMenu]
+        FN07 --> FN13[CR2-FN-13: App.tsx reestruturar]
+        FN08 --> FN13
+        FN09 --> FN13
+        FN10 --> FN13
+        FN11 --> FN13
+        FN12 --> FN13
+        AR15 --> FN13
+        AR17 --> FN13
+        FN07 --> FN14[CR2-FN-14: Google OAuth frontend]
+        FN07 --> FN15[CR2-FN-15: index.css]
+    end
+
+    subgraph "CR-002-VL: Validacao"
+        AR05 --> VL01[CR2-VL-01: Regressao migration]
+        AR09 --> VL02[CR2-VL-02: Regressao CRUD]
+        AR10 --> VL02
+        AR10 --> VL03[CR2-VL-03: Regressao services]
+        AR14 --> VL04[CR2-VL-04: Regressao api.ts]
+        AR18 --> VL05[CR2-VL-05: Regressao BrowserRouter]
+        FN13 --> VL05
+        FN03 --> VL06[CR2-VL-06: Teste auth endpoints]
+        FN04 --> VL06
+        FN05 --> VL06
+        FN06 --> VL06
+        FN04 --> VL07[CR2-VL-07: Teste multi-usuario]
+        FN05 --> VL07
+        FN06 --> VL07
+        FN13 --> VL08[CR2-VL-08: Teste auth e2e]
+        FN14 --> VL09[CR2-VL-09: Teste Google OAuth]
+        FN09 --> VL10[CR2-VL-10: Teste recovery + refresh]
+        FN10 --> VL10
+        AR14 --> VL10
+        VL08 --> VL11[CR2-VL-11: Atualizar docs]
+    end
+```
+
+---
+
+## Ordem de Execucao Recomendada — CR-002
+
+| Fase | Grupo | Tarefas | Descricao |
+|------|-------|---------|-----------|
+| 1 | AR Backend | CR2-AR-01 a CR2-AR-10 | Sequencial: deps → models → migration → auth module → CRUD → services |
+| 2 | AR Frontend | CR2-AR-11 a CR2-AR-18 | Pode iniciar em paralelo com Fase 1: deps → types → authApi → api.ts → context → hook → route guard → router |
+| 3 | VL Regressao | CR2-VL-01 a CR2-VL-04 | Validar que nenhuma funcionalidade existente quebrou apos AR |
+| 4 | FN Backend | CR2-FN-01 a CR2-FN-06 | Endpoints de auth + integracao de auth nos routers existentes |
+| 5 | FN Frontend | CR2-FN-07 a CR2-FN-15 | Paginas de auth → UserMenu → App.tsx → Google OAuth → CSS |
+| 6 | VL Feature + Docs | CR2-VL-05 a CR2-VL-11 | Regressao routing + testes e2e de auth + documentacao |
+
+---
+
 *Documento criado em 2026-02-08. Baseado em SPEC.md v1.0 Sec 8 (Ordem de Implementacao).*
 *Atualizado em 2026-02-08 para incluir CR-001 (Migracao PostgreSQL + Alembic).*
+*Atualizado em 2026-02-09 para incluir CR-002 (Multi-usuario e Autenticacao). 44 novas tarefas em 3 grupos (AR/FN/VL). IDs usam prefixo CR2- para evitar colisao com CR-001.*

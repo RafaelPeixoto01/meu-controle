@@ -1,9 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 1.0
-**Data:** 2026-02-06
+**Versao:** 2.0
+**Data:** 2026-02-09
 **Status:** Aprovado
-**Fase:** 1 — Registro de Despesas Planejadas Mensais
+**Fase:** 1 + 3 — Registro de Despesas + Multi-usuario e Autenticacao
+**CR Ref:** CR-002
 
 ---
 
@@ -125,6 +126,49 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
   **c) Despesas avulsas (sem parcela e marcadas como nao recorrentes):**
   - Nao sao replicadas.
 
+### Modulo: Autenticacao e Usuarios (CR-002)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-08 | Cadastro de usuario com nome, email e senha | Alta | Rafael |
+| RF-09 | Login com email/senha e login social com Google (OAuth2) | Alta | Rafael |
+| RF-10 | Gestao de sessao com JWT e isolamento de dados por usuario | Alta | Rafael |
+| RF-11 | Recuperacao de senha via email | Media | Rafael |
+| RF-12 | Perfil de usuario (visualizar e editar) | Media | Rafael |
+
+**RF-08 — Detalhamento:**
+- Campos obrigatorios: nome (texto), email (texto, unico), senha.
+- Senha armazenada com hash bcrypt (nunca em texto plano).
+- Cadastro retorna tokens JWT (access + refresh) e dados do usuario.
+- Email duplicado retorna erro 409 Conflict.
+
+**RF-09 — Detalhamento:**
+- Login com email e senha valida credenciais e retorna tokens JWT.
+- Login com Google OAuth2 via Authorization Code flow: frontend redireciona para Google, backend troca code por informacoes do usuario via httpx.
+- Google login com email ja cadastrado vincula a conta Google a conta existente (merge).
+- Credenciais invalidas retornam erro generico (seguranca: nao revela se email existe).
+
+**RF-10 — Detalhamento:**
+- Access token JWT com validade de 15 minutos.
+- Refresh token com validade de 7 dias, armazenado no banco de dados.
+- Refresh token renova o access token automaticamente; token anterior e invalidado (rotacao).
+- Logout invalida o refresh token no banco de dados.
+- Cada expense e income pertence a um usuario via FK `user_id`; usuarios so acessam, editam e deletam seus proprios dados.
+- Endpoints de expenses, incomes e months exigem autenticacao via Bearer token.
+
+**RF-11 — Detalhamento:**
+- Usuario solicita link de recuperacao informando email.
+- Email enviado via SendGrid com token temporario (valido por 1 hora).
+- Resposta do endpoint e sempre generica (nao revela se email existe no sistema).
+- Link no email direciona para pagina de redefinicao de senha no frontend.
+- Apos uso ou expiracao, o token e invalidado.
+
+**RF-12 — Detalhamento:**
+- Visualizar dados do perfil: nome, email, avatar (se login Google).
+- Editar nome e email (email com verificacao de unicidade).
+- Trocar senha validando a senha atual antes de aceitar a nova.
+- Usuarios cadastrados apenas via Google (sem password_hash) nao podem usar a funcao de troca de senha.
+
 ---
 
 ## 5. Requisitos Nao-Funcionais
@@ -189,6 +233,38 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
   - Criterios de aceite:
     - [ ] Dado que existe uma despesa com status "Pendente" e vencimento anterior a hoje, quando a tela e carregada, entao o status e exibido como "Atrasado".
 
+- **US-12:** Como usuario, quero me cadastrar com nome, email e senha, para criar minha conta e acessar o sistema. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario esta na pagina de registro, quando preenche nome, email e senha e clica "Criar Conta", entao a conta e criada e ele e redirecionado para o dashboard.
+
+- **US-13:** Como usuario, quero fazer login com email e senha, para acessar meus dados financeiros. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario tem uma conta, quando informa email e senha corretos, entao e autenticado e ve o dashboard com seus dados.
+
+- **US-14:** Como usuario, quero fazer login com minha conta Google, para acessar o sistema sem criar senha. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario esta na pagina de login, quando clica "Entrar com Google" e autoriza, entao e autenticado (conta criada automaticamente se necessario).
+
+- **US-15:** Como usuario, quero que minha sessao se renove automaticamente, para nao precisar fazer login repetidamente. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o access token expirou, quando o frontend faz uma requisicao, entao o refresh token renova a sessao automaticamente sem intervencao do usuario.
+
+- **US-16:** Como usuario, quero recuperar minha senha via email, para recuperar acesso caso eu a esqueca. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario esqueceu a senha, quando informa o email e solicita recuperacao, entao recebe um link por email para redefinir a senha.
+
+- **US-17:** Como usuario, quero visualizar e editar meu perfil, para manter meus dados atualizados. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario esta autenticado, quando acessa a pagina de perfil, entao ve seus dados e pode editar nome e email.
+
+- **US-18:** Como usuario, quero trocar minha senha pela pagina de perfil, para manter minha conta segura. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario tem senha (nao e Google-only), quando informa a senha atual e a nova, entao a senha e atualizada.
+
+- **US-19:** Como usuario, quero fazer logout, para encerrar minha sessao de forma segura. (CR-002)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario esta autenticado, quando clica "Sair", entao o refresh token e invalidado e ele e redirecionado para a pagina de login.
+
 ---
 
 ## 7. Regras de Negocio
@@ -205,14 +281,22 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-008 | parcela_atual e parcela_total devem ambos estar preenchidos ou ambos nulos; parcela_atual <= parcela_total | Despesas (RF-01) |
 | RN-009 | Saldo livre = total de receitas - total de despesas | Visao Mensal (RF-04) |
 | RN-010 | Receitas recorrentes sao replicadas na transicao de mes; receitas nao recorrentes nao sao | Transicao (RF-06) |
+| RN-011 | Email e unico por usuario; tentativa de cadastro com email existente retorna erro 409 | Autenticacao (RF-08) |
+| RN-012 | Senhas sao armazenadas com hash bcrypt, nunca em texto plano | Autenticacao (RF-08) |
+| RN-013 | Access token JWT expira em 15 minutos; refresh token expira em 7 dias | Autenticacao (RF-10) |
+| RN-014 | Ao usar refresh token, o anterior e invalidado (rotacao) e novo par e gerado | Autenticacao (RF-10) |
+| RN-015 | Cada expense e income pertence a um usuario (FK user_id); usuarios so acessam/editam/deletam seus proprios dados | Autenticacao (RF-10) |
+| RN-016 | Token de recuperacao de senha e valido por 1 hora; apos uso ou expiracao, e invalidado | Autenticacao (RF-11) |
+| RN-017 | Login Google com email ja cadastrado vincula a conta Google a conta existente (merge) | Autenticacao (RF-09) |
+| RN-018 | Usuario cadastrado apenas via Google (sem password_hash) nao pode trocar senha pelo perfil | Autenticacao (RF-12) |
 
 ---
 
-## 8. Fora de Escopo (Fase 1)
+## 8. Fora de Escopo
 
-Os itens abaixo **nao** serao implementados na Fase 1:
+Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 
-- Autenticacao e gestao de usuarios (multi-usuario)
+- ~~Autenticacao e gestao de usuarios (multi-usuario)~~ — **Implementada via CR-002**
 - Categorias e tags para despesas
 - Graficos e dashboards de analise
 - Exportacao de dados (PDF, CSV, Excel)
@@ -229,15 +313,17 @@ Os itens abaixo **nao** serao implementados na Fase 1:
 
 ### Dependencias
 
-- Nenhuma integracao externa na Fase 1.
 - PostgreSQL em producao (add-on Railway) para persistencia de dados entre deploys. SQLite para desenvolvimento local. (CR-001)
+- Google OAuth2 (Google Cloud Console) para login social com Google. (CR-002)
+- SendGrid para envio de emails de recuperacao de senha. (CR-002)
 
 ### Premissas
 
-- Single-user: nao ha autenticacao nem isolamento de dados por usuario.
-- Dados mensais nao excederao 100 lancamentos por mes (premissa de performance RNF-02).
+- Multi-usuario com JWT: cada usuario tem dados isolados por `user_id`. (CR-002)
+- Dados mensais nao excederao 100 lancamentos por mes por usuario (premissa de performance RNF-02).
 - Usuario acessa via browser moderno (Chrome, Firefox, Edge ou Safari em versao recente).
 - Desenvolvimento local usa SQLite (zero config); producao usa PostgreSQL via variavel de ambiente DATABASE_URL. (CR-001)
+- Google OAuth e SendGrid requerem configuracao de variaveis de ambiente para funcionar em producao. (CR-002)
 
 ---
 
@@ -265,10 +351,13 @@ Os itens abaixo **nao** serao implementados na Fase 1:
 - Dashboard com graficos de distribuicao por categoria
 - Comparativo entre meses (evolucao de gastos)
 
-### Fase 3 — Multi-usuario e Autenticacao
-- Cadastro e login de usuarios
-- Dados isolados por usuario
-- Recuperacao de senha
+### ~~Fase 3 — Multi-usuario e Autenticacao~~ (Implementada via CR-002)
+- ~~Cadastro e login de usuarios~~ — RF-08, RF-09
+- ~~Dados isolados por usuario~~ — RF-10
+- ~~Recuperacao de senha~~ — RF-11
+- Login social com Google (OAuth2) — RF-09
+- Perfil de usuario (visualizar/editar) — RF-12
+- Gestao de sessao com JWT (access + refresh tokens) — RF-10
 
 ### Fase 4 — Alertas e Notificacoes
 - Notificacao de despesas proximas do vencimento (email ou push)
@@ -291,3 +380,4 @@ Os itens abaixo **nao** serao implementados na Fase 1:
 ---
 
 *Documento migrado em 2026-02-08. Baseado em PRD_MeuControle.md v1.0 (2026-02-06).*
+*Atualizado para v2.0 em 2026-02-09. Inclui Fase 3 — Multi-usuario e Autenticacao (CR-002).*

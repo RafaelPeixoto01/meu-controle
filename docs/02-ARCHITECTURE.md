@@ -1,57 +1,86 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 1.0
-**Data:** 2026-02-06
+**Versao:** 2.0
+**Data:** 2026-02-09
 **PRD Ref:** 01-PRD v1.0
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao)
 
 ---
 
 ## 1. Stack Tecnologica
 
-| Camada         | Tecnologia                  | Versao    | Justificativa |
-|----------------|-----------------------------|-----------|---------------|
-| Frontend       | React + TypeScript          | React 19  | Ecossistema robusto, tipagem forte com TS |
-| Build/Dev      | Vite                        | 6.x       | Hot reload rapido, proxy integrado para API backend |
-| Estilizacao    | Tailwind CSS                | 4.x       | Plugin Vite nativo, utility-first, sem config extra (v4) |
-| State/Fetch    | TanStack Query              | 5.62+     | Cache inteligente, invalidation-based refresh, staleTime configuravel |
-| HTTP Client    | fetch nativo                | —         | Suficiente para a API REST; evita dependencia extra |
-| Backend        | Python + FastAPI            | FastAPI 0.115 | Framework async com validacao Pydantic nativa, Swagger auto |
-| ORM            | SQLAlchemy                  | 2.0+      | ORM maduro; modo sincrono (SQLite nao suporta async I/O real) |
-| Banco de Dados | PostgreSQL (prod) + SQLite (dev) | —   | PostgreSQL via Railway add-on em producao; SQLite local para desenvolvimento (CR-001) |
-| Migrations     | Alembic                     | 1.14+     | Gerenciamento de schema versionado (CR-001) |
-| Validacao      | Pydantic                    | 2.x       | Integrado ao FastAPI, validacao declarativa de schemas |
-| Arquitetura    | Monorepo                    | —         | Frontend e backend no mesmo repositorio, deploy simplificado |
+| Camada              | Tecnologia                       | Versao        | Justificativa |
+|---------------------|----------------------------------|---------------|---------------|
+| Frontend            | React + TypeScript               | React 19      | Ecossistema robusto, tipagem forte com TS |
+| Build/Dev           | Vite                             | 6.x           | Hot reload rapido, proxy integrado para API backend |
+| Estilizacao         | Tailwind CSS                     | 4.x           | Plugin Vite nativo, utility-first, sem config extra (v4) |
+| State/Fetch         | TanStack Query                   | 5.62+         | Cache inteligente, invalidation-based refresh, staleTime configuravel |
+| HTTP Client         | fetch nativo                     | —             | Suficiente para a API REST; evita dependencia extra |
+| Frontend Routing    | react-router-dom                 | 7.x           | Rotas client-side para paginas de auth e app (CR-002, ADR-017) |
+| Token Decode        | jwt-decode                       | 4.x           | Decode de JWT no frontend para extrair expiry e user info (CR-002) |
+| Backend             | Python + FastAPI                 | FastAPI 0.115 | Framework async com validacao Pydantic nativa, Swagger auto |
+| ORM                 | SQLAlchemy                       | 2.0+          | ORM maduro; modo sincrono (SQLite nao suporta async I/O real) |
+| Banco de Dados      | PostgreSQL (prod) + SQLite (dev) | —             | PostgreSQL via Railway add-on em producao; SQLite local para desenvolvimento (CR-001) |
+| Migrations          | Alembic                          | 1.14+         | Gerenciamento de schema versionado (CR-001) |
+| Validacao           | Pydantic                         | 2.x           | Integrado ao FastAPI, validacao declarativa de schemas |
+| Autenticacao (JWT)  | python-jose[cryptography]        | 3.3+          | Criacao e validacao de JWT com HS256 (CR-002, ADR-015) |
+| Password Hash       | passlib[bcrypt]                  | 1.7+          | Hashing seguro de senhas com bcrypt (CR-002) |
+| HTTP Client (back)  | httpx                            | 0.27+         | Chamadas backend→Google para OAuth2 token exchange (CR-002, ADR-016) |
+| Email               | SendGrid (sendgrid)              | 6.11+         | Envio de emails de recuperacao de senha (CR-002) |
+| Form Data           | python-multipart                 | 0.0.9+        | Parsing de form data para OAuth2PasswordBearer do FastAPI (CR-002) |
+| Arquitetura         | Monorepo                         | —             | Frontend e backend no mesmo repositorio, deploy simplificado |
 
 ---
 
 ## 2. Arquitetura Geral
 
-Aplicacao web monolitica com frontend SPA (Single Page Application) e backend REST API. Sem autenticacao, sem API gateway, sem servicos externos na Fase 1.
+Aplicacao web monolitica com frontend SPA (Single Page Application) e backend REST API. Com autenticacao JWT (access + refresh tokens) e login social Google OAuth2 (CR-002). Integracao com SendGrid para envio de emails de recuperacao de senha.
 
 ```mermaid
 graph TD
-    Browser[Browser do Usuario] --> Vite[Vite Dev Server :5173]
-    Vite -->|proxy /api| FastAPI[FastAPI :8000]
-    FastAPI --> SQLAlchemy[SQLAlchemy ORM]
-    SQLAlchemy --> SQLite[SQLite meu_controle.db]
+    subgraph Desenvolvimento
+        Browser[Browser do Usuario] --> Vite[Vite Dev Server :5173]
+        Vite -->|proxy /api| FastAPI[FastAPI :8000]
+        FastAPI --> SQLAlchemy[SQLAlchemy ORM]
+        SQLAlchemy --> SQLite[SQLite meu_controle.db]
+    end
 
-    Browser2[Browser - Producao] --> StaticFiles[Static Build frontend/dist/]
-    StaticFiles --> FastAPI2[FastAPI :8000]
-    FastAPI2 --> SQLAlchemy2[SQLAlchemy ORM]
-    SQLAlchemy2 --> PostgreSQL[PostgreSQL Railway]
+    subgraph Producao
+        Browser2[Browser - Producao] --> StaticFiles[Static Build frontend/dist/]
+        StaticFiles --> FastAPI2[FastAPI :8000]
+        FastAPI2 --> SQLAlchemy2[SQLAlchemy ORM]
+        SQLAlchemy2 --> PostgreSQL[PostgreSQL Railway]
+    end
+
+    subgraph Servicos Externos
+        FastAPI -->|OAuth2 code exchange| Google[Google OAuth2 API]
+        FastAPI -->|password reset email| SendGrid[SendGrid API]
+        FastAPI2 -->|OAuth2 code exchange| Google
+        FastAPI2 -->|password reset email| SendGrid
+    end
 ```
 
 **Fluxo em desenvolvimento:**
 1. Browser acessa `localhost:5173` (Vite dev server)
 2. Vite serve o frontend React e faz proxy de `/api/*` para `localhost:8000`
-3. FastAPI processa requests, interage com SQLite via SQLAlchemy
-4. Response JSON retorna ao frontend via proxy
+3. Requests autenticados enviam `Authorization: Bearer <token>` via header
+4. FastAPI valida o JWT, extrai `user_id`, processa request com dados do usuario
+5. SQLAlchemy filtra dados por `user_id` e interage com SQLite
+6. Response JSON retorna ao frontend via proxy
 
 **Fluxo em producao (Railway):**
 1. Frontend compilado como static files servidos junto ao backend
 2. FastAPI serve tanto a API quanto os arquivos estaticos
 3. Alembic executa migrations antes do startup (`alembic upgrade head`)
 4. SQLAlchemy conecta ao PostgreSQL via DATABASE_URL (CR-001)
+5. Variaveis de ambiente obrigatorias: `SECRET_KEY`, `DATABASE_URL`. Opcionais: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SENDGRID_API_KEY`
+
+**Fluxo de autenticacao (CR-002):**
+1. Usuario se registra via `/api/auth/register` (email/senha) ou `/api/auth/google` (Google OAuth2)
+2. Backend retorna access token (15min) + refresh token (7 dias)
+3. Frontend armazena tokens em localStorage e inclui access token em todas requisicoes
+4. Quando access token expira, frontend usa refresh token para obter novo par de tokens
+5. Quando refresh token expira, usuario e redirecionado para tela de login
 
 ---
 
@@ -66,6 +95,9 @@ Personal Finance/
 │   ├── 02-ARCHITECTURE.md
 │   ├── 03-SPEC.md
 │   ├── 04-IMPLEMENTATION-PLAN.md
+│   ├── changes/                    # Change Requests (CR-XXX)
+│   │   ├── CR-001-migracao-postgresql-railway.md
+│   │   └── CR-002-multi-usuario-autenticacao.md
 │   └── templates/
 │       ├── 00-template-change-request.md
 │       ├── 01-template-prd.md
@@ -79,7 +111,8 @@ Personal Finance/
 │   │   ├── env.py
 │   │   ├── script.py.mako
 │   │   └── versions/
-│   │       └── 001_initial_schema.py
+│   │       ├── 001_initial_schema.py
+│   │       └── 002_add_users_and_auth.py    # CR-002
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py
@@ -88,11 +121,15 @@ Personal Finance/
 │       ├── schemas.py
 │       ├── crud.py
 │       ├── services.py
+│       ├── auth.py                          # CR-002: JWT, password hashing, get_current_user
+│       ├── email_service.py                 # CR-002: SendGrid integration
 │       └── routers/
 │           ├── __init__.py
 │           ├── expenses.py
 │           ├── incomes.py
-│           └── months.py
+│           ├── months.py
+│           ├── auth.py                      # CR-002: register, login, Google, refresh, logout, forgot/reset password
+│           └── users.py                     # CR-002: GET/PATCH /me, change password
 ├── frontend/
 │   ├── package.json
 │   ├── tsconfig.json
@@ -107,12 +144,16 @@ Personal Finance/
 │       ├── utils/
 │       │   ├── format.ts
 │       │   └── date.ts
+│       ├── contexts/                        # CR-002
+│       │   └── AuthContext.tsx               # Auth state provider
 │       ├── services/
-│       │   └── api.ts
+│       │   ├── api.ts
+│       │   └── authApi.ts                   # CR-002: Auth API functions
 │       ├── hooks/
 │       │   ├── useExpenses.ts
 │       │   ├── useIncomes.ts
-│       │   └── useMonthTransition.ts
+│       │   ├── useMonthTransition.ts
+│       │   └── useAuth.ts                   # CR-002: Auth convenience hook
 │       ├── components/
 │       │   ├── MonthNavigator.tsx
 │       │   ├── IncomeTable.tsx
@@ -121,9 +162,16 @@ Personal Finance/
 │       │   ├── StatusBadge.tsx
 │       │   ├── ExpenseFormModal.tsx
 │       │   ├── IncomeFormModal.tsx
-│       │   └── ConfirmDialog.tsx
+│       │   ├── ConfirmDialog.tsx
+│       │   ├── ProtectedRoute.tsx           # CR-002: Route guard
+│       │   └── UserMenu.tsx                 # CR-002: Dropdown perfil/logout
 │       └── pages/
-│           └── MonthlyView.tsx
+│           ├── MonthlyView.tsx
+│           ├── LoginPage.tsx                # CR-002
+│           ├── RegisterPage.tsx             # CR-002
+│           ├── ForgotPasswordPage.tsx       # CR-002
+│           ├── ResetPasswordPage.tsx        # CR-002
+│           └── ProfilePage.tsx              # CR-002
 └── .gitignore
 ```
 
@@ -133,8 +181,24 @@ Personal Finance/
 
 ```mermaid
 erDiagram
+    USER ||--o{ EXPENSE : "has many"
+    USER ||--o{ INCOME : "has many"
+    USER ||--o{ REFRESH_TOKEN : "has many"
+
+    USER {
+        string id PK
+        string nome
+        string email UK
+        string password_hash
+        string google_id UK
+        string avatar_url
+        bool email_verified
+        datetime created_at
+        datetime updated_at
+    }
     EXPENSE {
         string id PK
+        string user_id FK
         date mes_referencia
         string nome
         decimal valor
@@ -148,6 +212,7 @@ erDiagram
     }
     INCOME {
         string id PK
+        string user_id FK
         date mes_referencia
         string nome
         decimal valor
@@ -156,18 +221,54 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
+    REFRESH_TOKEN {
+        string id PK
+        string user_id FK
+        string token_hash
+        datetime expires_at
+        datetime created_at
+    }
 ```
 
-> O mes de referencia nao e uma entidade separada; e representado pelo campo `mes_referencia` em cada registro. A visao mensal e construida via consulta filtrada por esse campo.
+> O mes de referencia nao e uma entidade separada; e representado pelo campo `mes_referencia` em cada registro. A visao mensal e construida via consulta filtrada por `user_id` + `mes_referencia`.
 
 ### Detalhamento das Entidades
+
+#### User (`users`) — CR-002
+
+| Campo          | Tipo          | Restricoes                        | Descricao                                         |
+|----------------|---------------|-----------------------------------|----------------------------------------------------|
+| id             | String(36)    | PK, auto-gerado (UUID)           | Identificador unico                                |
+| nome           | String(255)   | NOT NULL                          | Nome do usuario                                    |
+| email          | String(255)   | NOT NULL, UNIQUE                  | Email do usuario (login)                           |
+| password_hash  | String(255)   | Nullable                          | Hash bcrypt da senha. Nullable para usuarios Google-only |
+| google_id      | String(255)   | Nullable, UNIQUE                  | ID da conta Google (para login social)             |
+| avatar_url     | String(500)   | Nullable                          | URL do avatar (preenchido via Google)              |
+| email_verified | Boolean       | NOT NULL, default False           | Se o email foi verificado                          |
+| created_at     | DateTime      | NOT NULL, default now()           | Data de criacao do registro                        |
+| updated_at     | DateTime      | NOT NULL, default now(), onupdate | Data da ultima atualizacao                         |
+
+> **Regra de integridade:** Um usuario deve ter `password_hash` OU `google_id` preenchido (ou ambos). Usuario sem nenhum dos dois nao pode autenticar.
+
+#### RefreshToken (`refresh_tokens`) — CR-002
+
+| Campo          | Tipo          | Restricoes                        | Descricao                                         |
+|----------------|---------------|-----------------------------------|----------------------------------------------------|
+| id             | String(36)    | PK, auto-gerado (UUID)           | Identificador unico                                |
+| user_id        | String(36)    | NOT NULL, FK→users.id, CASCADE   | Usuario dono do token                              |
+| token_hash     | String(255)   | NOT NULL, INDEX                   | Hash do refresh token (nao armazenado em texto plano) |
+| expires_at     | DateTime      | NOT NULL                          | Data de expiracao do token                         |
+| created_at     | DateTime      | NOT NULL, default now()           | Data de criacao do registro                        |
+
+> **Rotacao de tokens:** Ao usar um refresh token, o antigo e invalidado (deletado) e um novo e gerado. Isso limita o impacto de tokens vazados.
 
 #### Expense (`expenses`)
 
 | Campo          | Tipo          | Restricoes                        | Descricao                                         |
 |----------------|---------------|-----------------------------------|----------------------------------------------------|
 | id             | String(36)    | PK, auto-gerado (UUID)           | Identificador unico                                |
-| mes_referencia | Date          | NOT NULL, INDEX                   | Mes/ano de referencia (ex: 2026-02-01)             |
+| user_id        | String(36)    | NOT NULL, FK→users.id, CASCADE   | Usuario dono da despesa (CR-002)                   |
+| mes_referencia | Date          | NOT NULL                          | Mes/ano de referencia (ex: 2026-02-01)             |
 | nome           | String(255)   | NOT NULL                          | Nome da despesa (ex: "Conta Luz")                  |
 | valor          | Numeric(10,2) | NOT NULL                          | Valor em reais                                     |
 | vencimento     | Date          | NOT NULL                          | Data de vencimento                                 |
@@ -180,12 +281,15 @@ erDiagram
 
 > **Regra de integridade:** Se `parcela_atual` e `parcela_total` forem preenchidos, ambos devem ser inteiros positivos e `parcela_atual <= parcela_total`. Se preenchidos, o campo `recorrente` e ignorado na logica de transicao (parcelas tem regra propria).
 
+> **Indice composto (CR-002):** `ix_expenses_user_month (user_id, mes_referencia)` substitui o indice antigo `ix_expenses_mes_referencia` para otimizar consultas por usuario + mes.
+
 #### Income (`incomes`)
 
 | Campo          | Tipo          | Restricoes                        | Descricao                                         |
 |----------------|---------------|-----------------------------------|----------------------------------------------------|
 | id             | String(36)    | PK, auto-gerado (UUID)           | Identificador unico                                |
-| mes_referencia | Date          | NOT NULL, INDEX                   | Mes/ano de referencia                              |
+| user_id        | String(36)    | NOT NULL, FK→users.id, CASCADE   | Usuario dono da receita (CR-002)                   |
+| mes_referencia | Date          | NOT NULL                          | Mes/ano de referencia                              |
 | nome           | String(255)   | NOT NULL                          | Nome da receita (ex: "Salario")                    |
 | valor          | Numeric(10,2) | NOT NULL                          | Valor em reais                                     |
 | data           | Date          | Nullable                          | Data de recebimento                                |
@@ -193,12 +297,21 @@ erDiagram
 | created_at     | DateTime      | NOT NULL, default now()           | Data de criacao do registro                        |
 | updated_at     | DateTime      | NOT NULL, default now(), onupdate | Data da ultima atualizacao                         |
 
+> **Indice composto (CR-002):** `ix_incomes_user_month (user_id, mes_referencia)` substitui o indice antigo `ix_incomes_mes_referencia`.
+
 ### Relacionamentos
 
 ```
+Usuario (1) ---- possui ----> Despesa (N)
+Usuario (1) ---- possui ----> Receita (N)
+Usuario (1) ---- possui ----> RefreshToken (N)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
 Receita (N) ---- pertence a ----> Mes de referencia (1)
 ```
+
+> **Isolamento de dados (CR-002):** Cada usuario so pode ver, criar, editar e deletar seus proprios dados. Todas as queries CRUD filtram por `user_id`. Operacoes de update/delete verificam ownership antes de executar.
+
+> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
 
 ---
 
@@ -208,15 +321,15 @@ Receita (N) ---- pertence a ----> Mes de referencia (1)
 
 | Item              | Padrao        | Exemplo                 |
 |-------------------|---------------|-------------------------|
-| Arquivos Python   | snake_case    | `services.py`           |
-| Arquivos TS/TSX   | camelCase     | `useExpenses.ts`        |
-| Componentes React | PascalCase    | `ExpenseTable.tsx`      |
-| Classes Python    | PascalCase    | `ExpenseStatus`         |
-| Funcoes Python    | snake_case    | `get_expenses_by_month` |
-| Funcoes TS        | camelCase     | `formatBRL`             |
+| Arquivos Python   | snake_case    | `services.py`, `email_service.py` |
+| Arquivos TS/TSX   | camelCase     | `useExpenses.ts`, `useAuth.ts` |
+| Componentes React | PascalCase    | `ExpenseTable.tsx`, `ProtectedRoute.tsx` |
+| Classes Python    | PascalCase    | `ExpenseStatus`, `User` |
+| Funcoes Python    | snake_case    | `get_expenses_by_month`, `get_current_user` |
+| Funcoes TS        | camelCase     | `formatBRL`, `loginUser` |
 | Variaveis         | camelCase/snake_case | Conforme linguagem |
-| Tabelas BD        | snake_case    | `expenses`, `incomes`   |
-| Rotas API         | kebab-case    | `/api/expenses/{id}`    |
+| Tabelas BD        | snake_case    | `expenses`, `incomes`, `users`, `refresh_tokens` |
+| Rotas API         | kebab-case    | `/api/expenses/{id}`, `/api/auth/forgot-password` |
 
 ### Git
 
@@ -230,6 +343,20 @@ Receita (N) ---- pertence a ----> Mes de referencia (1)
 - 201 Created para criacao, 204 No Content para exclusao.
 - `mes_referencia` derivado do path parameter da URL, nunca do body.
 - Endpoint principal `GET /api/months/{year}/{month}` retorna tudo em uma chamada.
+- Endpoints protegidos requerem header `Authorization: Bearer <access_token>` (CR-002).
+- Endpoints publicos (`/api/auth/*` exceto logout) nao requerem token (CR-002).
+- Ownership verification: operacoes em expense/income verificam `user_id` antes de permitir (CR-002).
+- 401 Unauthorized para token invalido, expirado, ou ausente (CR-002).
+
+### Autenticacao (CR-002)
+
+- **JWT access token:** Vida util de 15 minutos. Contem `sub` (user_id) e `email` no payload. Assinado com HS256 usando `SECRET_KEY`.
+- **JWT refresh token:** Vida util de 7 dias. Armazenado como hash no banco (`refresh_tokens`). Rotacao obrigatoria: token antigo invalidado ao usar.
+- **Bearer token:** Enviado no header `Authorization: Bearer <token>` em todas requisicoes autenticadas.
+- **Password hashing:** bcrypt via passlib. Nunca armazenar senha em texto plano.
+- **Dependency injection:** `get_current_user` como `Depends()` do FastAPI — extrai e valida token do header, retorna instancia `User`.
+- **Google OAuth2:** Authorization Code flow. Frontend redireciona para Google, backend troca `code` por tokens via httpx.
+- **Armazenamento frontend:** Tokens em `localStorage`. Access token incluso automaticamente via wrapper `request()` em `api.ts`.
 
 ### Estilo de Codigo
 
@@ -240,13 +367,46 @@ Receita (N) ---- pertence a ----> Mes de referencia (1)
 
 ## 6. Integracoes Externas
 
-Nenhuma integracao externa na Fase 1. Veja Roadmap Fase 7 no PRD para integracao com Open Finance.
+### Google OAuth2 (CR-002, ADR-016)
+
+| Item             | Valor |
+|------------------|-------|
+| Servico          | Google Identity Platform |
+| Proposito        | Login social com conta Google |
+| Protocolo        | OAuth 2.0 Authorization Code flow |
+| Vars de Ambiente | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` |
+| Var Frontend     | `VITE_GOOGLE_CLIENT_ID` |
+
+**Fluxo:**
+1. Frontend abre tela de consentimento Google (redirect com `client_id`, `redirect_uri`, `scope=openid email profile`)
+2. Google redireciona de volta com `code` na URL
+3. Frontend envia `code` para `POST /api/auth/google`
+4. Backend troca `code` por tokens Google via httpx (`https://oauth2.googleapis.com/token`)
+5. Backend extrai info do usuario (email, nome, avatar) do ID token
+6. Backend cria/vincula usuario local e retorna JWT tokens proprios
+
+### SendGrid (CR-002)
+
+| Item             | Valor |
+|------------------|-------|
+| Servico          | SendGrid Email API |
+| Proposito        | Envio de emails de recuperacao de senha |
+| Vars de Ambiente | `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `FRONTEND_URL` |
+
+**Fluxo:**
+1. Usuario solicita recuperacao via `POST /api/auth/forgot-password` com email
+2. Backend gera token temporario (JWT com 1h de expiracao)
+3. Backend envia email via SendGrid com link: `{FRONTEND_URL}/reset-password?token={token}`
+4. Usuario clica no link, frontend abre `ResetPasswordPage`
+5. Usuario define nova senha, frontend envia para `POST /api/auth/reset-password`
+
+**Degradacao graciosa:** Se `SENDGRID_API_KEY` nao estiver configurada, o endpoint loga um warning mas nao retorna erro (por seguranca, nao revela se o email existe). Em desenvolvimento, o token de reset e logado no console do servidor.
 
 ---
 
 ## 7. Estrategia de Testes
 
-Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist definida na SPEC (03-SPEC.md, Secao 6).
+Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist definida na SPEC (03-SPEC.md, Secao 6). Testes de autenticacao definidos no CR-002 (tarefas CR-T-34 a CR-T-39).
 
 | Tipo       | Ferramenta | Cobertura | Escopo |
 |------------|------------|-----------|--------|
@@ -268,15 +428,15 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
   - Negativas: Necessidade de wrapper manual para tratamento de erros e parsing JSON (implementado em `api.ts`).
 
 ### ADR-002: SPA sem react-router
-- **Status:** Aceita
+- **Status:** Substituida por ADR-017 (CR-002)
 - **Data:** 2026-02-06
 - **Contexto:** A Fase 1 tem exatamente uma pagina (visao mensal). O mes atual e gerenciado como estado React.
-- **Decisao:** Nao usar react-router. O mes e gerenciado via `useState` no hook `useMonthlyView`.
+- **Decisao:** ~~Nao usar react-router. O mes e gerenciado via `useState` no hook `useMonthlyView`.~~ Substituida: Com autenticacao (CR-002), multiplas paginas sao necessarias (login, register, forgot-password, reset-password, profile, dashboard). React Router adotado via ADR-017.
 - **Alternativas Consideradas:**
-  - react-router com rota `/month/:year/:month`: Descartado porque adiciona complexidade sem beneficio para SPA de pagina unica.
+  - react-router com rota `/month/:year/:month`: Descartado na Fase 1 porque adiciona complexidade sem beneficio para SPA de pagina unica.
 - **Consequencias:**
   - Positivas: Menos dependencias, setup mais simples.
-  - Negativas: URLs nao refletem o mes visualizado (sem deep linking). Aceitavel para Fase 1.
+  - Negativas: URLs nao refletem o mes visualizado (sem deep linking). Tornou-se insuficiente com autenticacao.
 
 ### ADR-003: create_all sem Alembic
 - **Status:** Substituida por ADR-014 (CR-001)
@@ -414,6 +574,41 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
   - Positivas: Schema versionado, migrations reversiveis, suporte a alteracoes incrementais.
   - Negativas: Complexidade adicional; devs precisam rodar `alembic upgrade head` apos pull.
 
+### ADR-015: JWT tokens em localStorage (CR-002)
+- **Status:** Aceita
+- **Data:** 2026-02-09
+- **Contexto:** O frontend SPA precisa armazenar tokens JWT para autenticacao stateless. As opcoes sao localStorage, sessionStorage, ou httpOnly cookies.
+- **Decisao:** Usar `localStorage` para armazenar access token (15 minutos) e refresh token (7 dias). Tokens sao lidos pelo wrapper `request()` em `api.ts` e incluidos automaticamente como header `Authorization: Bearer`.
+- **Alternativas Consideradas:**
+  - httpOnly cookies: Mais seguro contra XSS, mas adiciona complexidade de protecao CSRF e complica o setup do proxy Vite. Tokens em cookies exigem configuracao `SameSite`, `Secure`, e `Domain` — mais complexo para dev/prod.
+  - sessionStorage: Tokens perdidos ao fechar a aba do browser. Experiencia ruim para o usuario.
+- **Consequencias:**
+  - Positivas: Implementacao simples, funciona bem com Vite proxy e fetch nativo, persiste entre sessoes.
+  - Negativas: Vulneravel a XSS. Mitigado pela ausencia de conteudo HTML gerado por usuario (UGC) e pela curta vida util do access token (15min). Documentado como limitacao conhecida para futura melhoria.
+
+### ADR-016: Google OAuth2 direto, sem Firebase/Auth0 (CR-002)
+- **Status:** Aceita
+- **Data:** 2026-02-09
+- **Contexto:** O app precisa oferecer login social com Google alem do cadastro com email/senha. As opcoes sao implementar OAuth2 diretamente ou usar um servico intermediario.
+- **Decisao:** Implementar Google OAuth2 via Authorization Code flow diretamente. Frontend redireciona para Google consent screen. Backend troca `code` por tokens Google usando `httpx` e extrai dados do usuario (email, nome, avatar) do ID token.
+- **Alternativas Consideradas:**
+  - Firebase Authentication: Descartado para manter controle total da autenticacao e evitar dependencia de servico externo pago/limitado.
+  - Auth0 / Clerk: Descartado pelo mesmo motivo — adiciona custo mensal e dependencia que pode ser evitada.
+- **Consequencias:**
+  - Positivas: Controle total do fluxo, sem custos de servico externo, dados de usuario no proprio banco, sem vendor lock-in.
+  - Negativas: Mais codigo para implementar e manter. Requer configurar app no Google Cloud Console. Futuras integracoes sociais (Facebook, GitHub) exigirao implementacao individual.
+
+### ADR-017: Adotar React Router, substituindo ADR-002 (CR-002)
+- **Status:** Aceita (substitui ADR-002)
+- **Data:** 2026-02-09
+- **Contexto:** Com autenticacao, o app precisa de multiplas paginas: login, registro, recuperacao de senha (forgot + reset), perfil, e dashboard. Alem disso, a pagina de reset-password recebe um token via query parameter na URL, exigindo deep-linking funcional.
+- **Decisao:** Adotar `react-router-dom` v7+ para gerenciar rotas client-side. Rotas publicas (`/login`, `/register`, `/forgot-password`, `/reset-password`) e rotas protegidas (`/`, `/profile`) com componente `ProtectedRoute`.
+- **Alternativas Consideradas:**
+  - Manter renderizacao condicional sem router (como na Fase 1): Inviavel com 6+ paginas e necessidade de deep-linking (link de reset-password por email precisa abrir diretamente a pagina correta com token na URL).
+- **Consequencias:**
+  - Positivas: URLs semanticas, deep-linking funcional, layout aninhado com `<Outlet />` e `ProtectedRoute`. SPA fallback do backend (`serve_spa` em `main.py`) ja funciona — serve `index.html` para todas rotas nao-API.
+  - Negativas: Dependencia adicional (`react-router-dom`). Configuracao de rotas requer reestruturacao do `App.tsx`.
+
 ---
 
-*Documento criado em 2026-02-08. Baseado em SPEC.md v1.0 e PRD_MeuControle.md v1.0.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, e CR-002.*

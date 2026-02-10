@@ -2,7 +2,7 @@
 
 **Versao:** 1.0
 **Data:** 2026-02-08
-**Status:** Concluido (pendente: CR-T-06 e CR-T-08 — config e teste Railway)
+**Status:** Concluido
 **Autor:** Rafael
 **Prioridade:** Critica
 
@@ -276,4 +276,5 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 | Data       | Autor  | Descricao           |
 |------------|--------|---------------------|
 | 2026-02-08 | Rafael | CR criado           |
-| 2026-02-08 | Rafael | CR-T-01 a CR-T-05, CR-T-07, CR-T-09 implementados. Pendente: CR-T-06 (config Railway) e CR-T-08 (teste deploy) |
+| 2026-02-08 | Rafael | CR-T-01 a CR-T-05, CR-T-07, CR-T-09 implementados |
+| 2026-02-08 | Rafael | CR-T-06 (config Railway) e CR-T-08 (deploy) concluidos. CR finalizado |
