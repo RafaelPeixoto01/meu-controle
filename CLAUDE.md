@@ -3,8 +3,8 @@
 ## Identidade do Projeto
 
 - **Nome:** Meu Controle
-- **Descrição:** Rastreador de financas pessoais com visao mensal de despesas/receitas, transicao automatica de mes e gestao de status
-- **Stack:** React 19 + TypeScript, Vite 6, Tailwind CSS v4, TanStack Query v5, FastAPI, SQLAlchemy 2.0, SQLite
+- **Descrição:** Rastreador de financas pessoais multi-usuario com autenticacao JWT/Google OAuth2, visao mensal de despesas/receitas, transicao automatica de mes e gestao de status
+- **Stack:** React 19 + TypeScript, Vite 6, Tailwind CSS v4, TanStack Query v5, FastAPI, SQLAlchemy 2.0, PostgreSQL/SQLite
 - **Repositório:** https://github.com/RafaelPeixoto01/meu-controle.git
 
 ---
@@ -125,33 +125,43 @@ Personal Finance/
 │   │   ├── env.py
 │   │   ├── script.py.mako
 │   │   └── versions/
-│   │       └── 001_initial_schema.py
+│   │       ├── 001_initial_schema.py
+│       └── 002_add_users_and_auth.py  # CR-002
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py           # Entry point FastAPI + lifespan
 │       ├── database.py       # Engine SQLAlchemy + SessionLocal
-│       ├── models.py         # ORM: Expense, Income
-│       ├── schemas.py        # Pydantic: request/response
-│       ├── crud.py           # Acesso a dados
-│       ├── services.py       # Logica: transicao de mes, auto-status
+│       ├── models.py         # ORM: User, Expense, Income, RefreshToken
+│       ├── schemas.py        # Pydantic: request/response + auth schemas
+│       ├── crud.py           # Acesso a dados + User/RefreshToken CRUD
+│       ├── services.py       # Logica: transicao de mes, auto-status (user_id)
+│       ├── auth.py           # CR-002: JWT + bcrypt auth module
+│       ├── email_service.py  # CR-002: SendGrid email (password reset)
 │       └── routers/
-│           ├── expenses.py   # CRUD + duplicate
-│           ├── incomes.py    # CRUD
-│           └── months.py     # GET visao mensal
+│           ├── auth.py       # CR-002: register, login, Google OAuth, refresh, logout, forgot/reset password
+│           ├── users.py      # CR-002: GET/PATCH /me, change password
+│           ├── expenses.py   # CRUD + duplicate (auth required)
+│           ├── incomes.py    # CRUD (auth required)
+│           └── months.py     # GET visao mensal (auth required)
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts        # Proxy /api -> :8000
 │   ├── index.html
 │   └── src/
-│       ├── main.tsx          # Bootstrap React + QueryClient
-│       ├── App.tsx           # Shell
+│       ├── main.tsx          # Bootstrap React + QueryClient + BrowserRouter
+│       ├── App.tsx           # Shell com AuthProvider + Routes
 │       ├── index.css         # Tailwind v4 (@import + @theme)
-│       ├── types.ts
+│       ├── vite-env.d.ts     # Vite client types
+│       ├── types.ts          # Tipos + Auth types (CR-002)
 │       ├── utils/            # format.ts, date.ts
-│       ├── services/api.ts   # HTTP client (fetch)
-│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition
-│       ├── components/       # MonthNavigator, Tables, Forms, Modals
-│       └── pages/            # MonthlyView.tsx
+│       ├── services/
+│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor
+│       │   └── authApi.ts    # CR-002: auth API functions
+│       ├── contexts/
+│       │   └── AuthContext.tsx  # CR-002: auth state management
+│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth
+│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu
+│       └── pages/            # MonthlyView, Login, Register, ForgotPassword, ResetPassword, Profile
 ├── CLAUDE.md
 └── .gitignore
 ```
@@ -186,8 +196,12 @@ Personal Finance/
 | Build/Dev      | Vite                        | 6.x       |
 | Estilização    | Tailwind CSS                | 4.x       |
 | State/Fetch    | TanStack Query              | 5.62+     |
+| Routing        | react-router-dom            | 7.x       |
+| Auth (FE)      | jwt-decode                  | 4.x       |
 | HTTP Client    | fetch nativo                | —         |
 | Backend        | Python + FastAPI            | 0.115     |
+| Auth (BE)      | python-jose + passlib/bcrypt| 3.3/1.7   |
+| Email          | SendGrid                    | 6.11      |
 | ORM            | SQLAlchemy (sincrono)       | 2.0+      |
 | Banco de Dados | PostgreSQL (prod) + SQLite (dev) | —  |
 | Migrations     | Alembic                     | 1.14+     |
@@ -205,10 +219,11 @@ Personal Finance/
 - [x] Plano de Implementação (`/docs/04-IMPLEMENTATION-PLAN.md`)
 
 ### Change Requests Ativos
-- CR-001: Migracao PostgreSQL + Alembic (concluido — pendente config Railway: CR-T-06, CR-T-08)
+- CR-001: Migracao PostgreSQL + Alembic (concluido)
+- CR-002: Multi-usuario + Autenticacao JWT/Google OAuth2 (AR + FN + VL concluidos)
 
 ### Última Tarefa Implementada
-- CR-T-09 (CR-001: documentos atualizados)
+- CR-002 VL Group (validacao completa: 35/35 testes backend, tsc + build frontend)
 
 ---
 
