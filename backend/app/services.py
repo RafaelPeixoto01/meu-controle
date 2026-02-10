@@ -48,44 +48,53 @@ def apply_status_auto_detection(
     return expenses
 
 
-def generate_month_data(db: Session, target_mes: date) -> bool:
+def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
     """
-    RF-06: Algoritmo de Transicao de Mes.
+    RF-06: Algoritmo de Transicao de Mes. (CR-002: user_id para isolamento)
 
-    Chamado quando o usuario navega para um mes.
-    Olha os dados do mes anterior e gera entradas faltantes para target_mes
+    Chamado quando o usuario navega para um mes sem dados.
+    Olha os dados do mes anterior DO MESMO USUARIO e gera entradas para target_mes
     seguindo as regras de replicacao.
 
-    Usa check de duplicidade por nome para evitar replicar itens que ja existem
-    no mes-alvo, mas ainda permite adicionar itens novos do mes anterior.
+    Retorna True se dados foram gerados, False se o mes-alvo ja tinha dados
+    ou o mes anterior nao tinha dados (nada a replicar).
 
-    Retorna True se dados foram gerados, False caso contrario.
+    Algoritmo:
+    1. Checar se target_mes ja tem dados do usuario → se sim, return False (idempotente)
+    2. Buscar despesas e receitas do usuario no mes anterior
+    3. Para cada despesa:
+       a. Tem parcela (parcela_atual e parcela_total preenchidos)?
+          - Se parcela_atual < parcela_total: replicar com parcela_atual + 1
+          - Se parcela_atual == parcela_total: NAO replicar (ultima parcela)
+       b. Nao tem parcela?
+          - Se recorrente == True: replicar com mesmos dados
+          - Se recorrente == False: NAO replicar (despesa avulsa)
+    4. Para cada receita:
+       - Se recorrente == True: replicar
+       - Se recorrente == False: NAO replicar
+    5. Todas as novas entradas recebem status = Pendente, novos UUIDs e user_id do usuario.
     """
-    # Buscar dados do mes anterior
+    # Passo 1: Check de idempotencia (escopo por usuario)
+    existing_expenses = crud.count_expenses_by_month(db, target_mes, user_id)  # CR-002
+    existing_incomes = len(crud.get_incomes_by_month(db, target_mes, user_id))  # CR-002
+    if existing_expenses > 0 or existing_incomes > 0:
+        return False
+
+    # Passo 2: Buscar dados do usuario no mes anterior
     prev_mes = get_previous_month(target_mes)
-    prev_expenses = crud.get_expenses_by_month(db, prev_mes)
-    prev_incomes = crud.get_incomes_by_month(db, prev_mes)
+    prev_expenses = crud.get_expenses_by_month(db, prev_mes, user_id)  # CR-002
+    prev_incomes = crud.get_incomes_by_month(db, prev_mes, user_id)  # CR-002
 
     if not prev_expenses and not prev_incomes:
         return False
 
-    # Buscar nomes ja existentes no mes-alvo para evitar duplicatas
-    existing_expenses = crud.get_expenses_by_month(db, target_mes)
-    existing_incomes = crud.get_incomes_by_month(db, target_mes)
-    existing_expense_names = {e.nome for e in existing_expenses}
-    existing_income_names = {i.nome for i in existing_incomes}
-
-    generated = False
-
-    # Replicar despesas
+    # Passo 3: Replicar despesas
     for exp in prev_expenses:
-        if exp.nome in existing_expense_names:
-            continue  # Ja existe no mes-alvo, pular
-
         if exp.parcela_atual is not None and exp.parcela_total is not None:
             # Despesa parcelada
             if exp.parcela_atual < exp.parcela_total:
                 new_exp = Expense(
+                    user_id=user_id,  # CR-002
                     mes_referencia=target_mes,
                     nome=exp.nome,
                     valor=exp.valor,
@@ -98,12 +107,12 @@ def generate_month_data(db: Session, target_mes: date) -> bool:
                     status=ExpenseStatus.PENDENTE.value,
                 )
                 db.add(new_exp)
-                generated = True
             # else: ultima parcela, NAO replica
         else:
             # Despesa sem parcela
             if exp.recorrente:
                 new_exp = Expense(
+                    user_id=user_id,  # CR-002
                     mes_referencia=target_mes,
                     nome=exp.nome,
                     valor=exp.valor,
@@ -116,16 +125,13 @@ def generate_month_data(db: Session, target_mes: date) -> bool:
                     status=ExpenseStatus.PENDENTE.value,
                 )
                 db.add(new_exp)
-                generated = True
             # else: nao recorrente, NAO replica
 
-    # Replicar receitas
+    # Passo 4: Replicar receitas
     for inc in prev_incomes:
-        if inc.nome in existing_income_names:
-            continue  # Ja existe no mes-alvo, pular
-
         if inc.recorrente:
             new_inc = Income(
+                user_id=user_id,  # CR-002
                 mes_referencia=target_mes,
                 nome=inc.nome,
                 valor=inc.valor,
@@ -137,29 +143,27 @@ def generate_month_data(db: Session, target_mes: date) -> bool:
                 recorrente=True,
             )
             db.add(new_inc)
-            generated = True
         # else: nao recorrente, NAO replica
 
-    if generated:
-        db.commit()
-    return generated
+    db.commit()
+    return True
 
 
-def get_monthly_summary(db: Session, mes_referencia: date) -> dict:
+def get_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict:
     """
-    Constroi a visao mensal completa.
+    Constroi a visao mensal completa para um usuario especifico. (CR-002: user_id)
     Passos:
     1. Tenta gerar dados do mes se vazio (RF-06)
-    2. Busca despesas e receitas
+    2. Busca despesas e receitas do usuario
     3. Aplica auto-deteccao de status (RF-05)
     4. Calcula totalizadores (RF-04)
     """
-    # Passo 1: Auto-gerar se necessario
-    generate_month_data(db, mes_referencia)
+    # Passo 1: Auto-gerar se necessario (escopo por usuario)
+    generate_month_data(db, mes_referencia, user_id)  # CR-002
 
-    # Passo 2: Buscar dados
-    expenses = crud.get_expenses_by_month(db, mes_referencia)
-    incomes = crud.get_incomes_by_month(db, mes_referencia)
+    # Passo 2: Buscar dados do usuario
+    expenses = crud.get_expenses_by_month(db, mes_referencia, user_id)  # CR-002
+    incomes = crud.get_incomes_by_month(db, mes_referencia, user_id)  # CR-002
 
     # Passo 3: Auto-detectar status de atraso
     today = date.today()

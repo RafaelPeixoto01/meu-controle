@@ -101,3 +101,72 @@ class MonthlySummary(BaseModel):
     saldo_livre: float
     expenses: list[ExpenseResponse]
     incomes: list[IncomeResponse]
+
+
+# ========== Auth Schemas (CR-002) ==========
+
+class UserCreate(BaseModel):
+    """Schema para cadastro de usuario."""
+    nome: str = Field(..., min_length=1, max_length=255)
+    email: str = Field(..., max_length=255)
+    password: str = Field(..., min_length=6)
+
+
+class UserUpdate(BaseModel):
+    """Schema para atualizacao de perfil."""
+    nome: Optional[str] = Field(None, min_length=1, max_length=255)
+    email: Optional[str] = Field(None, max_length=255)
+
+
+class UserResponse(BaseModel):
+    """Schema de resposta para usuario."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    nome: str
+    email: str
+    avatar_url: Optional[str]
+    email_verified: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class LoginRequest(BaseModel):
+    """Schema para login com email/senha."""
+    email: str
+    password: str
+
+
+class GoogleAuthRequest(BaseModel):
+    """Schema para login com Google OAuth2."""
+    code: str
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema para refresh de token."""
+    refresh_token: str
+
+
+class TokenResponse(BaseModel):
+    """Schema de resposta com tokens JWT."""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: Optional[UserResponse] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema para solicitar reset de senha."""
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Schema para redefinir senha."""
+    token: str
+    new_password: str = Field(..., min_length=6)
+
+
+class ChangePasswordRequest(BaseModel):
+    """Schema para trocar senha pelo perfil."""
+    current_password: str
+    new_password: str = Field(..., min_length=6)

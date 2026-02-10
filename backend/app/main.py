@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from app.routers import expenses, incomes, months
+from app.routers import expenses, incomes, months, auth, users  # CR-002: auth, users
 
 
 @asynccontextmanager
@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Meu Controle API",
-    version="1.0.0",
+    version="2.0.0",  # CR-002
     lifespan=lifespan,
 )
 
@@ -29,6 +29,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)    # CR-002: autenticacao (register, login, Google, refresh, logout, forgot/reset password)
+app.include_router(users.router)   # CR-002: perfil de usuario (GET/PATCH /me, change password)
 app.include_router(months.router)
 app.include_router(expenses.router)
 app.include_router(incomes.router)
