@@ -28,6 +28,7 @@
 | HTTP Client (back)  | httpx                            | 0.27+         | Chamadas backend→Google para OAuth2 token exchange (CR-002, ADR-016) |
 | Email               | SendGrid (sendgrid)              | 6.11+         | Envio de emails de recuperacao de senha (CR-002) |
 | Form Data           | python-multipart                 | 0.0.9+        | Parsing de form data para OAuth2PasswordBearer do FastAPI (CR-002) |
+| Env Loading         | python-dotenv                    | 1.0+          | Carrega variaveis de `.env` no backend para desenvolvimento local |
 | Arquitetura         | Monorepo                         | —             | Frontend e backend no mesmo repositorio, deploy simplificado |
 
 ---
@@ -73,7 +74,8 @@ graph TD
 2. FastAPI serve tanto a API quanto os arquivos estaticos
 3. Alembic executa migrations antes do startup (`alembic upgrade head`)
 4. SQLAlchemy conecta ao PostgreSQL via DATABASE_URL (CR-001)
-5. Variaveis de ambiente obrigatorias: `SECRET_KEY`, `DATABASE_URL`. Opcionais: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SENDGRID_API_KEY`
+5. Variaveis de ambiente obrigatorias: `SECRET_KEY`, `DATABASE_URL`. Opcionais: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `SENDGRID_API_KEY`
+6. `GOOGLE_CLIENT_ID` e servido ao frontend em runtime via `GET /api/config` (nao depende de build-time injection)
 
 **Fluxo de autenticacao (CR-002):**
 1. Usuario se registra via `/api/auth/register` (email/senha) ou `/api/auth/google` (Google OAuth2)
@@ -375,10 +377,10 @@ Receita (N) ---- pertence a ----> Mes de referencia (1)
 | Proposito        | Login social com conta Google |
 | Protocolo        | OAuth 2.0 Authorization Code flow |
 | Vars de Ambiente | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` |
-| Var Frontend     | `VITE_GOOGLE_CLIENT_ID` |
+| Config Frontend  | `GET /api/config` retorna `google_client_id` em runtime |
 
 **Fluxo:**
-1. Frontend abre tela de consentimento Google (redirect com `client_id`, `redirect_uri`, `scope=openid email profile`)
+1. Frontend busca `google_client_id` de `GET /api/config` e abre tela de consentimento Google (redirect com `client_id`, `redirect_uri`, `scope=openid email profile`)
 2. Google redireciona de volta com `code` na URL
 3. Frontend envia `code` para `POST /api/auth/google`
 4. Backend troca `code` por tokens Google via httpx (`https://oauth2.googleapis.com/token`)

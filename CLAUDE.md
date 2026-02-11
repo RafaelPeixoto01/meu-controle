@@ -201,6 +201,7 @@ Personal Finance/
 | HTTP Client    | fetch nativo                | —         |
 | Backend        | Python + FastAPI            | 0.115     |
 | Auth (BE)      | python-jose + passlib/bcrypt| 3.3/1.7   |
+| Env Config     | python-dotenv               | 1.0+      |
 | Email          | SendGrid                    | 6.11      |
 | ORM            | SQLAlchemy (sincrono)       | 2.0+      |
 | Banco de Dados | PostgreSQL (prod) + SQLite (dev) | —  |
@@ -223,7 +224,7 @@ Personal Finance/
 - CR-002: Multi-usuario + Autenticacao JWT/Google OAuth2 (AR + FN + VL concluidos)
 
 ### Última Tarefa Implementada
-- CR-002 VL Group (validacao completa: 35/35 testes backend, tsc + build frontend)
+- Fix Google OAuth producao: endpoint `GET /api/config` serve `google_client_id` em runtime (elimina dependencia de build-time env vars)
 
 ---
 

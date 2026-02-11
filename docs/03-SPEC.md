@@ -57,6 +57,7 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 | `GET`    | `/api/users/me`                        | Sim   | —                       | `UserResponse`          | CR-002: Perfil do usuario (RF-12)               |
 | `PATCH`  | `/api/users/me`                        | Sim   | `UserUpdate`            | `UserResponse`          | CR-002: Atualizar perfil (RF-12)                |
 | `PATCH`  | `/api/users/me/password`               | Sim   | `ChangePasswordRequest` | `{"message": "..."}`    | CR-002: Trocar senha (RF-12)                    |
+| `GET`    | `/api/config`                          | Nao   | —                       | `{ google_client_id: string }` | Configuracao publica (Google Client ID runtime) |
 | `GET`    | `/api/health`                          | Nao   | —                       | `{"status": "ok"}`      | Health check                                    |
 
 **Nota:** O endpoint principal e `GET /api/months/{year}/{month}`. Ele retorna tudo que o frontend precisa em uma unica chamada: despesas, receitas e totalizadores. Tambem dispara a geracao automatica de mes (RF-06) e a auto-deteccao de status (RF-05).
@@ -191,6 +192,15 @@ app.include_router(incomes.router)
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/api/config")
+def get_public_config():
+    """Return public configuration (no secrets)."""
+    import os
+    return {
+        "google_client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+    }
 
 
 # Serve frontend static files in production
