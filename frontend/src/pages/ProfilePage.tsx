@@ -65,53 +65,70 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-lg mx-auto py-8 px-4">
-      <h2 className="text-2xl font-bold mb-6">Meu Perfil</h2>
+      <h2 className="text-2xl font-bold text-text mb-6">Meu Perfil</h2>
 
       {/* Secao Perfil */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h3 className="text-lg font-semibold mb-4">Informacoes Pessoais</h3>
+      <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-7 mb-6">
+        <h3 className="text-base font-bold text-text uppercase tracking-wide mb-5">
+          Informacoes Pessoais
+        </h3>
 
         {profileError && (
-          <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm">{profileError}</div>
+          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded-r-xl mb-5 text-sm font-medium">
+            {profileError}
+          </div>
         )}
         {profileSuccess && (
-          <div className="bg-green-50 text-green-600 p-3 rounded mb-4 text-sm">{profileSuccess}</div>
+          <div className="bg-green-50 border-l-4 border-green-500 text-green-700 p-3 rounded-r-xl mb-5 text-sm font-medium">
+            {profileSuccess}
+          </div>
         )}
 
         {editing ? (
           <form onSubmit={handleProfileSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+              <label className="block text-sm font-semibold text-text-muted mb-1.5">Nome</label>
               <input
                 type="text"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                  placeholder:text-slate-400
+                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                  transition-all duration-200"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-semibold text-text-muted mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                  placeholder:text-slate-400
+                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                  transition-all duration-200"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3 pt-2">
               <button
                 type="submit"
                 disabled={profileLoading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
+                className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold
+                  hover:bg-primary-hover hover:shadow-md hover:shadow-primary/20
+                  active:scale-[0.98] disabled:opacity-50
+                  transition-all duration-150"
               >
                 {profileLoading ? "Salvando..." : "Salvar"}
               </button>
               <button
                 type="button"
                 onClick={() => { setEditing(false); setNome(user.nome); setEmail(user.email); }}
-                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 font-medium"
+                className="px-5 py-2.5 text-text-muted border border-border rounded-xl
+                  hover:bg-slate-50 active:bg-slate-100 active:scale-[0.98]
+                  transition-all duration-150 font-semibold"
               >
                 Cancelar
               </button>
@@ -119,11 +136,22 @@ export default function ProfilePage() {
           </form>
         ) : (
           <div>
-            <p className="mb-2"><span className="font-medium">Nome:</span> {user.nome}</p>
-            <p className="mb-4"><span className="font-medium">Email:</span> {user.email}</p>
+            <div className="space-y-3 mb-5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-text-muted w-14">Nome:</span>
+                <span className="text-text font-medium">{user.nome}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-text-muted w-14">Email:</span>
+                <span className="text-text font-medium">{user.email}</span>
+              </div>
+            </div>
             <button
               onClick={() => setEditing(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-medium"
+              className="px-5 py-2.5 bg-primary text-white rounded-xl font-semibold
+                hover:bg-primary-hover hover:shadow-md hover:shadow-primary/20
+                active:scale-[0.98]
+                transition-all duration-150"
             >
               Editar
             </button>
@@ -132,58 +160,75 @@ export default function ProfilePage() {
       </div>
 
       {/* Secao Trocar Senha (backend rejeita para usuarios Google-only via RN-018) */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Trocar Senha</h3>
+      <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-7">
+        <h3 className="text-base font-bold text-text uppercase tracking-wide mb-5">
+          Trocar Senha
+        </h3>
 
-          {passwordError && (
-            <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm">{passwordError}</div>
-          )}
-          {passwordSuccess && (
-            <div className="bg-green-50 text-green-600 p-3 rounded mb-4 text-sm">{passwordSuccess}</div>
-          )}
+        {passwordError && (
+          <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded-r-xl mb-5 text-sm font-medium">
+            {passwordError}
+          </div>
+        )}
+        {passwordSuccess && (
+          <div className="bg-green-50 border-l-4 border-green-500 text-green-700 p-3 rounded-r-xl mb-5 text-sm font-medium">
+            {passwordSuccess}
+          </div>
+        )}
 
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Senha Atual</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Nova Senha</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-text-muted mb-1.5">Senha Atual</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-text-muted mb-1.5">Nova Senha</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-text-muted mb-1.5">Confirmar Nova Senha</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                transition-all duration-200"
+            />
+          </div>
+          <div className="pt-2">
             <button
               type="submit"
               disabled={passwordLoading}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
+              className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold
+                hover:bg-primary-hover hover:shadow-md hover:shadow-primary/20
+                active:scale-[0.98] disabled:opacity-50
+                transition-all duration-150"
             >
               {passwordLoading ? "Alterando..." : "Alterar Senha"}
             </button>
-          </form>
-        </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

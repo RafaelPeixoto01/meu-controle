@@ -82,19 +82,20 @@ export default function ExpenseFormModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-surface rounded-2xl shadow-2xl shadow-black/10 border border-slate-100/80
+          p-7 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-bold text-gray-800 mb-5">
+        <h3 className="text-lg font-bold text-text mb-6">
           {initialData ? "Editar Despesa" : "Nova Despesa"}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-text-muted mb-1.5">
               Nome
             </label>
             <input
@@ -104,13 +105,14 @@ export default function ExpenseFormModal({
               required
               maxLength={255}
               placeholder="Ex: Aluguel"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5
-                focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
-                transition-colors duration-150"
+              className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                placeholder:text-slate-400
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                transition-all duration-200"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-text-muted mb-1.5">
               Valor (R$)
             </label>
             <input
@@ -121,13 +123,14 @@ export default function ExpenseFormModal({
               min="0.01"
               step="0.01"
               placeholder="0,00"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5
-                focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
-                transition-colors duration-150 tabular-nums"
+              className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                placeholder:text-slate-400 tabular-nums
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                transition-all duration-200"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-text-muted mb-1.5">
               Vencimento
             </label>
             <input
@@ -135,15 +138,15 @@ export default function ExpenseFormModal({
               value={vencimento}
               onChange={(e) => setVencimento(e.target.value)}
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5
-                focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
-                transition-colors duration-150"
+              className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                transition-all duration-200"
             />
           </div>
           <div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-text-muted mb-1.5">
                   Parcela Atual
                 </label>
                 <input
@@ -155,14 +158,15 @@ export default function ExpenseFormModal({
                   }}
                   min="1"
                   placeholder="Ex: 5"
-                  className={`w-full border rounded-lg px-3 py-2.5
-                    focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
-                    transition-colors duration-150
-                    ${parcelaError ? "border-danger" : "border-gray-300"}`}
+                  className={`w-full border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                    placeholder:text-slate-400
+                    focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                    transition-all duration-200
+                    ${parcelaError ? "border-danger" : "border-border"}`}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-text-muted mb-1.5">
                   Total Parcelas
                 </label>
                 <input
@@ -174,15 +178,16 @@ export default function ExpenseFormModal({
                   }}
                   min="1"
                   placeholder="Ex: 11"
-                  className={`w-full border rounded-lg px-3 py-2.5
-                    focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary
-                    transition-colors duration-150
-                    ${parcelaError ? "border-danger" : "border-gray-300"}`}
+                  className={`w-full border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                    placeholder:text-slate-400
+                    focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                    transition-all duration-200
+                    ${parcelaError ? "border-danger" : "border-border"}`}
                 />
               </div>
             </div>
             {parcelaError && (
-              <p className="text-danger text-sm mt-1.5">{parcelaError}</p>
+              <p className="text-danger text-sm mt-1.5 font-medium">{parcelaError}</p>
             )}
           </div>
           <div className="flex items-center gap-2.5">
@@ -196,26 +201,27 @@ export default function ExpenseFormModal({
             />
             <label
               htmlFor="recorrente"
-              className={`text-sm ${hasParcelas ? "text-gray-400" : "text-gray-700"}`}
+              className={`text-sm font-medium ${hasParcelas ? "text-slate-400" : "text-text-muted"}`}
             >
               Recorrente (repete todo mes)
             </label>
           </div>
-          <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-gray-600 border border-gray-300 rounded-lg
-                hover:bg-gray-50 active:bg-gray-100
-                transition-colors duration-150 font-medium"
+              className="px-5 py-2.5 text-text-muted border border-border rounded-xl
+                hover:bg-slate-50 active:bg-slate-100 active:scale-[0.98]
+                transition-all duration-150 font-semibold"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-primary text-white rounded-lg font-medium
-                hover:bg-primary-hover active:bg-blue-800
-                transition-colors duration-150"
+              className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold
+                hover:bg-primary-hover hover:shadow-md hover:shadow-primary/20
+                active:scale-[0.98]
+                transition-all duration-150"
             >
               Salvar
             </button>

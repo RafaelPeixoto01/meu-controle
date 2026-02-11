@@ -20,7 +20,7 @@ export default function MonthlyView() {
     return (
       <div className="flex flex-col justify-center items-center py-24 gap-3">
         <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-        <p className="text-gray-400 text-sm">Carregando dados...</p>
+        <p className="text-text-muted text-sm font-medium">Carregando dados...</p>
       </div>
     );
   }
@@ -28,10 +28,10 @@ export default function MonthlyView() {
   if (isError) {
     return (
       <div className="flex flex-col justify-center items-center py-24 gap-2">
-        <p className="text-danger font-medium text-lg">
+        <p className="text-danger font-bold text-lg">
           Erro ao carregar dados
         </p>
-        <p className="text-gray-400 text-sm">
+        <p className="text-text-muted text-sm">
           {error?.message || "Verifique sua conexao e tente novamente."}
         </p>
       </div>

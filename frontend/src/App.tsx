@@ -11,11 +11,20 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
 
 function AppHeader() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   return (
-    <header className="bg-primary text-white py-4 px-6 shadow-md flex justify-between items-center">
-      <h1 className="text-xl font-bold tracking-wide">MEU CONTROLE</h1>
-      {isAuthenticated && <UserMenu />}
+    <header className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-4 px-6 shadow-lg shadow-blue-900/10 flex justify-between items-center">
+      <h1 className="text-xl font-extrabold tracking-wide">MEU CONTROLE</h1>
+      {isAuthenticated && (
+        <div className="flex items-center gap-4">
+          {user && (
+            <span className="text-sm text-white/70 font-medium hidden sm:block">
+              Olá, {user.nome}
+            </span>
+          )}
+          <UserMenu />
+        </div>
+      )}
     </header>
   );
 }
@@ -23,7 +32,7 @@ function AppHeader() {
 export default function App() {
   return (
     <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-background">
         <AppHeader />
         <main>
           <Routes>
