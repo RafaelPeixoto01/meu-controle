@@ -1,10 +1,13 @@
 import calendar
+import logging
 from datetime import date
 
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.models import Expense, ExpenseStatus, Income
+
+logger = logging.getLogger(__name__)
 
 
 def get_next_month(current: date) -> date:
@@ -74,25 +77,46 @@ def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
        - Se recorrente == False: NAO replicar
     5. Todas as novas entradas recebem status = Pendente, novos UUIDs e user_id do usuario.
     """
+    logger.info(
+        "generate_month_data called: target_mes=%s, user_id=%s",
+        target_mes, user_id,
+    )
+
     # Passo 1: Check de idempotencia (escopo por usuario)
     existing_expenses = crud.count_expenses_by_month(db, target_mes, user_id)  # CR-002
     existing_incomes = len(crud.get_incomes_by_month(db, target_mes, user_id))  # CR-002
+    logger.info(
+        "Idempotency check: target has %d expenses, %d incomes",
+        existing_expenses, existing_incomes,
+    )
     if existing_expenses > 0 or existing_incomes > 0:
+        logger.info("SKIP: Target month already has data, returning False")
         return False
 
     # Passo 2: Buscar dados do usuario no mes anterior
     prev_mes = get_previous_month(target_mes)
     prev_expenses = crud.get_expenses_by_month(db, prev_mes, user_id)  # CR-002
     prev_incomes = crud.get_incomes_by_month(db, prev_mes, user_id)  # CR-002
+    logger.info(
+        "Previous month %s: %d expenses, %d incomes",
+        prev_mes, len(prev_expenses), len(prev_incomes),
+    )
 
     if not prev_expenses and not prev_incomes:
+        logger.info("SKIP: Previous month has no data, returning False")
         return False
 
     # Passo 3: Replicar despesas
+    replicated_count = 0
     for exp in prev_expenses:
         if exp.parcela_atual is not None and exp.parcela_total is not None:
             # Despesa parcelada
             if exp.parcela_atual < exp.parcela_total:
+                logger.info(
+                    "REPLICATE installment: '%s' parcela %d/%d -> %d/%d",
+                    exp.nome, exp.parcela_atual, exp.parcela_total,
+                    exp.parcela_atual + 1, exp.parcela_total,
+                )
                 new_exp = Expense(
                     user_id=user_id,  # CR-002
                     mes_referencia=target_mes,
@@ -107,10 +131,16 @@ def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
                     status=ExpenseStatus.PENDENTE.value,
                 )
                 db.add(new_exp)
-            # else: ultima parcela, NAO replica
+                replicated_count += 1
+            else:
+                logger.info(
+                    "SKIP last installment: '%s' parcela %d/%d",
+                    exp.nome, exp.parcela_atual, exp.parcela_total,
+                )
         else:
             # Despesa sem parcela
             if exp.recorrente:
+                logger.info("REPLICATE recurring: '%s'", exp.nome)
                 new_exp = Expense(
                     user_id=user_id,  # CR-002
                     mes_referencia=target_mes,
@@ -125,11 +155,18 @@ def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
                     status=ExpenseStatus.PENDENTE.value,
                 )
                 db.add(new_exp)
-            # else: nao recorrente, NAO replica
+                replicated_count += 1
+            else:
+                logger.info(
+                    "SKIP non-recurring: '%s' (recorrente=%s)",
+                    exp.nome, exp.recorrente,
+                )
 
     # Passo 4: Replicar receitas
+    replicated_incomes = 0
     for inc in prev_incomes:
         if inc.recorrente:
+            logger.info("REPLICATE income: '%s'", inc.nome)
             new_inc = Income(
                 user_id=user_id,  # CR-002
                 mes_referencia=target_mes,
@@ -143,7 +180,14 @@ def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
                 recorrente=True,
             )
             db.add(new_inc)
-        # else: nao recorrente, NAO replica
+            replicated_incomes += 1
+        else:
+            logger.info("SKIP non-recurring income: '%s'", inc.nome)
+
+    logger.info(
+        "Replication complete: %d expenses, %d incomes replicated for %s",
+        replicated_count, replicated_incomes, target_mes,
+    )
 
     db.commit()
     return True
