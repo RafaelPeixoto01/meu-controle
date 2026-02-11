@@ -94,8 +94,7 @@ class TestGenerateMonthData:
         db.commit()
 
         result = generate_month_data(db, date(2026, 2, 1), test_user.id)
-        # Function runs (returns True) but nothing replicated
-        assert result is True
+        assert result is False  # Nothing to replicate
 
         feb_expenses = crud.get_expenses_by_month(db, date(2026, 2, 1), test_user.id)
         assert len(feb_expenses) == 0
@@ -147,3 +146,162 @@ class TestGenerateMonthData:
         feb_expenses = crud.get_expenses_by_month(db, date(2026, 2, 1), test_user.id)
         for exp in feb_expenses:
             assert exp.status == ExpenseStatus.PENDENTE.value
+
+    def test_origem_id_set_on_replicas(self, db, test_user, january_data):
+        """Replicated expenses should have origem_id pointing to source expense."""
+        jan_expenses = crud.get_expenses_by_month(db, date(2026, 1, 1), test_user.id)
+        generate_month_data(db, date(2026, 2, 1), test_user.id)
+
+        feb_expenses = crud.get_expenses_by_month(db, date(2026, 2, 1), test_user.id)
+        for feb_exp in feb_expenses:
+            assert feb_exp.origem_id is not None
+            # origem_id should match a January expense
+            source_ids = {e.id for e in jan_expenses}
+            assert feb_exp.origem_id in source_ids
+
+    def test_incremental_replication_new_expense(self, db, test_user):
+        """BUG FIX: Creating expense after first navigation should still replicate."""
+        # 1. Create first expense in January
+        exp_a = Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="Aluguel",
+            valor=1500.00,
+            vencimento=date(2026, 1, 10),
+            recorrente=True,
+            status=ExpenseStatus.PENDENTE.value,
+        )
+        db.add(exp_a)
+        db.commit()
+
+        # 2. Navigate to February → replicates Aluguel
+        result1 = generate_month_data(db, date(2026, 2, 1), test_user.id)
+        assert result1 is True
+        feb_expenses = crud.get_expenses_by_month(db, date(2026, 2, 1), test_user.id)
+        assert len(feb_expenses) == 1
+
+        # 3. Add second expense to January
+        exp_b = Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="Internet",
+            valor=100.00,
+            vencimento=date(2026, 1, 15),
+            recorrente=True,
+            status=ExpenseStatus.PENDENTE.value,
+        )
+        db.add(exp_b)
+        db.commit()
+
+        # 4. Navigate to February again → should replicate Internet
+        result2 = generate_month_data(db, date(2026, 2, 1), test_user.id)
+        assert result2 is True
+        feb_expenses = crud.get_expenses_by_month(db, date(2026, 2, 1), test_user.id)
+        assert len(feb_expenses) == 2  # Aluguel + Internet
+        names = {e.nome for e in feb_expenses}
+        assert names == {"Aluguel", "Internet"}
+
+    def test_incremental_replication_no_duplicates(self, db, test_user):
+        """Incremental replication should not duplicate already-replicated expenses."""
+        exp = Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="Aluguel",
+            valor=1500.00,
+            vencimento=date(2026, 1, 10),
+            recorrente=True,
+            status=ExpenseStatus.PENDENTE.value,
+        )
+        db.add(exp)
+        db.commit()
+
+        # Call 3 times — should always result in exactly 1 replica
+        generate_month_data(db, date(2026, 2, 1), test_user.id)
+        generate_month_data(db, date(2026, 2, 1), test_user.id)
+        generate_month_data(db, date(2026, 2, 1), test_user.id)
+
+        feb_expenses = crud.get_expenses_by_month(db, date(2026, 2, 1), test_user.id)
+        assert len(feb_expenses) == 1
+
+    def test_incremental_replication_installment(self, db, test_user):
+        """Adding installment expense after first navigation should replicate it."""
+        # 1. Create recurring expense in January
+        exp_a = Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="Aluguel",
+            valor=1500.00,
+            vencimento=date(2026, 1, 10),
+            recorrente=True,
+            status=ExpenseStatus.PENDENTE.value,
+        )
+        db.add(exp_a)
+        db.commit()
+
+        # 2. Navigate to February
+        generate_month_data(db, date(2026, 2, 1), test_user.id)
+
+        # 3. Add installment expense to January
+        exp_b = Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="TV",
+            valor=200.00,
+            vencimento=date(2026, 1, 20),
+            parcela_atual=1,
+            parcela_total=12,
+            recorrente=False,
+            status=ExpenseStatus.PENDENTE.value,
+        )
+        db.add(exp_b)
+        db.commit()
+
+        # 4. Navigate to February again
+        result = generate_month_data(db, date(2026, 2, 1), test_user.id)
+        assert result is True
+
+        feb_expenses = crud.get_expenses_by_month(db, date(2026, 2, 1), test_user.id)
+        assert len(feb_expenses) == 2
+
+        tv = [e for e in feb_expenses if e.nome == "TV"]
+        assert len(tv) == 1
+        assert tv[0].parcela_atual == 2
+        assert tv[0].parcela_total == 12
+
+    def test_incremental_replication_income(self, db, test_user):
+        """Adding recurring income after first navigation should replicate it."""
+        # 1. Create expense in January
+        exp = Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="Aluguel",
+            valor=1500.00,
+            vencimento=date(2026, 1, 10),
+            recorrente=True,
+            status=ExpenseStatus.PENDENTE.value,
+        )
+        db.add(exp)
+        db.commit()
+
+        # 2. Navigate to February
+        generate_month_data(db, date(2026, 2, 1), test_user.id)
+
+        # 3. Add income to January
+        inc = Income(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="Salario",
+            valor=5000.00,
+            data=date(2026, 1, 5),
+            recorrente=True,
+        )
+        db.add(inc)
+        db.commit()
+
+        # 4. Navigate to February again
+        result = generate_month_data(db, date(2026, 2, 1), test_user.id)
+        assert result is True
+
+        feb_incomes = crud.get_incomes_by_month(db, date(2026, 2, 1), test_user.id)
+        assert len(feb_incomes) == 1
+        assert feb_incomes[0].nome == "Salario"

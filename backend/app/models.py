@@ -55,6 +55,9 @@ class Expense(Base):
     parcela_atual: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parcela_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     recorrente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    origem_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )  # ID da despesa de origem na replicacao (RF-06)
     status: Mapped[str] = mapped_column(
         String(20), default=ExpenseStatus.PENDENTE.value, nullable=False
     )
@@ -83,6 +86,9 @@ class Income(Base):
     valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     data: Mapped[date | None] = mapped_column(Date, nullable=True)
     recorrente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    origem_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )  # ID da receita de origem na replicacao (RF-06)
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.now, onupdate=datetime.now

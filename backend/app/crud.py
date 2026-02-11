@@ -56,6 +56,21 @@ def count_expenses_by_month(db: Session, mes_referencia: date, user_id: str) -> 
     return len(list(db.scalars(stmt).all()))
 
 
+def expense_replica_exists(
+    db: Session, target_mes: date, user_id: str, origem_id: str
+) -> bool:
+    """Checa se ja existe uma replica desta despesa no mes-alvo."""
+    stmt = (
+        select(Expense)
+        .where(
+            Expense.user_id == user_id,
+            Expense.mes_referencia == target_mes,
+            Expense.origem_id == origem_id,
+        )
+    )
+    return db.scalars(stmt).first() is not None
+
+
 # ========== Incomes ==========
 
 def get_incomes_by_month(db: Session, mes_referencia: date, user_id: str) -> list[Income]:
@@ -96,6 +111,21 @@ def delete_income(db: Session, income: Income) -> None:
     """Remove uma receita."""
     db.delete(income)
     db.commit()
+
+
+def income_replica_exists(
+    db: Session, target_mes: date, user_id: str, origem_id: str
+) -> bool:
+    """Checa se ja existe uma replica desta receita no mes-alvo."""
+    stmt = (
+        select(Income)
+        .where(
+            Income.user_id == user_id,
+            Income.mes_referencia == target_mes,
+            Income.origem_id == origem_id,
+        )
+    )
+    return db.scalars(stmt).first() is not None
 
 
 # ========== Users (CR-002) ==========
