@@ -23,6 +23,7 @@ Este projeto segue um fluxo de desenvolvimento baseado em documentação. **Nunc
 | 3 | Spec Técnica | `/docs/03-SPEC.md` | Detalhamento técnico de cada feature |
 | 4 | Plano de Implementação | `/docs/04-IMPLEMENTATION-PLAN.md` | Ordem e dependências das tarefas |
 | 5 | Implementação | Código-fonte | Construção efetiva |
+| 6 | Deploy e Release | `/docs/05-DEPLOY-GUIDE.md` | Procedimentos de deploy, rollback e verificação |
 
 ### Regra de Ouro
 
@@ -116,6 +117,8 @@ Personal Finance/
 │   ├── 02-ARCHITECTURE.md
 │   ├── 03-SPEC.md
 │   ├── 04-IMPLEMENTATION-PLAN.md
+│   ├── 05-DEPLOY-GUIDE.md           # Guia de deploy, rollback e verificacao
+│   ├── Plano-de-evolucao.md          # Roadmap de melhorias de processo/infra
 │   ├── changes/              # Change Requests (CR-XXX)
 │   └── templates/            # Templates dos documentos
 ├── backend/
@@ -218,6 +221,8 @@ Personal Finance/
 - [x] Arquitetura (`/docs/02-ARCHITECTURE.md`)
 - [x] Spec Técnica (`/docs/03-SPEC.md`)
 - [x] Plano de Implementação (`/docs/04-IMPLEMENTATION-PLAN.md`)
+- [x] Guia de Deploy (`/docs/05-DEPLOY-GUIDE.md`)
+- [x] Plano de Evolução (`/docs/Plano-de-evolucao.md`)
 
 ### Change Requests Ativos
 - CR-001: Migracao PostgreSQL + Alembic (concluido)

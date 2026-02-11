@@ -1,0 +1,114 @@
+# Plano de Evolucao — Meu Controle
+
+**Versao:** 1.0
+**Data:** 2026-02-11
+**Autor:** Rafael
+
+---
+
+## Visao Geral
+
+Este documento organiza as melhorias de processo, infraestrutura e fluxo de desenvolvimento do projeto Meu Controle. Diferente do PRD (que define features do produto), este plano foca em **como desenvolvemos e operamos** o projeto.
+
+Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos criticos que precisam ser resolvidos imediatamente.
+
+---
+
+## Priorizacao
+
+| Prioridade | Significado | Criterio |
+|------------|-------------|----------|
+| P0 | Critico | Risco de perda de dados ou incapacidade de reverter problemas em producao |
+| P1 | Importante | Prevencao de bugs em producao, melhora significativa de qualidade |
+| P2 | Desejavel | Reduz retrabalho e dor recorrente, custo medio |
+| P3 | Futuro | Nice-to-have, depende de escala ou contexto |
+
+---
+
+## P0 — Critico
+
+### P0-1: Guia de Deploy e Release
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Documento | `/docs/05-DEPLOY-GUIDE.md` |
+| Descricao | Documentar pipeline completo Railway (build, migration, start), variaveis de ambiente por ambiente, procedimentos de rollback e backup |
+| Impacto | Sem este guia, rollback e procedimentos de emergencia dependem de memoria individual |
+
+### P0-2: Aprimorar Plano de Rollback no Template de CR
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Documento | `/docs/templates/00-template-change-request.md` (Secao 10) |
+| Descricao | Secao 10 do template era generica (3 linhas). Expandida para 5 sub-secoes: rollback de codigo, migration, impacto em dados, variaveis de ambiente, e verificacao pos-rollback |
+| Impacto | CRs futuros nascem com plano de rollback robusto desde o rascunho |
+
+---
+
+## P1 — Importante
+
+### P1-1: Fase de Validacao Explicita no Fluxo
+
+| Campo | Valor |
+|-------|-------|
+| Status | Pendente |
+| Descricao | Adicionar checklist de validacao entre implementacao e deploy. Inclui: criterios de aceite do CR/Spec, smoke test, revisao de migrations |
+| Documento afetado | `CLAUDE.md` (fluxo), possivelmente novo template |
+
+### P1-2: Done When Universal
+
+| Campo | Valor |
+|-------|-------|
+| Status | Pendente |
+| Descricao | Padronizar o que "pronto" significa para qualquer tarefa: testes passando, migration testada localmente, docs atualizados, commit seguindo Conventional Commits |
+| Documento afetado | `CLAUDE.md` (regras de implementacao) |
+
+---
+
+## P2 — Desejavel
+
+### P2-1: Secao de Troubleshooting no CLAUDE.md
+
+| Campo | Valor |
+|-------|-------|
+| Status | Pendente |
+| Descricao | Migrar licoes aprendidas da MEMORY.md para o CLAUDE.md (passlib+bcrypt, SQLite ALTER FK, Windows quirks). Garante que qualquer sessao tenha acesso a erros conhecidos |
+| Documento afetado | `CLAUDE.md` |
+
+### P2-2: Gestao de Dependencias
+
+| Campo | Valor |
+|-------|-------|
+| Status | Pendente |
+| Descricao | Definir politica de pinning (exato vs range), auditoria periodica (`pip audit`, `npm audit`), processo de atualizacao |
+| Documento afetado | `02-ARCHITECTURE.md` ou novo documento |
+
+---
+
+## P3 — Futuro
+
+### P3-1: ADRs Formais
+
+| Campo | Valor |
+|-------|-------|
+| Status | Pendente |
+| Descricao | Criar pasta `docs/adrs/` com template e processo para registrar decisoes arquiteturais com contexto e alternativas |
+| Quando | Proximo CR arquitetural grande |
+
+### P3-2: Design Review para CRs Complexos
+
+| Campo | Valor |
+|-------|-------|
+| Status | Pendente |
+| Descricao | Adicionar fase de revisao de design antes da implementacao para CRs de alta complexidade (como foi o CR-002) |
+| Quando | Quando houver mais CRs do porte do CR-002 |
+
+---
+
+## Changelog
+
+| Data | Autor | Descricao |
+|------|-------|-----------|
+| 2026-02-11 | Rafael | Documento criado (v1.0) com itens P0-P3 |

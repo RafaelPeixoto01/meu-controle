@@ -125,11 +125,39 @@ ALTER TABLE ...;
 
 ## 10. Plano de Rollback
 
-[Descrever como reverter a mudança caso algo dê errado]
+> Referencia: Procedimentos detalhados em `/docs/05-DEPLOY-GUIDE.md` (secoes 4 e 5).
 
-- Reverter commit(s): `git revert [hash]`
-- Reverter migration (se aplicável): `[comando]`
-- Passos adicionais: ...
+### 10.1 Rollback de Codigo
+
+- **Metodo:** `git revert [hash(es)]` + push para `master` (Railway auto-deploy)
+- **Metodo alternativo:** Redeploy do deployment anterior via Railway Dashboard
+- **Commits a reverter:** [listar commits ou range]
+
+### 10.2 Rollback de Migration
+
+- **Migration afetada:** [ex: `003_add_categories.py`]
+- **Comando de downgrade:** `alembic downgrade [revisao_anterior]` (ex: `alembic downgrade 002`)
+- **Downgrade testado?** [ ] Sim / [ ] Nao
+- **Downgrade e destrutivo?** [ ] Sim (dados perdidos) / [ ] Nao (schema revertido sem perda)
+
+### 10.3 Impacto em Dados
+
+- **Dados serao perdidos no rollback?** [ ] Sim / [ ] Nao
+- **Detalhamento:** [Ex: "Coluna X sera removida, dados nela serao perdidos" ou "Apenas schema revertido, dados preservados"]
+- **Backup necessario antes do deploy?** [ ] Sim / [ ] Nao
+- **Procedimento de backup:** Ver Deploy Guide secao 5 (`railway run pg_dump -Fc > backup.dump`)
+
+### 10.4 Rollback de Variaveis de Ambiente
+
+- **Variaveis novas/alteradas:** [listar ou "Nenhuma"]
+- **Acao de rollback:** [Ex: "Remover VAR_X do Railway" ou "Restaurar VAR_Y para valor anterior"]
+
+### 10.5 Verificacao Pos-Rollback
+
+- [ ] Aplicacao acessivel e funcional
+- [ ] `alembic current` mostra revisao esperada (se migration revertida)
+- [ ] [Verificacao especifica do CR — ex: "Endpoint X retorna dados corretamente"]
+- [ ] Usuarios existentes conseguem fazer login
 
 ---
 

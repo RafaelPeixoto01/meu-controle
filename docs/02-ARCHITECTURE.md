@@ -1,7 +1,7 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.0
-**Data:** 2026-02-09
+**Versao:** 2.1
+**Data:** 2026-02-11
 **PRD Ref:** 01-PRD v1.0
 **CR Ref:** CR-002 (Multi-usuario e Autenticacao)
 
@@ -613,4 +613,49 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, e CR-002.*
+## 9. Deploy e Infraestrutura
+
+### 9.1 Plataforma de Producao
+
+| Item | Valor |
+|------|-------|
+| Hosting | Railway (container Docker) |
+| Banco de dados | PostgreSQL (Railway add-on) |
+| Build trigger | Push para branch `master` (auto-deploy) |
+| Container base | `python:3.12-slim` (backend) + `node:20-alpine` (frontend build) |
+
+### 9.2 Pipeline de Deploy
+
+```mermaid
+graph LR
+    A[git push master] --> B[Railway detecta push]
+    B --> C[Docker build multi-stage]
+    C --> D[Stage 1: npm ci + build React]
+    D --> E[Stage 2: pip install + copy static]
+    E --> F[Container start]
+    F --> G[alembic upgrade head]
+    G --> H[uvicorn app.main:app]
+    H --> I[App online :8000]
+```
+
+1. Push para `master` aciona build automatico no Railway
+2. Dockerfile multi-stage: Stage 1 compila frontend (Node 20), Stage 2 prepara backend (Python 3.12)
+3. Container inicia: `alembic upgrade head` executa migrations pendentes
+4. `uvicorn` inicia o servidor FastAPI na porta 8000
+5. FastAPI serve API (`/api/*`) e arquivos estaticos do frontend (SPA fallback)
+
+### 9.3 Verificacao e Rollback
+
+Procedimentos detalhados de checklist pre-deploy, rollback (codigo, migration, variaveis), backup de banco e verificacao pos-deploy estao documentados em:
+
+> **`/docs/05-DEPLOY-GUIDE.md`**
+
+### 9.4 Health Check
+
+- **Endpoint:** `GET /api/config` retorna `{"google_client_id": "..."}` (confirma que app esta respondendo)
+- **Uso:** Verificacao manual pos-deploy
+- **Futuro:** Adicionar `HEALTHCHECK` no Dockerfile (ver Plano de Evolucao P1)
+
+---
+
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, e CR-002.*
