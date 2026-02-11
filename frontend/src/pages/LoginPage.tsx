@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-
 export default function LoginPage() {
   const { login, loginWithGoogle, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -12,6 +10,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState("");
+
+  // Fetch Google Client ID from backend (runtime, not build-time)
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((data) => setGoogleClientId(data.google_client_id || ""))
+      .catch(() => {});
+  }, []);
 
   // CR-002: Google OAuth callback — captura code da URL
   useEffect(() => {
@@ -44,13 +51,13 @@ export default function LoginPage() {
   }
 
   function handleGoogleLogin() {
-    if (!GOOGLE_CLIENT_ID) {
+    if (!googleClientId) {
       setError("Google OAuth nao configurado");
       return;
     }
     const redirectUri = `${window.location.origin}/login`;
     const scope = "openid email profile";
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}`;
     window.location.href = url;
   }
 

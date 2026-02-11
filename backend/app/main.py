@@ -41,6 +41,15 @@ def health_check():
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+def get_public_config():
+    """Return public configuration (no secrets)."""
+    import os
+    return {
+        "google_client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+    }
+
+
 # Serve frontend static files in production
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 if STATIC_DIR.is_dir():
