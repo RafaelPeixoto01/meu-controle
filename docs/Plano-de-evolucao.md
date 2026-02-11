@@ -73,17 +73,17 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 
 | Campo | Valor |
 |-------|-------|
-| Status | Pendente |
+| Status | ✅ Concluido |
 | Descricao | Migrar licoes aprendidas da MEMORY.md para o CLAUDE.md (passlib+bcrypt, SQLite ALTER FK, Windows quirks). Garante que qualquer sessao tenha acesso a erros conhecidos |
-| Documento afetado | `CLAUDE.md` |
+| Documento afetado | `CLAUDE.md` (Secao "Troubleshooting e Erros Conhecidos") |
 
 ### P2-2: Gestao de Dependencias
 
 | Campo | Valor |
 |-------|-------|
-| Status | Pendente |
+| Status | ✅ Concluido |
 | Descricao | Definir politica de pinning (exato vs range), auditoria periodica (`pip audit`, `npm audit`), processo de atualizacao |
-| Documento afetado | `02-ARCHITECTURE.md` ou novo documento |
+| Documento afetado | `02-ARCHITECTURE.md` (Secao 10: Gestao de Dependencias) |
 
 ---
 
@@ -112,3 +112,4 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | Data | Autor | Descricao |
 |------|-------|-----------|
 | 2026-02-11 | Rafael | Documento criado (v1.0) com itens P0-P3 |
+| 2026-02-11 | Rafael | P2-1 e P2-2 concluidos (Troubleshooting no CLAUDE.md, Gestao de Dependencias no 02-ARCHITECTURE.md) |

@@ -1,6 +1,6 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.1
+**Versao:** 2.2
 **Data:** 2026-02-11
 **PRD Ref:** 01-PRD v1.0
 **CR Ref:** CR-002 (Multi-usuario e Autenticacao)
@@ -658,4 +658,56 @@ Procedimentos detalhados de checklist pre-deploy, rollback (codigo, migration, v
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, e CR-002.*
+## 10. Gestao de Dependencias
+
+### 10.1 Politica de Pinning
+
+| Ecossistema | Estrategia | Formato | Exemplo | Justificativa |
+|-------------|------------|---------|---------|---------------|
+| Backend (pip) | Major.Minor fixo, patch livre | `==X.Y.*` | `fastapi==0.115.*` | Permite bug fixes automaticos, bloqueia breaking changes |
+| Frontend (npm) | Caret ranges | `^X.Y.Z` | `"react": "^19.0.0"` | Padrao npm, permite minor+patch, bloqueia major |
+| Lock files | Backend: nenhum; Frontend: `package-lock.json` | — | — | Frontend usa lock para builds reprodutiveis; backend depende dos ranges em `requirements.txt` |
+
+**Pins criticos (nao alterar sem testar):**
+
+| Dependencia | Pin | Motivo |
+|-------------|-----|--------|
+| `bcrypt` | `==4.0.*` | passlib 1.7.x incompativel com bcrypt >= 4.1 (ver Troubleshooting no CLAUDE.md) |
+
+### 10.2 Processo de Auditoria
+
+Executar periodicamente (recomendado: antes de cada CR ou mensalmente):
+
+**Backend:**
+```bash
+cd backend
+pip audit                          # Verifica vulnerabilidades conhecidas
+pip list --outdated                # Lista pacotes com versao mais nova disponivel
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm audit                          # Verifica vulnerabilidades conhecidas
+npm outdated                       # Lista pacotes com versao mais nova disponivel
+```
+
+### 10.3 Processo de Atualizacao
+
+1. **Verificar:** Executar auditoria (10.2) e identificar dependencias a atualizar
+2. **Avaliar impacto:** Consultar changelog da dependencia para breaking changes
+3. **Atualizar:** Alterar versao em `requirements.txt` ou `package.json`
+4. **Testar localmente:**
+   - Backend: `pip install -r requirements.txt && alembic upgrade head && python -m uvicorn app.main:app --reload`
+   - Frontend: `npm install && npm run build`
+5. **Validar:** Executar testes existentes e verificar funcionalidades afetadas
+6. **Commit:** `chore: update [dependencia] to X.Y.Z`
+
+**Regras:**
+- Nunca atualizar multiplas dependencias em um unico commit
+- Atualizar pin critico (`bcrypt`) requer teste explicito do fluxo de autenticacao
+- Se a atualizacao introduzir um problema, documentar em "Troubleshooting" no `CLAUDE.md`
+
+---
+
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, e CR-002.*

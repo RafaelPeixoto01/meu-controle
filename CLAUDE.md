@@ -258,3 +258,32 @@ Personal Finance/
 - **Testes são obrigatórios.** Toda funcionalidade precisa de cobertura.
 - **Um passo de cada vez.** Implemente por grupo/tarefa, não tudo de uma vez.
 - **Documente primeiro.** Código sem documentação gera retrabalho.
+
+---
+
+## Troubleshooting e Erros Conhecidos
+
+Referencia rapida de problemas encontrados durante o desenvolvimento e suas solucoes. Consulte esta secao antes de debugar problemas ja resolvidos.
+
+### Dependencias Python
+
+| Problema | Causa | Solucao |
+|----------|-------|---------|
+| `passlib` falha com bcrypt 4.1+ | passlib 1.7.x nao e compativel com bcrypt >= 4.1 | Manter `bcrypt==4.0.*` fixo em `requirements.txt` |
+
+### Alembic / Migrations
+
+| Problema | Causa | Solucao |
+|----------|-------|---------|
+| `ALTER TABLE` com FK falha no SQLite | SQLite nao suporta `ALTER` com foreign keys | Usar `op.batch_alter_table()` nas migrations Alembic |
+
+### Ambiente Windows
+
+| Problema | Causa | Solucao |
+|----------|-------|---------|
+| Comando `del` falha no bash | `del` e comando do CMD, nao do bash | Usar `rm -f` no bash tool |
+| `timeout` nao funciona no PowerShell | Comando exclusivo do CMD | Usar `Start-Sleep` no PowerShell |
+| `curl` nao funciona no PowerShell | Alias conflita com `Invoke-WebRequest` | Usar `Invoke-RestMethod` no PowerShell |
+| uvicorn nao encontrado | Executavel nao esta no PATH do Windows | Usar `python -m uvicorn` |
+| `pkill` / `kill` nao encerram processo | Comandos Unix nao funcionam no Windows | Usar `taskkill //F //PID <pid>` |
+| Processo Python com nome inesperado | Nome pode ser `python3.12.exe` ao inves de `python.exe` | Identificar via PID: `netstat -ano \| grep <porta>` + `tasklist //FI "PID eq <pid>"` |
