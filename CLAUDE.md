@@ -23,7 +23,8 @@ Este projeto segue um fluxo de desenvolvimento baseado em documentação. **Nunc
 | 3 | Spec Técnica | `/docs/03-SPEC.md` | Detalhamento técnico de cada feature |
 | 4 | Plano de Implementação | `/docs/04-IMPLEMENTATION-PLAN.md` | Ordem e dependências das tarefas |
 | 5 | Implementação | Código-fonte | Construção efetiva |
-| 6 | Deploy e Release | `/docs/05-DEPLOY-GUIDE.md` | Procedimentos de deploy, rollback e verificação |
+| 6 | Validação | Checklist "Done When" | Verificar critérios de aceite antes do deploy |
+| 7 | Deploy e Release | `/docs/05-DEPLOY-GUIDE.md` | Procedimentos de deploy, rollback e verificação |
 
 ### Regra de Ouro
 
@@ -70,7 +71,24 @@ Ao criar qualquer documento do fluxo, **use obrigatoriamente o template correspo
 - Siga as convenções de nomenclatura do `02-ARCHITECTURE.md`
 - Implemente uma tarefa por vez conforme o `04-IMPLEMENTATION-PLAN.md`
 - Escreva testes para cada funcionalidade
-- Verifique o critério "Done When" de cada tarefa ao concluir
+- Verifique o checklist "Done When Universal" ao concluir cada tarefa
+
+### Done When Universal
+
+Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
+
+**Obrigatórios:**
+- [ ] Funcionalidade implementada conforme descrito na tarefa
+- [ ] App roda localmente sem erros (backend + frontend)
+- [ ] Testes existentes continuam passando (regressão)
+- [ ] Novos testes cobrem a funcionalidade adicionada/alterada
+- [ ] Commit segue Conventional Commits e referencia o ID da tarefa
+
+**Se aplicável:**
+- [ ] Migration testada: `alembic upgrade head` + `alembic downgrade -1`
+- [ ] Endpoints respondem com status codes corretos
+- [ ] Documentos afetados atualizados (Spec, Architecture, CLAUDE.md)
+- [ ] Sem erros/warnings no console do browser (frontend)
 
 ### Commits
 
@@ -92,7 +110,7 @@ Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que j
 3. **Avalie o impacto** nos documentos existentes (PRD, Arquitetura, Spec, Plano)
 4. **Atualize os documentos afetados** antes de implementar
 5. **Implemente** seguindo as tarefas do CR
-6. **Valide** os critérios de aceite
+6. **Valide** os critérios de aceite do CR + checklist "Done When Universal"
 
 **Nunca faça alterações direto no código sem antes documentar o CR.**
 

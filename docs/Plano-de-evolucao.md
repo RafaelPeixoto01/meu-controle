@@ -53,16 +53,16 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 
 | Campo | Valor |
 |-------|-------|
-| Status | Pendente |
-| Descricao | Adicionar checklist de validacao entre implementacao e deploy. Inclui: criterios de aceite do CR/Spec, smoke test, revisao de migrations |
-| Documento afetado | `CLAUDE.md` (fluxo), possivelmente novo template |
+| Status | ✅ Concluido |
+| Descricao | Adicionada Fase 6 "Validacao" ao fluxo em `CLAUDE.md`, entre Implementacao (5) e Deploy (7). Referencia o checklist "Done When Universal" |
+| Documento afetado | `CLAUDE.md` (fluxo) |
 
 ### P1-2: Done When Universal
 
 | Campo | Valor |
 |-------|-------|
-| Status | Pendente |
-| Descricao | Padronizar o que "pronto" significa para qualquer tarefa: testes passando, migration testada localmente, docs atualizados, commit seguindo Conventional Commits |
+| Status | ✅ Concluido |
+| Descricao | Criada sub-secao "Done When Universal" em `CLAUDE.md` com checklist obrigatorio (5 itens) e condicional (4 itens). Passo 6 das regras de CR atualizado para referenciar o checklist |
 | Documento afetado | `CLAUDE.md` (regras de implementacao) |
 
 ---
