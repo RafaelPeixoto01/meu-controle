@@ -1,6 +1,6 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.2
+**Versao:** 2.3
 **Data:** 2026-02-11
 **PRD Ref:** 01-PRD v1.0
 **CR Ref:** CR-002 (Multi-usuario e Autenticacao)
@@ -508,15 +508,23 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
   - Positivas: Toggle de status e uma chamada com `{ "status": "Pago" }` — minimalista.
   - Negativas: Nenhuma significativa.
 
-### ADR-009: Tailwind CSS v4 via plugin Vite
-- **Status:** Aceita
-- **Data:** 2026-02-06
-- **Contexto:** Tailwind CSS v4 mudou a forma de configuracao em relacao a v3.
+### ADR-009: Tailwind CSS v4 via plugin Vite + Design System
+- **Status:** Aceita (expandida em CR-003)
+- **Data:** 2026-02-06 (expandida 2026-02-11)
+- **Contexto:** Tailwind CSS v4 mudou a forma de configuracao em relacao a v3. Em CR-003, um design system coeso foi adotado sobre essa base.
 - **Decisao:** Usar `@tailwindcss/vite` plugin ao inves de PostCSS. CSS usa `@import "tailwindcss"` e `@theme` block ao inves das diretivas v3 (`@tailwind base/components/utilities`). Nao precisa de `tailwind.config.js`.
+- **Design System (CR-003):**
+  - Tipografia: Outfit (Google Fonts) importada via `@import url()` no `index.css`, definida como `--font-sans` no `@theme`.
+  - Tokens de cor semanticos no bloco `@theme`: `surface`, `background`, `text`, `text-muted`, `border`, `primary-50`, `primary-light`, `accent`, `accent-light`, status (`pendente`, `pago`, `atrasado` com variantes `-bg`).
+  - Animacoes CSS customizadas: `float`, `float-reverse`, `fade-in-up`, `pulse-soft` — usadas em paginas de autenticacao para micro-interacoes decorativas.
+  - Convencoes de classes: cards `rounded-2xl`, inputs `rounded-xl`, modais com `backdrop-blur-[2px]`, botoes com `active:scale-[0.98]`.
+  - Documento de referencia visual: `docs/design-brief.md`.
+  - Detalhamento completo dos tokens e padroes: `docs/03-SPEC.md` Secao 3 (Design System).
 - **Alternativas Consideradas:**
   - Tailwind v3 com PostCSS: Descartado porque v4 com plugin Vite e mais simples e moderno.
+  - CSS Modules ou styled-components: Descartado porque Tailwind v4 com `@theme` oferece design tokens nativos sem dependencia extra.
 - **Consequencias:**
-  - Positivas: Sem arquivo de config extra, integracao nativa com Vite.
+  - Positivas: Sem arquivo de config extra, integracao nativa com Vite, design system via CSS puro (sem JS runtime).
   - Negativas: Documentacao/exemplos online ainda majoritariamente v3 (pode gerar confusao).
 
 ### ADR-010: TanStack Query com staleTime 5min, sem optimistic updates
@@ -710,4 +718,4 @@ npm outdated                       # Lista pacotes com versao mais nova disponiv
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, e CR-002.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002 e CR-003.*

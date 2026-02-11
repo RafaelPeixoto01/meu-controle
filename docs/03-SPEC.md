@@ -1,7 +1,7 @@
 # Especificacao Tecnica — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.0
-**Data:** 2026-02-09
+**Versao:** 2.1
+**Data:** 2026-02-11
 **PRD Ref:** 01-PRD v2.0
 **Arquitetura Ref:** 02-ARCHITECTURE v2.0
 **CR Ref:** CR-002 (Multi-usuario e Autenticacao)
@@ -1820,8 +1820,89 @@ export function useDuplicateExpense(year: number, month: number) {
 Legenda:
   [E] = Editar    [X] = Excluir
   Status e clicavel para alternar entre Pendente / Pago
-  [UserMenu ▼] = CR-002: Dropdown com nome do usuario, link Perfil, botao Sair
+  [UserMenu ▼] = CR-002: Dropdown com nome do usuario, icones SVG, link Perfil, botao Sair
 ```
+
+> **Nota (CR-003):** O wireframe acima representa a estrutura funcional. O header usa gradiente (`bg-gradient-to-r from-blue-600 to-blue-800`) com greeting "Ola, {nome}". Consulte a subsecao "Design System" abaixo para os padroes visuais detalhados.
+
+### Design System (CR-003)
+
+Documento de referencia visual: `docs/design-brief.md`
+
+#### Tipografia
+
+| Item | Valor |
+|------|-------|
+| Font family | Outfit (Google Fonts) — geometrica, moderna, amigavel |
+| Import | `@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap')` |
+| Token CSS | `--font-sans: 'Outfit', system-ui, -apple-system, sans-serif` |
+| Fallback | `system-ui, -apple-system, sans-serif` |
+
+#### Tokens de Cor
+
+Definidos no bloco `@theme` do `frontend/src/index.css`. Geram utilidades Tailwind automaticamente (ex: `--color-surface` → `bg-surface`).
+
+| Token | Hex | Uso |
+|-------|-----|-----|
+| `--color-primary` | `#2563eb` | Botoes primarios, links, headers de tabela |
+| `--color-primary-hover` | `#1d4ed8` | Hover de botoes primarios |
+| `--color-primary-light` | `#dbeafe` | Bordas de headers de tabela |
+| `--color-primary-50` | `#eff6ff` | Background de headers de tabela, hover de menu |
+| `--color-accent` | `#8b5cf6` | Destaques secundarios (branding panel) |
+| `--color-accent-light` | `#ede9fe` | Background de destaques secundarios |
+| `--color-danger` | `#dc2626` | Botao excluir, status Atrasado, saldo negativo |
+| `--color-danger-hover` | `#b91c1c` | Hover de botao excluir |
+| `--color-success` | `#16a34a` | Receitas, status Pago, saldo positivo |
+| `--color-success-dark` | `#15803d` | Texto saldo positivo |
+| `--color-warning` | `#d97706` | Alertas de aviso |
+| `--color-pendente` | `#ca8a04` | Status Pendente (texto) |
+| `--color-pendente-bg` | `#fef9c3` | Status Pendente (background) |
+| `--color-pago` | `#16a34a` | Status Pago (texto) |
+| `--color-pago-bg` | `#dcfce7` | Status Pago (background) |
+| `--color-atrasado` | `#dc2626` | Status Atrasado (texto) |
+| `--color-atrasado-bg` | `#fee2e2` | Status Atrasado (background) |
+| `--color-google` | `#4285f4` | Botao Google OAuth |
+| `--color-surface` | `#ffffff` | Cards, modais, dropdowns |
+| `--color-background` | `#f8fafc` | Background da pagina |
+| `--color-text` | `#1e293b` | Texto principal |
+| `--color-text-muted` | `#64748b` | Texto secundario, labels |
+| `--color-border` | `#e2e8f0` | Bordas de inputs, cards |
+
+#### Padroes de Componentes
+
+| Elemento | Classes Tailwind |
+|----------|-----------------|
+| Card | `bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80` |
+| Input | `border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all duration-200` |
+| Label | `text-sm font-semibold text-text-muted mb-1.5` |
+| Botao primario | `bg-primary text-white rounded-xl font-semibold hover:bg-primary-hover hover:shadow-md hover:shadow-primary/20 active:scale-[0.98] transition-all duration-150` |
+| Botao secundario | `text-text-muted border border-border rounded-xl font-semibold hover:bg-slate-50 active:bg-slate-100 active:scale-[0.98] transition-all duration-150` |
+| Modal overlay | `fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50` |
+| Modal card | `bg-surface rounded-2xl shadow-2xl shadow-black/10 border border-slate-100/80 p-7` |
+| Alert erro | `bg-red-50 border-l-4 border-red-500 text-red-700 p-3 rounded-r-xl text-sm font-medium` |
+| Alert sucesso | `bg-green-50 border-l-4 border-green-500 text-green-700 p-3 rounded-r-xl text-sm font-medium` |
+| Header tabela | `bg-primary-50 border-y border-primary-light` com `text-xs font-bold text-primary uppercase tracking-wide` |
+
+#### Animacoes CSS
+
+Definidas em `frontend/src/index.css` como `@keyframes` + classes utilitarias:
+
+| Animacao | Classe | Uso |
+|----------|--------|-----|
+| `float` | `.animate-float` | Formas decorativas no branding panel (6s) |
+| `float-reverse` | `.animate-float-reverse` | Formas decorativas alternativas (8s) |
+| `float` (lento) | `.animate-float-slow` | Formas decorativas lentas (10s) |
+| `fade-in-up` | `.animate-fade-in-up` | Entrada de cards e forms (0.6s) |
+| `pulse-soft` | `.animate-pulse-soft` | Pulsacao sutil em elementos decorativos (3s) |
+
+#### Layout de Paginas de Autenticacao
+
+| Pagina | Layout Desktop | Layout Mobile |
+|--------|---------------|---------------|
+| LoginPage | Split: branding panel (gradiente + mesh + formas animadas) a esquerda, form a direita | Branding compacto (wallet SVG + titulo) acima do form |
+| RegisterPage | Split: branding panel a esquerda, form a direita | Branding compacto acima do form |
+| ForgotPasswordPage | Centered: card unico com wallet SVG + titulo acima | Mesmo layout |
+| ResetPasswordPage | Centered: card unico com wallet SVG + titulo acima | Mesmo layout |
 
 ### Componente: MonthNavigator
 
@@ -1832,7 +1913,7 @@ Legenda:
 | onPrevious | () => void   | Sim         | Callback mes anterior  |
 | onNext     | () => void   | Sim         | Callback proximo mes   |
 
-**Renderiza:** Flex row com botao "< Anterior", label do mes (ex: "Fevereiro 2026"), botao "Proximo >".
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`) com flex row: botao "← Anterior" (`rounded-xl hover:bg-primary/10 active:scale-[0.97]`), label do mes (`text-xl font-bold text-text`), botao "Proximo →".
 
 **Dependencias:** `utils/date.ts` (getMonthLabel)
 
@@ -1843,12 +1924,12 @@ Legenda:
 | status  | ExpenseStatus  | Sim         | Status atual da despesa   |
 | onClick | () => void     | Sim         | Callback ao clicar        |
 
-**Estados visuais:**
-- `Pendente` → `bg-pendente/20 text-pendente` (amarelado)
-- `Pago` → `bg-pago/20 text-pago` (esverdeado)
-- `Atrasado` → `bg-atrasado/20 text-atrasado` (avermelhado)
+**Estados visuais (CR-003):**
+- `Pendente` → `bg-pendente-bg text-pendente border border-pendente/30` (amarelado)
+- `Pago` → `bg-pago-bg text-pago border border-pago/30` (esverdeado)
+- `Atrasado` → `bg-atrasado-bg text-atrasado border border-atrasado/30` (avermelhado)
 
-**Comportamento:** Elemento `<button>` estilizado como pill badge com `cursor-pointer`.
+**Comportamento:** Elemento `<button>` estilizado como pill badge (`rounded-full px-3.5 py-1 text-xs font-bold`) com `cursor-pointer`, `hover:shadow-md hover:scale-105`, `active:scale-95`, `focus:ring-2 focus:ring-primary/30`.
 
 ### Componente: ExpenseFormModal
 
@@ -1866,7 +1947,8 @@ Legenda:
 - Campos de parcela aparecem/desaparecem juntos.
 - Checkbox `recorrente` desabilitado quando parcelas estao preenchidas.
 - Validacao client-side: `parcela_atual <= parcela_total`.
-- Overlay escuro (`bg-black/50`) com modal centralizado.
+- Overlay com backdrop blur (`bg-black/40 backdrop-blur-[2px]`) com modal centralizado (`bg-surface rounded-2xl shadow-2xl`).
+- Inputs seguem padrao do Design System (`rounded-xl px-4 py-3 bg-slate-50/50`).
 
 ### Componente: IncomeFormModal
 
@@ -1889,7 +1971,7 @@ Legenda:
 | onConfirm | () => void | Sim         | Callback confirmar     |
 | onCancel  | () => void | Sim         | Callback cancelar      |
 
-**Renderiza:** Overlay modal com titulo, mensagem e botoes "Cancelar" (secundario) e "Confirmar" (vermelho/danger).
+**Renderiza:** Overlay com backdrop blur (`bg-black/40 backdrop-blur-[2px]`), card `bg-surface rounded-2xl shadow-2xl p-7`. Botoes: "Cancelar" (secundario `rounded-xl`) e "Excluir" (`bg-danger rounded-xl hover:shadow-md hover:shadow-danger/20`).
 
 ### Componente: IncomeTable
 
@@ -1900,7 +1982,7 @@ Legenda:
 | year          | number    | Sim         | Ano (para mutations)   |
 | month         | number    | Sim         | Mes (para mutations)   |
 
-**Renderiza:** Header "RECEITAS" com botao "+ Nova Receita", tabela (Nome | Valor | Data | Acoes), linha footer com total.
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "RECEITAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Receita" (`bg-primary rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Linhas alternadas (`bg-slate-50/50`), hover `bg-primary-50/50`. Footer com total em `font-bold`.
 
 **Comportamento:** Gerencia estado de modal (criar/editar) e dialogo de confirmacao (excluir). Usa hooks `useCreateIncome`, `useUpdateIncome`, `useDeleteIncome`.
 
@@ -1913,7 +1995,7 @@ Legenda:
 | year          | number    | Sim         | Ano (para mutations)   |
 | month         | number    | Sim         | Mes (para mutations)   |
 
-**Renderiza:** Header "DESPESAS" com botao "+ Nova Despesa", tabela (Nome | Valor | Parcela | Venc. | Status | Acoes), linha footer com total.
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "DESPESAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Despesa" (`bg-primary rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Colunas: Nome | Valor | Parcela | Venc. | Status | Acoes. Linhas alternadas, hover `bg-primary-50/50`. Footer com total em `font-bold`.
 
 **Comportamento:**
 - `StatusBadge` clicavel para toggle de status (Pendente/Atrasado → Pago, Pago → Pendente)
@@ -1929,7 +2011,7 @@ Legenda:
 | totalDespesas | number | Sim         | Total despesas      |
 | saldoLivre    | number | Sim         | Saldo calculado     |
 
-**Renderiza:** Card com `SALDO LIVRE: R$ {receitas} - R$ {despesas} = R$ {saldo}`. Background verde se saldo >= 0, vermelho se < 0.
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Secao superior: Receitas em `text-success font-semibold` e Despesas em `text-danger font-semibold` (com "- " prefixo). Secao inferior separada por `border-t-2`: saldo em `text-2xl font-extrabold`. Background condicional: `bg-success/[0.06] text-success-dark border-success/20` se >= 0, `bg-danger/[0.06] text-danger border-danger/20` se < 0.
 
 ### Componente: MonthlyView (Pagina)
 
@@ -1956,17 +2038,21 @@ export default function MonthlyView() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center py-20">
-        <p className="text-gray-500 text-lg">Carregando...</p>
+      <div className="flex flex-col justify-center items-center py-24 gap-3">
+        <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-text-muted text-sm font-medium">Carregando dados...</p>
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex justify-center items-center py-20">
-        <p className="text-danger text-lg">
-          Erro ao carregar dados: {error?.message}
+      <div className="flex flex-col justify-center items-center py-24 gap-2">
+        <p className="text-danger font-bold text-lg">
+          Erro ao carregar dados
+        </p>
+        <p className="text-text-muted text-sm">
+          {error?.message || "Verifique sua conexao e tente novamente."}
         </p>
       </div>
     );
@@ -1975,7 +2061,7 @@ export default function MonthlyView() {
   if (!data) return null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 py-6 pb-12 space-y-6">
       <MonthNavigator
         year={year}
         month={month}
@@ -2004,7 +2090,7 @@ export default function MonthlyView() {
 }
 ```
 
-**Estados:** Loading (spinner), Error (mensagem vermelha), Empty (null), Data (renderiza componentes).
+**Estados:** Loading (spinner `border-t-primary` com texto `text-text-muted`), Error (titulo `text-danger font-bold` + subtitulo `text-text-muted`), Empty (null), Data (renderiza componentes).
 
 ### Componente: ProtectedRoute (CR-002)
 
@@ -2043,7 +2129,10 @@ export default function ProtectedRoute() {
 |------|------|-------------|-----------|
 | — | — | — | Nao recebe props; usa AuthContext internamente |
 
-**Comportamento:** Dropdown no header. Mostra nome do usuario. Menu com link "Perfil" (navega para `/profile`) e botao "Sair" (chama `logout()`). Estilizado consistente com header.
+**Comportamento:** Dropdown no header. Botao com nome do usuario + chevron SVG animado (`rotate-180` quando aberto), hover `bg-white/10`. Click-outside handler via overlay invisivel (`fixed inset-0 z-40`). Menu dropdown (`bg-surface rounded-xl shadow-xl shadow-black/10 border border-slate-100/80`):
+- Link "Perfil" com icone SVG de usuario, hover `bg-primary-50`
+- Separador `border-t border-slate-100`
+- Botao "Sair" com icone SVG de logout, hover `text-danger bg-red-50`
 
 ```typescript
 import { useState } from "react";
@@ -3624,3 +3713,4 @@ sequenceDiagram
 
 *Documento migrado em 2026-02-08. Baseado em SPEC.md v1.0 (2026-02-06).*
 *Atualizado para v2.0 em 2026-02-09 — CR-002: Multi-usuario e Autenticacao (RF-08 a RF-12).*
+*Atualizado para v2.1 em 2026-02-11 — CR-003: Design System e descricoes visuais dos componentes.*
