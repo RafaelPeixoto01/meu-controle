@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 2.0
-**Data:** 2026-02-09
+**Versao:** 2.1
+**Data:** 2026-02-11
 **Status:** Aprovado
 **Fase:** 1 + 3 — Registro de Despesas + Multi-usuario e Autenticacao
-**CR Ref:** CR-002
+**CR Ref:** CR-002, CR-004
 
 ---
 
@@ -104,6 +104,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - Exibir o **total de despesas** do mes (soma de todos os valores de despesas).
 - Exibir o **total de receitas** do mes.
 - Exibir o **saldo livre** = total de receitas - total de despesas.
+- Exibir **totais por status de despesa**: total Pago, total Pendente e total Atrasado (CR-004).
 - Os totalizadores devem ser atualizados em tempo real ao adicionar, editar ou remover lancamentos.
 
 ### Modulo: Transicao de Mes
@@ -340,7 +341,7 @@ Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 | Saldo Livre | Diferenca entre total de receitas e total de despesas do mes |
 | Transicao de Mes | Processo automatico de gerar lancamentos de um novo mes a partir do mes anterior |
 | Status | Estado de pagamento de uma despesa: Pendente, Pago ou Atrasado |
-| Totalizadores | Valores agregados exibidos na tela: total despesas, total receitas, saldo livre |
+| Totalizadores | Valores agregados exibidos na tela: total despesas, total receitas, saldo livre, totais por status (CR-004) |
 
 ---
 
@@ -381,3 +382,4 @@ Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 
 *Documento migrado em 2026-02-08. Baseado em PRD_MeuControle.md v1.0 (2026-02-06).*
 *Atualizado para v2.0 em 2026-02-09. Inclui Fase 3 — Multi-usuario e Autenticacao (CR-002).*
+*Atualizado para v2.1 em 2026-02-11. RF-04: totalizadores por status de despesa (CR-004).*

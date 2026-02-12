@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.0
-**Data:** 2026-02-09
-**PRD Ref:** 01-PRD v2.0
+**Versao:** 2.1
+**Data:** 2026-02-11
+**PRD Ref:** 01-PRD v2.1
 **Arquitetura Ref:** 02-ARCHITECTURE v2.0
-**Spec Ref:** 03-SPEC v2.0
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao)
+**Spec Ref:** 03-SPEC v2.1
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status)
 
 ---
 
@@ -23,6 +23,7 @@
 | CR-002-AR | Arquitetura: Auth Foundation (Backend + Frontend) | CR2-AR-01 a CR2-AR-18 | Pendente |
 | CR-002-FN | Funcionalidade: Endpoints, Paginas, Integracao    | CR2-FN-01 a CR2-FN-15 | Pendente |
 | CR-002-VL | Validacao: Regressao, Testes, Documentacao         | CR2-VL-01 a CR2-VL-11 | Pendente |
+| CR-004 | Totalizadores de Despesa por Status                       | CR4-T-01 a CR4-T-06   | Pendente |
 
 ---
 
@@ -455,3 +456,23 @@ graph TD
 *Documento criado em 2026-02-08. Baseado em SPEC.md v1.0 Sec 8 (Ordem de Implementacao).*
 *Atualizado em 2026-02-08 para incluir CR-001 (Migracao PostgreSQL + Alembic).*
 *Atualizado em 2026-02-09 para incluir CR-002 (Multi-usuario e Autenticacao). 44 novas tarefas em 3 grupos (AR/FN/VL). IDs usam prefixo CR2- para evitar colisao com CR-001.*
+
+---
+
+## Grupo CR-004: Totalizadores de Despesa por Status
+
+> Ref: `/docs/changes/CR-004-totalizadores-por-status.md`
+>
+> Adiciona 3 totalizadores (Pago, Pendente, Atrasado) à MonthlySummary e ao footer da ExpenseTable.
+> Sem migration. Sem novos endpoints. Mudança aditiva na API.
+
+| ID | Tarefa | Arquivos | Depende de | Done When |
+|----|--------|----------|------------|-----------|
+| CR4-T-01 | Adicionar campos `total_pago`, `total_pendente`, `total_atrasado` ao schema `MonthlySummary` | `backend/app/schemas.py` | — | Schema compila com 3 novos campos `float` |
+| CR4-T-02 | Calcular totais por status em `get_monthly_summary` | `backend/app/services.py` | CR4-T-01 | `GET /api/months/{y}/{m}` retorna os 3 novos campos com valores corretos |
+| CR4-T-03 | Espelhar campos no type `MonthlySummary` do frontend | `frontend/src/types.ts` | CR4-T-01 | `npm run build` compila sem erros |
+| CR4-T-04 | Passar novos totais como props para `ExpenseTable` | `frontend/src/pages/MonthlyView.tsx` | CR4-T-03 | Props passadas, sem erros TS |
+| CR4-T-05 | Renderizar linhas de resumo por status no footer da `ExpenseTable` | `frontend/src/components/ExpenseTable.tsx` | CR4-T-04 | 3 linhas coloridas (Pago/Pendente/Atrasado) acima de "Total Despesas" |
+| CR4-T-06 | Atualizar documentos afetados | `docs/01-PRD.md`, `docs/03-SPEC.md`, `docs/04-IMPLEMENTATION-PLAN.md` | — | Docs refletem os novos totalizadores |
+
+*Atualizado em 2026-02-11. Adicionado grupo CR-004 (Totalizadores por Status). 6 tarefas.*

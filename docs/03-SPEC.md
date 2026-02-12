@@ -1293,9 +1293,14 @@ class MonthlySummary(BaseModel):
     total_despesas: float
     total_receitas: float
     saldo_livre: float
+    total_pago: float       # CR-004: total despesas com status Pago
+    total_pendente: float   # CR-004: total despesas com status Pendente
+    total_atrasado: float   # CR-004: total despesas com status Atrasado
     expenses: list[ExpenseResponse]
     incomes: list[IncomeResponse]
 ```
+
+**Invariante (CR-004):** `total_pago + total_pendente + total_atrasado == total_despesas` (sempre).
 
 **Frontend — Type (`frontend/src/types.ts` — secao Summary):**
 
@@ -1305,6 +1310,9 @@ export interface MonthlySummary {
   total_despesas: number;
   total_receitas: number;
   saldo_livre: number;
+  total_pago: number;       // CR-004
+  total_pendente: number;   // CR-004
+  total_atrasado: number;   // CR-004
   expenses: Expense[];
   incomes: Income[];
 }
@@ -1323,6 +1331,7 @@ def get_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict
     2. Busca despesas e receitas do usuario
     3. Aplica auto-deteccao de status (RF-05)
     4. Calcula totalizadores (RF-04)
+    5. Calcula totalizadores por status (CR-004)
     """
     # Passo 1: Auto-gerar se necessario (escopo por usuario)
     generate_month_data(db, mes_referencia, user_id)  # CR-002
@@ -1340,11 +1349,19 @@ def get_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict
     total_despesas = sum(float(e.valor) for e in expenses)
     total_receitas = sum(float(i.valor) for i in incomes)
 
+    # Passo 5: Totalizadores por status (CR-004)
+    total_pago = sum(float(e.valor) for e in expenses if e.status == ExpenseStatus.PAGO.value)
+    total_pendente = sum(float(e.valor) for e in expenses if e.status == ExpenseStatus.PENDENTE.value)
+    total_atrasado = sum(float(e.valor) for e in expenses if e.status == ExpenseStatus.ATRASADO.value)
+
     return {
         "mes_referencia": mes_referencia,
         "total_despesas": round(total_despesas, 2),
         "total_receitas": round(total_receitas, 2),
         "saldo_livre": round(total_receitas - total_despesas, 2),
+        "total_pago": round(total_pago, 2),          # CR-004
+        "total_pendente": round(total_pendente, 2),    # CR-004
+        "total_atrasado": round(total_atrasado, 2),    # CR-004
         "expenses": expenses,
         "incomes": incomes,
     }
@@ -1988,14 +2005,24 @@ Definidas em `frontend/src/index.css` como `@keyframes` + classes utilitarias:
 
 ### Componente: ExpenseTable
 
-| Prop          | Tipo      | Obrigatorio | Descricao              |
-|---------------|-----------|-------------|------------------------|
-| expenses      | Expense[] | Sim         | Lista de despesas      |
-| totalDespesas | number    | Sim         | Total de despesas      |
-| year          | number    | Sim         | Ano (para mutations)   |
-| month         | number    | Sim         | Mes (para mutations)   |
+| Prop           | Tipo      | Obrigatorio | Descricao                          |
+|----------------|-----------|-------------|------------------------------------|
+| expenses       | Expense[] | Sim         | Lista de despesas                  |
+| totalDespesas  | number    | Sim         | Total de despesas                  |
+| totalPago      | number    | Sim         | Total despesas com status Pago (CR-004)     |
+| totalPendente  | number    | Sim         | Total despesas com status Pendente (CR-004) |
+| totalAtrasado  | number    | Sim         | Total despesas com status Atrasado (CR-004) |
+| year           | number    | Sim         | Ano (para mutations)               |
+| month          | number    | Sim         | Mes (para mutations)               |
 
-**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "DESPESAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Despesa" (`bg-primary rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Colunas: Nome | Valor | Parcela | Venc. | Status | Acoes. Linhas alternadas, hover `bg-primary-50/50`. Footer com total em `font-bold`.
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "DESPESAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Despesa" (`bg-primary rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Colunas: Nome | Valor | Parcela | Venc. | Status | Acoes. Linhas alternadas, hover `bg-primary-50/50`. Footer com 3 linhas de resumo por status (CR-004) seguidas de total em `font-bold`.
+
+**Footer — Linhas de resumo por status (CR-004):** 3 linhas acima do "Total Despesas", cada uma com cor do Design System:
+- Pago: `bg-pago-bg/50 text-pago text-sm font-semibold`
+- Pendente: `bg-pendente-bg/50 text-pendente text-sm font-semibold`
+- Atrasado: `bg-atrasado-bg/50 text-atrasado text-sm font-semibold`
+
+Hierarquia visual: linhas de status usam `text-sm font-semibold py-2.5`, total geral usa `font-bold py-3.5`.
 
 **Comportamento:**
 - `StatusBadge` clicavel para toggle de status (Pendente/Atrasado → Pago, Pago → Pendente)
@@ -2077,6 +2104,9 @@ export default function MonthlyView() {
       <ExpenseTable
         expenses={data.expenses}
         totalDespesas={data.total_despesas}
+        totalPago={data.total_pago}
+        totalPendente={data.total_pendente}
+        totalAtrasado={data.total_atrasado}
         year={year}
         month={month}
       />
