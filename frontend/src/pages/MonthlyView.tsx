@@ -57,6 +57,9 @@ export default function MonthlyView() {
       <ExpenseTable
         expenses={data.expenses}
         totalDespesas={data.total_despesas}
+        totalPago={data.total_pago}
+        totalPendente={data.total_pendente}
+        totalAtrasado={data.total_atrasado}
         year={year}
         month={month}
       />

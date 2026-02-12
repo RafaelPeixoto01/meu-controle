@@ -14,6 +14,9 @@ import ConfirmDialog from "./ConfirmDialog";
 interface ExpenseTableProps {
   expenses: Expense[];
   totalDespesas: number;
+  totalPago: number;
+  totalPendente: number;
+  totalAtrasado: number;
   year: number;
   month: number;
 }
@@ -26,6 +29,9 @@ function getNextStatus(current: ExpenseStatus): ExpenseStatus {
 export default function ExpenseTable({
   expenses,
   totalDespesas,
+  totalPago,
+  totalPendente,
+  totalAtrasado,
   year,
   month,
 }: ExpenseTableProps) {
@@ -176,6 +182,33 @@ export default function ExpenseTable({
             )}
           </tbody>
           <tfoot>
+            <tr className="border-t-2 border-slate-200 bg-pago-bg/50">
+              <td className="px-6 py-2.5 text-sm font-semibold text-pago">
+                Pago
+              </td>
+              <td className="px-6 py-2.5 text-right text-sm font-semibold text-pago tabular-nums">
+                {formatBRL(totalPago)}
+              </td>
+              <td colSpan={4} />
+            </tr>
+            <tr className="bg-pendente-bg/50">
+              <td className="px-6 py-2.5 text-sm font-semibold text-pendente">
+                Pendente
+              </td>
+              <td className="px-6 py-2.5 text-right text-sm font-semibold text-pendente tabular-nums">
+                {formatBRL(totalPendente)}
+              </td>
+              <td colSpan={4} />
+            </tr>
+            <tr className="bg-atrasado-bg/50">
+              <td className="px-6 py-2.5 text-sm font-semibold text-atrasado">
+                Atrasado
+              </td>
+              <td className="px-6 py-2.5 text-right text-sm font-semibold text-atrasado tabular-nums">
+                {formatBRL(totalAtrasado)}
+              </td>
+              <td colSpan={4} />
+            </tr>
             <tr className="bg-slate-50 border-t-2 border-slate-200">
               <td className="px-6 py-3.5 font-bold text-text">
                 Total Despesas

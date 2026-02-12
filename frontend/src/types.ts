@@ -69,6 +69,9 @@ export interface MonthlySummary {
   total_despesas: number;
   total_receitas: number;
   saldo_livre: number;
+  total_pago: number;       // CR-004
+  total_pendente: number;   // CR-004
+  total_atrasado: number;   // CR-004
   expenses: Expense[];
   incomes: Income[];
 }

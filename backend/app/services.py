@@ -215,11 +215,19 @@ def get_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict
     total_despesas = sum(float(e.valor) for e in expenses)
     total_receitas = sum(float(i.valor) for i in incomes)
 
+    # Passo 5: Totalizadores por status (CR-004)
+    total_pago = sum(float(e.valor) for e in expenses if e.status == ExpenseStatus.PAGO.value)
+    total_pendente = sum(float(e.valor) for e in expenses if e.status == ExpenseStatus.PENDENTE.value)
+    total_atrasado = sum(float(e.valor) for e in expenses if e.status == ExpenseStatus.ATRASADO.value)
+
     return {
         "mes_referencia": mes_referencia,
         "total_despesas": round(total_despesas, 2),
         "total_receitas": round(total_receitas, 2),
         "saldo_livre": round(total_receitas - total_despesas, 2),
+        "total_pago": round(total_pago, 2),
+        "total_pendente": round(total_pendente, 2),
+        "total_atrasado": round(total_atrasado, 2),
         "expenses": expenses,
         "incomes": incomes,
     }

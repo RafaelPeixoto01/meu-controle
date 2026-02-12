@@ -99,6 +99,9 @@ class MonthlySummary(BaseModel):
     total_despesas: float
     total_receitas: float
     saldo_livre: float
+    total_pago: float       # CR-004: total despesas com status Pago
+    total_pendente: float   # CR-004: total despesas com status Pendente
+    total_atrasado: float   # CR-004: total despesas com status Atrasado
     expenses: list[ExpenseResponse]
     incomes: list[IncomeResponse]
 
