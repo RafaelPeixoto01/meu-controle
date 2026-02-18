@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.1
-**Data:** 2026-02-11
+**Versao:** 2.2
+**Data:** 2026-02-17
 **PRD Ref:** 01-PRD v2.1
 **Arquitetura Ref:** 02-ARCHITECTURE v2.0
-**Spec Ref:** 03-SPEC v2.1
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status)
+**Spec Ref:** 03-SPEC v2.2
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios)
 
 ---
 
@@ -23,7 +23,8 @@
 | CR-002-AR | Arquitetura: Auth Foundation (Backend + Frontend) | CR2-AR-01 a CR2-AR-18 | Pendente |
 | CR-002-FN | Funcionalidade: Endpoints, Paginas, Integracao    | CR2-FN-01 a CR2-FN-15 | Pendente |
 | CR-002-VL | Validacao: Regressao, Testes, Documentacao         | CR2-VL-01 a CR2-VL-11 | Pendente |
-| CR-004 | Totalizadores de Despesa por Status                       | CR4-T-01 a CR4-T-06   | Pendente |
+| CR-004 | Totalizadores de Despesa por Status                       | CR4-T-01 a CR4-T-06   | Concluido |
+| CR-005 | Gastos Diarios (Daily Expenses)                           | CR5-T-01 a CR5-T-21   | Concluido |
 
 ---
 
@@ -476,3 +477,38 @@ graph TD
 | CR4-T-06 | Atualizar documentos afetados | `docs/01-PRD.md`, `docs/03-SPEC.md`, `docs/04-IMPLEMENTATION-PLAN.md` | — | Docs refletem os novos totalizadores |
 
 *Atualizado em 2026-02-11. Adicionado grupo CR-004 (Totalizadores por Status). 6 tarefas.*
+
+---
+
+## Grupo CR-005: Gastos Diarios (Daily Expenses)
+
+> Ref: `/docs/changes/CR-005-gastos-diarios.md`
+>
+> Nova funcionalidade independente para registrar gastos nao planejados do dia a dia.
+> Inclui modelo DailyExpense, API REST, visao mensal agrupada por dia, navegacao entre visoes.
+
+| ID | Tarefa | Arquivos | Depende de | Done When |
+|----|--------|----------|------------|-----------|
+| CR5-T-01 | Criar CR-005 | `docs/changes/CR-005-gastos-diarios.md` | — | Documento criado |
+| CR5-T-02 | Criar modulo de categorias | `backend/app/categories.py` | CR5-T-01 | 14 categorias + Outros + 6 metodos pagamento + helpers |
+| CR5-T-03 | Adicionar modelo DailyExpense + User relationship | `backend/app/models.py` | CR5-T-02 | Model com colunas, indices e FK corretos |
+| CR5-T-04 | Criar migration 004 | `backend/alembic/versions/004_add_daily_expenses.py` | CR5-T-03 | alembic upgrade/downgrade funciona |
+| CR5-T-05 | Adicionar schemas Pydantic | `backend/app/schemas.py` | CR5-T-03 | 6 schemas criados |
+| CR5-T-06 | Adicionar funcoes CRUD | `backend/app/crud.py` | CR5-T-03 | 5 funcoes CRUD |
+| CR5-T-07 | Adicionar service layer | `backend/app/services.py` | CR5-T-06 | Agrupamento por dia + subtotais funciona |
+| CR5-T-08 | Criar router + registrar em main.py | `backend/app/routers/daily_expenses.py`, `backend/app/main.py` | CR5-T-05/06/07 | 5 endpoints respondem corretamente |
+| CR5-T-09 | Adicionar tipos TypeScript | `frontend/src/types.ts` | CR5-T-05 | 6 interfaces adicionadas |
+| CR5-T-10 | Adicionar funcoes API frontend | `frontend/src/services/api.ts` | CR5-T-09 | 5 funcoes em api.ts |
+| CR5-T-11 | Criar hooks TanStack Query | `frontend/src/hooks/useDailyExpenses.ts` | CR5-T-10 | 5 hooks exportados |
+| CR5-T-12 | Criar hook de navegacao mensal | `frontend/src/hooks/useDailyExpensesView.ts` | CR5-T-11 | Hook com month state + navigation |
+| CR5-T-13 | Adicionar formatDateFull() | `frontend/src/utils/format.ts` | — | Funcao formata "DD/MM - Dia" |
+| CR5-T-14 | Criar DailyExpenseFormModal | `frontend/src/components/DailyExpenseFormModal.tsx` | CR5-T-11/13 | Modal com 5 campos, create/edit |
+| CR5-T-15 | Criar DailyExpenseTable | `frontend/src/components/DailyExpenseTable.tsx` | CR5-T-11/13/14 | Tabela agrupada por dia com totais |
+| CR5-T-16 | Criar ViewSelector | `frontend/src/components/ViewSelector.tsx` | — | Pills/tabs alternam entre visoes |
+| CR5-T-17 | Criar DailyExpensesView page | `frontend/src/pages/DailyExpensesView.tsx` | CR5-T-12/15/16 | Pagina renderiza todos componentes |
+| CR5-T-18 | Adicionar rota /daily-expenses | `frontend/src/App.tsx` | CR5-T-17 | Rota protegida funciona |
+| CR5-T-19 | Integrar ViewSelector no MonthlyView | `frontend/src/pages/MonthlyView.tsx` | CR5-T-16/18 | Navegacao entre visoes funciona |
+| CR5-T-20 | Verificar build completo | — | CR5-T-19 | tsc, migration, backend sem erros |
+| CR5-T-21 | Atualizar documentacao | docs/*, CLAUDE.md | CR5-T-20 | Todos docs atualizados |
+
+*Atualizado em 2026-02-17. Adicionado grupo CR-005 (Gastos Diarios). 21 tarefas.*

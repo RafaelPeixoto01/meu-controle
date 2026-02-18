@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 2.1
-**Data:** 2026-02-11
+**Versao:** 2.2
+**Data:** 2026-02-17
 **Status:** Aprovado
-**Fase:** 1 + 3 — Registro de Despesas + Multi-usuario e Autenticacao
-**CR Ref:** CR-002, CR-004
+**Fase:** 1 + 3 + Gastos Diarios — Registro de Despesas + Multi-usuario e Autenticacao + Gastos Diarios
+**CR Ref:** CR-002, CR-004, CR-005
 
 ---
 
@@ -126,6 +126,21 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 
   **c) Despesas avulsas (sem parcela e marcadas como nao recorrentes):**
   - Nao sao replicadas.
+
+### Modulo: Gastos Diarios (CR-005)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-13 | CRUD de gastos diarios com descricao, valor, data, subcategoria e metodo de pagamento | Alta | Rafael |
+
+**RF-13 — Detalhamento:**
+- Campos obrigatorios: descricao (texto), valor (decimal em R$), data (default = hoje), subcategoria (selecao), metodo de pagamento (selecao).
+- A subcategoria e escolhida pelo usuario a partir de 14 categorias fixas + "Outros", conforme definido em `backend/app/categories.py`.
+- A categoria e auto-derivada da subcategoria escolhida (o usuario nao seleciona a categoria diretamente).
+- Metodos de pagamento disponiveis: Dinheiro, Cartao de Credito, Cartao de Debito, Pix, Vale Alimentacao, Vale Refeicao.
+- A visao mensal exibe gastos agrupados por dia, com subtotal por dia e total do mes.
+- Gastos diarios sao independentes dos gastos planejados (nao participam da transicao de mes).
+- O usuario navega entre as duas visoes (Gastos Planejados e Gastos Diarios) por meio de um seletor de visao (ViewSelector).
 
 ### Modulo: Autenticacao e Usuarios (CR-002)
 
@@ -266,6 +281,23 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
   - Criterios de aceite:
     - [ ] Dado que o usuario esta autenticado, quando clica "Sair", entao o refresh token e invalidado e ele e redirecionado para a pagina de login.
 
+- **US-20:** Como usuario, quero registrar um gasto diario com descricao, valor, subcategoria, data e metodo de pagamento, para ter controle dos meus gastos nao planejados. (CR-005)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario esta na visao de Gastos Diarios, quando clica em "+ Novo Gasto" e preenche os campos, entao o gasto aparece na lista agrupado pelo dia correspondente.
+
+- **US-21:** Como usuario, quero visualizar meus gastos diarios agrupados por dia com subtotais e total mensal, para entender como estou gastando no dia a dia. (CR-005)
+  - Criterios de aceite:
+    - [ ] A visao mensal exibe gastos agrupados por dia, com subtotal por dia e total do mes. Valores no formato BRL.
+
+- **US-22:** Como usuario, quero editar ou excluir um gasto diario, para corrigir erros ou remover lancamentos indevidos. (CR-005)
+  - Criterios de aceite:
+    - [ ] Dado que existe um gasto diario, quando o usuario edita e salva, entao os valores sao atualizados na lista e nos totalizadores.
+    - [ ] Dado que existe um gasto diario, quando o usuario clica em excluir e confirma, entao o gasto e removido e os totalizadores sao recalculados.
+
+- **US-23:** Como usuario, quero alternar entre a visao de Gastos Planejados e Gastos Diarios, para acessar rapidamente cada funcionalidade. (CR-005)
+  - Criterios de aceite:
+    - [ ] O ViewSelector no topo da pagina permite alternar entre as duas visoes sem perder o contexto do mes selecionado.
+
 ---
 
 ## 7. Regras de Negocio
@@ -290,6 +322,11 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-016 | Token de recuperacao de senha e valido por 1 hora; apos uso ou expiracao, e invalidado | Autenticacao (RF-11) |
 | RN-017 | Login Google com email ja cadastrado vincula a conta Google a conta existente (merge) | Autenticacao (RF-09) |
 | RN-018 | Usuario cadastrado apenas via Google (sem password_hash) nao pode trocar senha pelo perfil | Autenticacao (RF-12) |
+| RN-019 | Subcategoria de gasto diario deve pertencer a uma das 14 categorias fixas + Outros | Gastos Diarios (RF-13) |
+| RN-020 | Categoria de gasto diario e auto-derivada da subcategoria escolhida pelo usuario | Gastos Diarios (RF-13) |
+| RN-021 | Metodo de pagamento deve ser um dos 6 metodos validos: Dinheiro, Cartao de Credito, Cartao de Debito, Pix, Vale Alimentacao, Vale Refeicao | Gastos Diarios (RF-13) |
+| RN-022 | Gastos diarios sao independentes de gastos planejados — nao participam da transicao automatica de mes | Gastos Diarios (RF-13) |
+| RN-023 | Gastos diarios pertencem a um usuario via FK user_id; isolamento de dados por usuario | Gastos Diarios (RF-13) |
 
 ---
 
@@ -298,7 +335,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 
 - ~~Autenticacao e gestao de usuarios (multi-usuario)~~ — **Implementada via CR-002**
-- Categorias e tags para despesas
+- ~~Categorias e tags para despesas~~ — **Parcialmente implementado via CR-005** (categorias fixas para gastos diarios)
 - Graficos e dashboards de analise
 - Exportacao de dados (PDF, CSV, Excel)
 - Notificacoes e alertas de vencimento
@@ -342,6 +379,10 @@ Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 | Transicao de Mes | Processo automatico de gerar lancamentos de um novo mes a partir do mes anterior |
 | Status | Estado de pagamento de uma despesa: Pendente, Pago ou Atrasado |
 | Totalizadores | Valores agregados exibidos na tela: total despesas, total receitas, saldo livre, totais por status (CR-004) |
+| Gasto Diario | Despesa nao planejada do dia a dia — mercado, transporte, alimentacao, lazer, etc. (CR-005) |
+| Subcategoria | Classificacao especifica dentro de uma categoria de gasto diario (ex: "Supermercado" dentro de "Alimentacao") (CR-005) |
+| Metodo de Pagamento | Forma de pagamento utilizada em um gasto diario: Dinheiro, Cartao de Credito, Cartao de Debito, Pix, Vale Alimentacao, Vale Refeicao (CR-005) |
+| ViewSelector | Componente de navegacao que permite alternar entre Gastos Planejados e Gastos Diarios (CR-005) |
 
 ---
 
@@ -383,3 +424,4 @@ Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 *Documento migrado em 2026-02-08. Baseado em PRD_MeuControle.md v1.0 (2026-02-06).*
 *Atualizado para v2.0 em 2026-02-09. Inclui Fase 3 — Multi-usuario e Autenticacao (CR-002).*
 *Atualizado para v2.1 em 2026-02-11. RF-04: totalizadores por status de despesa (CR-004).*
+*Atualizado para v2.2 em 2026-02-17. RF-13: Gastos Diarios — CRUD, categorias fixas, visao mensal agrupada por dia (CR-005).*

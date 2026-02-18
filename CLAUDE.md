@@ -36,6 +36,12 @@ Documentação PRIMEIRO → Código DEPOIS
 - Alterações/Correções: CR → Avaliar impacto → Atualizar docs afetados → Implementar
 - Bug fix simples: CR → Implementar → Atualizar testes
 
+### IMPORTANTE: CR é Obrigatório
+
+> **NUNCA implemente uma feature ou alteração significativa sem criar o CR primeiro.**
+> Mesmo para mudanças urgentes ou aparentemente simples. Se uma alteração já foi feita
+> sem CR, crie um retroativamente antes de prosseguir com qualquer follow-up.
+
 ---
 
 ## Templates e Prompts
@@ -64,6 +70,7 @@ Ao criar qualquer documento do fluxo, **use obrigatoriamente o template correspo
 4. **Nunca invente** funcionalidades que não estão na spec
 5. **Nunca omita** funcionalidades que estão na spec
 6. **Se houver ambiguidade**, pare e pergunte antes de decidir
+7. **Explore antes de mudar:** Em tarefas que envolvem deploy, migrations, ou dependências, explore o estado atual antes de agir (o que está deployado, schema do banco, dependências instaladas)
 
 ### Durante a Implementação
 
@@ -99,6 +106,12 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 - Refactoring: `refactor: [descrição]`
 - Testes: `test: add tests for T-XXX`
 
+### Push e Deploy
+
+- Antes de push, verifique se o build TypeScript passa: `cd frontend && npx tsc --noEmit -p tsconfig.app.json`
+- Commits devem referenciar o CR relevante (ex: `feat: CR-004 - descricao`)
+- Após implementação, atualize TODOS os documentos relacionados antes de push
+
 ---
 
 ## Regras para Alterações e Correções
@@ -111,6 +124,8 @@ Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que j
 4. **Atualize os documentos afetados** antes de implementar
 5. **Implemente** seguindo as tarefas do CR
 6. **Valide** os critérios de aceite do CR + checklist "Done When Universal"
+7. **Verifique o build** TypeScript: `cd frontend && npx tsc --noEmit -p tsconfig.app.json`
+8. **Commit e push** referenciando o CR: `feat: CR-XXX - descricao`
 
 **Nunca faça alterações direto no código sem antes documentar o CR.**
 
@@ -147,15 +162,18 @@ Personal Finance/
 │   │   ├── script.py.mako
 │   │   └── versions/
 │   │       ├── 001_initial_schema.py
-│       └── 002_add_users_and_auth.py  # CR-002
+│   │       ├── 002_add_users_and_auth.py  # CR-002
+│   │       ├── 003_add_origem_id.py       # RF-06
+│       └── 004_add_daily_expenses.py  # CR-005
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py           # Entry point FastAPI + lifespan
 │       ├── database.py       # Engine SQLAlchemy + SessionLocal
-│       ├── models.py         # ORM: User, Expense, Income, RefreshToken
-│       ├── schemas.py        # Pydantic: request/response + auth schemas
-│       ├── crud.py           # Acesso a dados + User/RefreshToken CRUD
-│       ├── services.py       # Logica: transicao de mes, auto-status (user_id)
+│       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense
+│       ├── schemas.py        # Pydantic: request/response + auth + daily expense schemas
+│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD
+│       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary
+│       ├── categories.py     # CR-005: Categorias e metodos de pagamento (gastos diarios)
 │       ├── auth.py           # CR-002: JWT + bcrypt auth module
 │       ├── email_service.py  # CR-002: SendGrid email (password reset)
 │       └── routers/
@@ -163,7 +181,8 @@ Personal Finance/
 │           ├── users.py      # CR-002: GET/PATCH /me, change password
 │           ├── expenses.py   # CRUD + duplicate (auth required)
 │           ├── incomes.py    # CRUD (auth required)
-│           └── months.py     # GET visao mensal (auth required)
+│           ├── months.py     # GET visao mensal (auth required)
+│           └── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts        # Proxy /api -> :8000
@@ -173,16 +192,16 @@ Personal Finance/
 │       ├── App.tsx           # Shell com AuthProvider + Routes
 │       ├── index.css         # Tailwind v4 (@import + @theme)
 │       ├── vite-env.d.ts     # Vite client types
-│       ├── types.ts          # Tipos + Auth types (CR-002)
-│       ├── utils/            # format.ts, date.ts
+│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005)
+│       ├── utils/            # format.ts (formatBRL, formatDateFull), date.ts
 │       ├── services/
-│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor
+│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses API
 │       │   └── authApi.ts    # CR-002: auth API functions
 │       ├── contexts/
 │       │   └── AuthContext.tsx  # CR-002: auth state management
-│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth
-│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu
-│       └── pages/            # MonthlyView, Login, Register, ForgotPassword, ResetPassword, Profile
+│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses
+│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector
+│       └── pages/            # MonthlyView, DailyExpensesView, Login, Register, ForgotPassword, ResetPassword, Profile
 ├── CLAUDE.md
 └── .gitignore
 ```
@@ -245,9 +264,11 @@ Personal Finance/
 ### Change Requests Ativos
 - CR-001: Migracao PostgreSQL + Alembic (concluido)
 - CR-002: Multi-usuario + Autenticacao JWT/Google OAuth2 (AR + FN + VL concluidos)
+- CR-004: Totalizadores de despesa por status — Pago, Pendente, Atrasado (concluido)
+- CR-005: Gastos Diarios — registro de gastos nao planejados com categorias, metodos de pagamento, visao mensal agrupada por dia (concluido)
 
 ### Última Tarefa Implementada
-- Fix Google OAuth producao: endpoint `GET /api/config` serve `google_client_id` em runtime (elimina dependencia de build-time env vars)
+- CR-005: Gastos Diarios — modelo DailyExpense, API REST, visao mensal agrupada por dia, ViewSelector para navegacao
 
 ---
 
@@ -258,6 +279,9 @@ Personal Finance/
 - **Testes são obrigatórios.** Toda funcionalidade precisa de cobertura.
 - **Um passo de cada vez.** Implemente por grupo/tarefa, não tudo de uma vez.
 - **Documente primeiro.** Código sem documentação gera retrabalho.
+- **Docs sempre sincronizados.** Ao concluir uma feature ou CR, atualize TODOS os documentos relacionados na mesma sessão (Implementation Plan, PRD, Spec, CR). A tarefa só está completa quando os docs estão atualizados.
+- **Não fabrique ferramentas.** Nunca invente ou adivinhe a existência de plugins, comandos CLI ou ferramentas. Se não tiver certeza, verifique a documentação primeiro. Se um comando falhar, reconheça o erro imediatamente.
+- **Planeje antes de codar.** Em tarefas complexas (3+ etapas), crie um plano TodoWrite detalhado antes de escrever qualquer código. Inclua: CR, arquivos a modificar, verificação de build, atualizações de docs, commit.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 2026-02-11
-**Status:** Aprovado
+**Status:** Concluído
 **Autor:** Rafael
 **Prioridade:** Média
 
@@ -161,7 +161,7 @@ A API retorna 3 campos adicionais na `MonthlySummary`: `total_pago`, `total_pend
 
 - **Método:** `git revert [hash(es)]` + push para `master` (Railway auto-deploy)
 - **Método alternativo:** Redeploy do deployment anterior via Railway Dashboard
-- **Commits a reverter:** Commit(s) do CR-004
+- **Commits a reverter:** `2f58daf` (docs) + `9942b58` (feat)
 
 ### 10.2 Rollback de Migration
 
@@ -194,3 +194,5 @@ A API retorna 3 campos adicionais na `MonthlySummary`: `total_pago`, `total_pend
 | Data | Autor | Descrição |
 |------|-------|-----------|
 | 2026-02-11 | Rafael | CR criado |
+| 2026-02-12 | Rafael | Implementação concluída |
+| 2026-02-12 | Rafael | Deploy realizado — status: Concluído |

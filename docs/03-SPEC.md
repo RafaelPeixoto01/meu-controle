@@ -1,16 +1,16 @@
-# Especificacao Tecnica — Meu Controle (Fase 1 + 3)
+# Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios)
 
-**Versao:** 2.1
-**Data:** 2026-02-11
-**PRD Ref:** 01-PRD v2.0
-**Arquitetura Ref:** 02-ARCHITECTURE v2.0
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao)
+**Versao:** 2.2
+**Data:** 2026-02-17
+**PRD Ref:** 01-PRD v2.2
+**Arquitetura Ref:** 02-ARCHITECTURE v2.4
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios)
 
 ---
 
 ## 1. Resumo das Mudancas
 
-Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle financeiro pessoal mensal com CRUD de despesas e receitas, visao mensal consolidada com totalizadores, transicao automatica de mes e gestao de status de pagamento. Fase 3 (CR-002) adiciona autenticacao multi-usuario com JWT, login social Google OAuth2, recuperacao de senha via email, perfil de usuario e isolamento de dados por `user_id`.
+Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle financeiro pessoal mensal com CRUD de despesas e receitas, visao mensal consolidada com totalizadores, transicao automatica de mes e gestao de status de pagamento. Fase 3 (CR-002) adiciona autenticacao multi-usuario com JWT, login social Google OAuth2, recuperacao de senha via email, perfil de usuario e isolamento de dados por `user_id`. CR-005 adiciona Gastos Diarios: CRUD de gastos nao planejados com categorias fixas, visao mensal agrupada por dia e navegacao via ViewSelector.
 
 ### Escopo desta Iteracao
 
@@ -30,6 +30,14 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 - Perfil de usuario — visualizar/editar (RF-12)
 - React Router para paginas de auth (ADR-017)
 - Retrofit de features existentes com auth dependency e user scoping
+
+**Gastos Diarios (CR-005):**
+- CRUD de gastos diarios nao planejados (RF-13)
+- Categorias fixas (14 + Outros) com subcategorias, definidas em `categories.py`
+- 6 metodos de pagamento (Dinheiro, Cartao de Credito/Debito, Pix, Vale Alimentacao/Refeicao)
+- Visao mensal agrupada por dia com subtotais e total do mes
+- ViewSelector para alternar entre Gastos Planejados e Gastos Diarios
+- Rota `/daily-expenses` protegida com autenticacao
 
 ---
 
@@ -58,6 +66,11 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 | `PATCH`  | `/api/users/me`                        | Sim   | `UserUpdate`            | `UserResponse`          | CR-002: Atualizar perfil (RF-12)                |
 | `PATCH`  | `/api/users/me/password`               | Sim   | `ChangePasswordRequest` | `{"message": "..."}`    | CR-002: Trocar senha (RF-12)                    |
 | `GET`    | `/api/config`                          | Nao   | —                       | `{ google_client_id: string }` | Configuracao publica (Google Client ID runtime) |
+| `GET`    | `/api/daily-expenses/categories`       | Nao   | —                       | `CategoriesResponse`    | CR-005: Categorias + metodos de pagamento       |
+| `GET`    | `/api/daily-expenses/{year}/{month}`   | Sim   | —                       | `DailyExpenseMonthlySummary` | CR-005: Visao mensal agrupada por dia      |
+| `POST`   | `/api/daily-expenses/{year}/{month}`   | Sim   | `DailyExpenseCreate`    | `DailyExpenseResponse` (201) | CR-005: Criar gasto diario               |
+| `PATCH`  | `/api/daily-expenses/{id}`             | Sim   | `DailyExpenseUpdate`    | `DailyExpenseResponse`  | CR-005: Atualizar gasto diario                  |
+| `DELETE` | `/api/daily-expenses/{id}`             | Sim   | —                       | 204 No Content          | CR-005: Excluir gasto diario                    |
 | `GET`    | `/api/health`                          | Nao   | —                       | `{"status": "ok"}`      | Health check                                    |
 
 **Nota:** O endpoint principal e `GET /api/months/{year}/{month}`. Ele retorna tudo que o frontend precisa em uma unica chamada: despesas, receitas e totalizadores. Tambem dispara a geracao automatica de mes (RF-06) e a auto-deteccao de status (RF-05).
@@ -1786,6 +1799,213 @@ export function useDuplicateExpense(year: number, month: number) {
       queryClient.invalidateQueries({ queryKey: monthQueryKey(year, month) });
     },
   });
+}
+```
+
+---
+
+### Feature: [RF-13] Gastos Diarios (CR-005)
+
+#### 2.1 Descricao Tecnica
+
+CRUD de gastos diarios nao planejados com categorias fixas (14 + Outros), visao mensal agrupada por dia e navegacao via ViewSelector. A categoria e auto-derivada da subcategoria escolhida pelo usuario. Gastos diarios sao completamente independentes dos gastos planejados — nao participam da transicao automatica de mes e tem modelo de dados proprio (`DailyExpense`).
+
+#### 2.2 Arquivos
+
+**Novos:**
+
+| Acao  | Caminho                                           | Descricao                                       |
+|-------|---------------------------------------------------|-------------------------------------------------|
+| Criar | `backend/app/categories.py`                       | Categorias fixas + metodos pagamento + helpers  |
+| Criar | `backend/alembic/versions/004_add_daily_expenses.py` | Migration: cria tabela daily_expenses         |
+| Criar | `backend/app/routers/daily_expenses.py`           | Router com 5 endpoints                          |
+| Criar | `frontend/src/hooks/useDailyExpenses.ts`          | 5 hooks TanStack Query                          |
+| Criar | `frontend/src/hooks/useDailyExpensesView.ts`      | Hook navegacao mensal                           |
+| Criar | `frontend/src/components/DailyExpenseTable.tsx`    | Tabela agrupada por dia                         |
+| Criar | `frontend/src/components/DailyExpenseFormModal.tsx`| Modal formulario gasto diario                   |
+| Criar | `frontend/src/components/ViewSelector.tsx`         | Seletor Planejados/Diarios                      |
+| Criar | `frontend/src/pages/DailyExpensesView.tsx`         | Pagina principal gastos diarios                 |
+
+**Modificados:**
+
+| Acao      | Caminho                              | Descricao                                       |
+|-----------|--------------------------------------|-------------------------------------------------|
+| Atualizar | `backend/app/models.py`              | +DailyExpense model, +User.daily_expenses rel   |
+| Atualizar | `backend/app/schemas.py`             | +6 schemas Pydantic                             |
+| Atualizar | `backend/app/crud.py`                | +5 funcoes CRUD                                 |
+| Atualizar | `backend/app/services.py`            | +get_daily_expenses_monthly_summary()           |
+| Atualizar | `backend/app/main.py`                | +include_router(daily_expenses)                 |
+| Atualizar | `frontend/src/types.ts`              | +6 interfaces TypeScript                        |
+| Atualizar | `frontend/src/services/api.ts`       | +5 funcoes API                                  |
+| Atualizar | `frontend/src/utils/format.ts`       | +formatDateFull()                               |
+| Atualizar | `frontend/src/App.tsx`               | +rota /daily-expenses                           |
+| Atualizar | `frontend/src/pages/MonthlyView.tsx`  | +ViewSelector no topo                           |
+
+#### 2.3 Codigo
+
+**`backend/app/categories.py` — Categorias e Metodos de Pagamento:**
+
+```python
+DAILY_EXPENSE_CATEGORIES = {
+    "Alimentacao": ["Supermercado", "Feira/Sacolao", "Acougue/Peixaria", "Padaria", "Restaurante/Lanchonete", "Delivery/App de Comida", "Cafeteria", "Loja de Conveniencia", "Outros Alimentacao"],
+    "Transporte": ["Combustivel", "Estacionamento", "Pedagio", "Transporte Publico", "Aplicativo de Transporte", "Manutencao Veiculo", "Lavagem Veiculo", "Outros Transporte"],
+    "Saude": ["Farmacia", "Consulta Medica", "Exames", "Dentista", "Otica", "Outros Saude"],
+    "Higiene e Beleza": ["Cabeleireiro/Barbearia", "Produtos de Higiene", "Cosmeticos", "Outros Higiene"],
+    "Casa e Manutencao": ["Material de Limpeza", "Manutencao Residencial", "Utensilios Domesticos", "Decoracao", "Outros Casa"],
+    "Educacao": ["Material Escolar", "Livros", "Cursos Extras", "Outros Educacao"],
+    "Lazer e Entretenimento": ["Cinema/Teatro", "Streaming/Assinatura", "Jogos", "Passeios/Viagens", "Hobbies", "Outros Lazer"],
+    "Vestuario": ["Roupas", "Calcados", "Acessorios", "Outros Vestuario"],
+    "Pet": ["Racao/Petiscos", "Veterinario", "Acessorios Pet", "Banho/Tosa", "Outros Pet"],
+    "Presentes e Doacoes": ["Presentes", "Doacoes", "Outros Presentes"],
+    "Tecnologia": ["Eletronicos", "Acessorios Tech", "Apps/Software", "Outros Tecnologia"],
+    "Servicos": ["Correios/Entregas", "Cartorio", "Impressao/Xerox", "Chaveiro/Reparos", "Outros Servicos"],
+    "Filhos/Dependentes": ["Escola/Creche Extras", "Brinquedos", "Roupas Infantis", "Atividades Extracurriculares", "Outros Filhos"],
+    "Impostos e Taxas": ["IPVA", "IPTU", "Multas", "Taxas Diversas", "Outros Impostos"],
+    "Outros": ["Outros"],
+}
+
+PAYMENT_METHODS = [
+    "Dinheiro", "Cartao de Credito", "Cartao de Debito",
+    "Pix", "Vale Alimentacao", "Vale Refeicao",
+]
+
+def get_category_for_subcategory(subcategoria: str) -> str | None:
+    """Retorna a categoria pai de uma subcategoria."""
+    for cat, subs in DAILY_EXPENSE_CATEGORIES.items():
+        if subcategoria in subs:
+            return cat
+    return None
+
+def is_valid_subcategory(subcategoria: str) -> bool:
+    return get_category_for_subcategory(subcategoria) is not None
+
+def is_valid_payment_method(metodo: str) -> bool:
+    return metodo in PAYMENT_METHODS
+```
+
+**Schemas (em `schemas.py`):**
+
+```python
+class DailyExpenseCreate(BaseModel):
+    descricao: str = Field(min_length=1, max_length=255)
+    valor: float = Field(gt=0)
+    data: date
+    subcategoria: str = Field(min_length=1, max_length=50)
+    metodo_pagamento: str = Field(min_length=1, max_length=30)
+
+class DailyExpenseUpdate(BaseModel):
+    descricao: str | None = Field(None, min_length=1, max_length=255)
+    valor: float | None = Field(None, gt=0)
+    data: date | None = None
+    subcategoria: str | None = Field(None, min_length=1, max_length=50)
+    metodo_pagamento: str | None = Field(None, min_length=1, max_length=30)
+
+class DailyExpenseResponse(BaseModel):
+    id: str
+    user_id: str
+    mes_referencia: date
+    descricao: str
+    valor: float
+    data: date
+    categoria: str
+    subcategoria: str
+    metodo_pagamento: str
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class DailyExpenseDaySummary(BaseModel):
+    data: str
+    gastos: list[DailyExpenseResponse]
+    subtotal: float
+
+class DailyExpenseMonthlySummary(BaseModel):
+    mes_referencia: date
+    total_mes: float
+    dias: list[DailyExpenseDaySummary]
+
+class CategoriesResponse(BaseModel):
+    categorias: dict[str, list[str]]
+    metodos_pagamento: list[str]
+```
+
+**Router (`backend/app/routers/daily_expenses.py`):**
+
+```python
+router = APIRouter(prefix="/api/daily-expenses", tags=["daily-expenses"])
+
+@router.get("/categories", response_model=CategoriesResponse)
+def get_categories():
+    """Retorna categorias e metodos de pagamento (publico)."""
+
+@router.get("/{year}/{month}", response_model=DailyExpenseMonthlySummary)
+def get_monthly_daily_expenses(year: int, month: int, db, current_user):
+    """Visao mensal agrupada por dia."""
+
+@router.post("/{year}/{month}", response_model=DailyExpenseResponse, status_code=201)
+def create_daily_expense(year: int, month: int, data: DailyExpenseCreate, db, current_user):
+    """Criar gasto diario. Valida subcategoria e metodo_pagamento. Auto-deriva categoria."""
+
+@router.patch("/{daily_expense_id}", response_model=DailyExpenseResponse)
+def update_daily_expense(daily_expense_id: str, data: DailyExpenseUpdate, db, current_user):
+    """Atualizar gasto diario. Ownership check + validacao."""
+
+@router.delete("/{daily_expense_id}", status_code=204)
+def delete_daily_expense(daily_expense_id: str, db, current_user):
+    """Excluir gasto diario. Ownership check."""
+```
+
+**Frontend — Tipos (em `types.ts`):**
+
+```typescript
+export interface DailyExpense {
+  id: string; user_id: string; mes_referencia: string;
+  descricao: string; valor: number; data: string;
+  categoria: string; subcategoria: string; metodo_pagamento: string;
+  created_at: string; updated_at: string;
+}
+export interface DailyExpenseCreate {
+  descricao: string; valor: number; data: string;
+  subcategoria: string; metodo_pagamento: string;
+}
+export interface DailyExpenseUpdate { /* todos opcionais */ }
+export interface DailyExpenseDaySummary {
+  data: string; gastos: DailyExpense[]; subtotal: number;
+}
+export interface DailyExpenseMonthlySummary {
+  mes_referencia: string; total_mes: number; dias: DailyExpenseDaySummary[];
+}
+export interface CategoriesData {
+  categorias: Record<string, string[]>; metodos_pagamento: string[];
+}
+```
+
+**Frontend — Hooks (em `useDailyExpenses.ts`):**
+
+- `useDailyExpensesMonthly(year, month)` — query key `["daily-expenses-summary", year, month]`
+- `useDailyExpensesCategories()` — query key `["daily-expenses-categories"]`, staleTime: Infinity
+- `useCreateDailyExpense(year, month)` — invalida `["daily-expenses-summary"]`
+- `useUpdateDailyExpense()` — invalida `["daily-expenses-summary"]`
+- `useDeleteDailyExpense()` — invalida `["daily-expenses-summary"]`
+
+**Frontend — Componentes:**
+
+- `ViewSelector.tsx` — Pills/tabs usando `useNavigate` e `useLocation`. Alterna entre `/` (Gastos Planejados) e `/daily-expenses` (Gastos Diarios). Integrado no topo de `MonthlyView` e `DailyExpensesView`.
+- `DailyExpenseFormModal.tsx` — Modal com 5 campos: descricao, valor, data (default=hoje), categoria+subcategoria (selects cascateados), metodo_pagamento (select). Suporta criacao e edicao via prop `initialData`.
+- `DailyExpenseTable.tsx` — Tabela agrupada por dia com sub-componente `DayGroup`. Header do dia com data formatada (`formatDateFull`) + subtotal. Rows com descricao, valor, subcategoria (badge), metodo_pagamento, acoes (Editar/Excluir). Footer com "Total do Mes". Estado vazio com mensagem.
+- `DailyExpensesView.tsx` — Pagina principal: ViewSelector + MonthNavigator + DailyExpenseTable. Loading/error states.
+
+**Frontend — Utilidade (em `format.ts`):**
+
+```typescript
+export function formatDateFull(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const dd = String(day).padStart(2, "0");
+  const mm = String(month).padStart(2, "0");
+  const weekday = date.toLocaleDateString("pt-BR", { weekday: "long" });
+  const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  return `${dd}/${mm} - ${capitalized}`;
 }
 ```
 
@@ -3603,6 +3823,11 @@ sequenceDiagram
 | 18| Acessar expense de outro usuario via ID (CR-002) | 404 Not Found (ownership check retorna None, nao 403)              |
 | 19| Requisicao sem header Authorization (CR-002)     | 401 Unauthorized — "Not authenticated"                             |
 | 20| SendGrid nao configurado — sem API key (CR-002)  | Log warning no backend, endpoint retorna 200 (seguranca)           |
+| 21| Subcategoria invalida em gasto diario (CR-005)   | 422 Validation Error — "Subcategoria invalida"                     |
+| 22| Metodo de pagamento invalido em gasto diario (CR-005) | 422 Validation Error — "Metodo de pagamento invalido"         |
+| 23| Acessar gasto diario de outro usuario (CR-005)   | 404 Not Found (ownership check, mesmo padrao de expenses)          |
+| 24| Valor negativo ou zero em gasto diario (CR-005)  | Validacao Pydantic rejeita: Field(gt=0)                            |
+| 25| Gasto diario sem campos obrigatorios (CR-005)    | 422 Validation Error — campos required                             |
 
 ---
 
@@ -3622,6 +3847,11 @@ sequenceDiagram
 | BT-008 | Refresh token expirado (CR-002)        | POST /api/auth/refresh       | 401             |
 | BT-009 | Endpoint protegido sem token (CR-002)  | GET /api/months/2026/2       | 401             |
 | BT-010 | Acessar expense de outro user (CR-002) | PATCH /api/expenses/{id}     | 404             |
+| BT-011 | Listar categorias e metodos (CR-005)           | GET /api/daily-expenses/categories | 200       |
+| BT-012 | Criar gasto diario com dados validos (CR-005)  | POST /api/daily-expenses/2026/2    | 201       |
+| BT-013 | Criar gasto diario com subcategoria invalida (CR-005) | POST /api/daily-expenses/2026/2 | 422    |
+| BT-014 | Listar gastos diarios do mes (CR-005)          | GET /api/daily-expenses/2026/2     | 200       |
+| BT-015 | Excluir gasto diario (CR-005)                  | DELETE /api/daily-expenses/{id}    | 204       |
 
 ### Fluxo completo (backend + frontend)
 
@@ -3656,6 +3886,12 @@ sequenceDiagram
 | FT-027 | Recuperacao de senha via email (CR-002)                      | Link funciona, senha redefinida, login OK             |
 | FT-028 | Login Google — novo usuario (CR-002)                         | Conta criada, dashboard acessivel                     |
 | FT-029 | Login Google — email ja cadastrado (CR-002)                  | Vincula Google, acessa mesmos dados existentes        |
+| FT-030 | Criar gasto diario via modal (CR-005)                        | Aparece na tabela agrupado pelo dia correto           |
+| FT-031 | Visualizar gastos agrupados por dia (CR-005)                 | Dias com header formatado, subtotal e total do mes    |
+| FT-032 | Editar gasto diario (CR-005)                                 | Valores atualizam na tabela e totalizadores           |
+| FT-033 | Excluir gasto diario (CR-005)                                | Some da tabela, totalizadores recalculam              |
+| FT-034 | Navegar entre meses em Gastos Diarios (CR-005)               | Mes anterior/proximo carrega gastos corretos          |
+| FT-035 | Alternar entre Planejados e Diarios via ViewSelector (CR-005)| Visao muda sem erro, dados carregam corretamente      |
 
 ---
 
@@ -3739,8 +3975,39 @@ sequenceDiagram
 - [ ] Atualizar `frontend/src/index.css` (--color-google)
 - [ ] Atualizar `frontend/package.json` (2 novas dependencias)
 
+### CR-005: Gastos Diarios
+
+**Backend — Novos arquivos:**
+- [x] Criar `backend/app/categories.py`
+- [x] Criar `backend/app/routers/daily_expenses.py`
+- [x] Criar `backend/alembic/versions/004_add_daily_expenses.py`
+
+**Backend — Atualizacoes:**
+- [x] Atualizar `backend/app/models.py` (DailyExpense model + User.daily_expenses relationship)
+- [x] Atualizar `backend/app/schemas.py` (6 novos schemas)
+- [x] Atualizar `backend/app/crud.py` (5 funcoes CRUD)
+- [x] Atualizar `backend/app/services.py` (get_daily_expenses_monthly_summary)
+- [x] Atualizar `backend/app/main.py` (include_router daily_expenses)
+- [x] Atualizar `backend/alembic/env.py` (importar DailyExpense)
+
+**Frontend — Novos arquivos:**
+- [x] Criar `frontend/src/hooks/useDailyExpenses.ts`
+- [x] Criar `frontend/src/hooks/useDailyExpensesView.ts`
+- [x] Criar `frontend/src/components/DailyExpenseTable.tsx`
+- [x] Criar `frontend/src/components/DailyExpenseFormModal.tsx`
+- [x] Criar `frontend/src/components/ViewSelector.tsx`
+- [x] Criar `frontend/src/pages/DailyExpensesView.tsx`
+
+**Frontend — Atualizacoes:**
+- [x] Atualizar `frontend/src/types.ts` (6 interfaces)
+- [x] Atualizar `frontend/src/services/api.ts` (5 funcoes API)
+- [x] Atualizar `frontend/src/utils/format.ts` (formatDateFull)
+- [x] Atualizar `frontend/src/App.tsx` (rota /daily-expenses)
+- [x] Atualizar `frontend/src/pages/MonthlyView.tsx` (ViewSelector)
+
 ---
 
 *Documento migrado em 2026-02-08. Baseado em SPEC.md v1.0 (2026-02-06).*
 *Atualizado para v2.0 em 2026-02-09 — CR-002: Multi-usuario e Autenticacao (RF-08 a RF-12).*
 *Atualizado para v2.1 em 2026-02-11 — CR-003: Design System e descricoes visuais dos componentes.*
+*Atualizado para v2.2 em 2026-02-17 — CR-005: Gastos Diarios (RF-13) — API contracts, feature section, testes, checklist.*

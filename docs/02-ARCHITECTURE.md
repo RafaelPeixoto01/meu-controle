@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.3
-**Data:** 2026-02-11
-**PRD Ref:** 01-PRD v1.0
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao)
+**Versao:** 2.4
+**Data:** 2026-02-17
+**PRD Ref:** 01-PRD v2.2
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios)
 
 ---
 
@@ -99,7 +99,8 @@ Personal Finance/
 │   ├── 04-IMPLEMENTATION-PLAN.md
 │   ├── changes/                    # Change Requests (CR-XXX)
 │   │   ├── CR-001-migracao-postgresql-railway.md
-│   │   └── CR-002-multi-usuario-autenticacao.md
+│   │   ├── CR-002-multi-usuario-autenticacao.md
+│   │   └── CR-005-gastos-diarios.md
 │   └── templates/
 │       ├── 00-template-change-request.md
 │       ├── 01-template-prd.md
@@ -114,7 +115,8 @@ Personal Finance/
 │   │   ├── script.py.mako
 │   │   └── versions/
 │   │       ├── 001_initial_schema.py
-│   │       └── 002_add_users_and_auth.py    # CR-002
+│   │       ├── 002_add_users_and_auth.py    # CR-002
+│   │       └── 004_add_daily_expenses.py    # CR-005
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py
@@ -124,6 +126,7 @@ Personal Finance/
 │       ├── crud.py
 │       ├── services.py
 │       ├── auth.py                          # CR-002: JWT, password hashing, get_current_user
+│       ├── categories.py                    # CR-005: Categorias + metodos pagamento + helpers
 │       ├── email_service.py                 # CR-002: SendGrid integration
 │       └── routers/
 │           ├── __init__.py
@@ -131,7 +134,8 @@ Personal Finance/
 │           ├── incomes.py
 │           ├── months.py
 │           ├── auth.py                      # CR-002: register, login, Google, refresh, logout, forgot/reset password
-│           └── users.py                     # CR-002: GET/PATCH /me, change password
+│           ├── users.py                     # CR-002: GET/PATCH /me, change password
+│           └── daily_expenses.py            # CR-005: CRUD gastos diarios (5 endpoints)
 ├── frontend/
 │   ├── package.json
 │   ├── tsconfig.json
@@ -155,7 +159,9 @@ Personal Finance/
 │       │   ├── useExpenses.ts
 │       │   ├── useIncomes.ts
 │       │   ├── useMonthTransition.ts
-│       │   └── useAuth.ts                   # CR-002: Auth convenience hook
+│       │   ├── useAuth.ts                   # CR-002: Auth convenience hook
+│       │   ├── useDailyExpenses.ts          # CR-005: TanStack Query hooks gastos diarios
+│       │   └── useDailyExpensesView.ts      # CR-005: Navegacao mensal gastos diarios
 │       ├── components/
 │       │   ├── MonthNavigator.tsx
 │       │   ├── IncomeTable.tsx
@@ -166,14 +172,18 @@ Personal Finance/
 │       │   ├── IncomeFormModal.tsx
 │       │   ├── ConfirmDialog.tsx
 │       │   ├── ProtectedRoute.tsx           # CR-002: Route guard
-│       │   └── UserMenu.tsx                 # CR-002: Dropdown perfil/logout
+│       │   ├── UserMenu.tsx                 # CR-002: Dropdown perfil/logout
+│       │   ├── DailyExpenseTable.tsx        # CR-005: Tabela gastos agrupada por dia
+│       │   ├── DailyExpenseFormModal.tsx    # CR-005: Modal formulario gasto diario
+│       │   └── ViewSelector.tsx            # CR-005: Seletor Planejados/Diarios
 │       └── pages/
 │           ├── MonthlyView.tsx
 │           ├── LoginPage.tsx                # CR-002
 │           ├── RegisterPage.tsx             # CR-002
 │           ├── ForgotPasswordPage.tsx       # CR-002
 │           ├── ResetPasswordPage.tsx        # CR-002
-│           └── ProfilePage.tsx              # CR-002
+│           ├── ProfilePage.tsx              # CR-002
+│           └── DailyExpensesView.tsx       # CR-005: Pagina gastos diarios
 └── .gitignore
 ```
 
@@ -186,6 +196,7 @@ erDiagram
     USER ||--o{ EXPENSE : "has many"
     USER ||--o{ INCOME : "has many"
     USER ||--o{ REFRESH_TOKEN : "has many"
+    USER ||--o{ DAILY_EXPENSE : "has many"
 
     USER {
         string id PK
@@ -229,6 +240,19 @@ erDiagram
         string token_hash
         datetime expires_at
         datetime created_at
+    }
+    DAILY_EXPENSE {
+        string id PK
+        string user_id FK
+        date mes_referencia
+        string descricao
+        decimal valor
+        date data
+        string categoria
+        string subcategoria
+        string metodo_pagamento
+        datetime created_at
+        datetime updated_at
     }
 ```
 
@@ -301,19 +325,41 @@ erDiagram
 
 > **Indice composto (CR-002):** `ix_incomes_user_month (user_id, mes_referencia)` substitui o indice antigo `ix_incomes_mes_referencia`.
 
+#### DailyExpense (`daily_expenses`) — CR-005
+
+| Campo              | Tipo           | Restricoes                        | Descricao                                         |
+|--------------------|----------------|-----------------------------------|----------------------------------------------------|
+| id                 | String(36)     | PK, auto-gerado (UUID)           | Identificador unico                                |
+| user_id            | String(36)     | NOT NULL, FK→users.id, CASCADE   | Usuario dono do gasto diario                       |
+| mes_referencia     | Date           | NOT NULL                          | Mes/ano de referencia (ex: 2026-02-01)             |
+| descricao          | String(255)    | NOT NULL                          | Descricao do gasto (ex: "Compras no mercado")      |
+| valor              | Numeric(10,2)  | NOT NULL                          | Valor em reais                                     |
+| data               | Date           | NOT NULL                          | Data em que o gasto ocorreu                        |
+| categoria          | String(50)     | NOT NULL                          | Categoria auto-derivada da subcategoria            |
+| subcategoria       | String(50)     | NOT NULL                          | Subcategoria escolhida pelo usuario                |
+| metodo_pagamento   | String(30)     | NOT NULL                          | Metodo de pagamento utilizado                      |
+| created_at         | DateTime       | NOT NULL, default now()           | Data de criacao do registro                        |
+| updated_at         | DateTime       | NOT NULL, default now(), onupdate | Data da ultima atualizacao                         |
+
+> **Indice composto:** `ix_daily_expenses_user_month (user_id, mes_referencia)` para consultas por usuario + mes. Indice adicional `ix_daily_expenses_data` no campo `data`.
+
+> **Categorias:** 14 categorias fixas + "Outros" definidas em `backend/app/categories.py`. A categoria e derivada automaticamente da subcategoria via `get_category_for_subcategory()`.
+
 ### Relacionamentos
 
 ```
 Usuario (1) ---- possui ----> Despesa (N)
 Usuario (1) ---- possui ----> Receita (N)
 Usuario (1) ---- possui ----> RefreshToken (N)
+Usuario (1) ---- possui ----> GastoDiario (N)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
 Receita (N) ---- pertence a ----> Mes de referencia (1)
+GastoDiario (N) ---- pertence a ----> Mes de referencia (1)
 ```
 
 > **Isolamento de dados (CR-002):** Cada usuario so pode ver, criar, editar e deletar seus proprios dados. Todas as queries CRUD filtram por `user_id`. Operacoes de update/delete verificam ownership antes de executar.
 
-> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
+> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
 
 ---
 
@@ -330,8 +376,8 @@ Receita (N) ---- pertence a ----> Mes de referencia (1)
 | Funcoes Python    | snake_case    | `get_expenses_by_month`, `get_current_user` |
 | Funcoes TS        | camelCase     | `formatBRL`, `loginUser` |
 | Variaveis         | camelCase/snake_case | Conforme linguagem |
-| Tabelas BD        | snake_case    | `expenses`, `incomes`, `users`, `refresh_tokens` |
-| Rotas API         | kebab-case    | `/api/expenses/{id}`, `/api/auth/forgot-password` |
+| Tabelas BD        | snake_case    | `expenses`, `incomes`, `users`, `refresh_tokens`, `daily_expenses` |
+| Rotas API         | kebab-case    | `/api/expenses/{id}`, `/api/auth/forgot-password`, `/api/daily-expenses/{id}` |
 
 ### Git
 
@@ -347,8 +393,10 @@ Receita (N) ---- pertence a ----> Mes de referencia (1)
 - Endpoint principal `GET /api/months/{year}/{month}` retorna tudo em uma chamada.
 - Endpoints protegidos requerem header `Authorization: Bearer <access_token>` (CR-002).
 - Endpoints publicos (`/api/auth/*` exceto logout) nao requerem token (CR-002).
-- Ownership verification: operacoes em expense/income verificam `user_id` antes de permitir (CR-002).
+- Ownership verification: operacoes em expense/income/daily-expense verificam `user_id` antes de permitir (CR-002, CR-005).
 - 401 Unauthorized para token invalido, expirado, ou ausente (CR-002).
+- Endpoints de gastos diarios `/api/daily-expenses/*` seguem o mesmo padrao: auth required, ownership check, PATCH parcial (CR-005).
+- Endpoint `/api/daily-expenses/categories` e publico (nao requer auth) — retorna categorias e metodos de pagamento.
 
 ### Autenticacao (CR-002)
 
@@ -718,4 +766,4 @@ npm outdated                       # Lista pacotes com versao mais nova disponiv
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002 e CR-003.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003 e CR-005.*
