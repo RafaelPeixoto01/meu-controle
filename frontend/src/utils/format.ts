@@ -23,3 +23,16 @@ export function formatDateBR(isoDate: string | null): string {
   const [, month, day] = isoDate.split("-");
   return `${day}/${month}`;
 }
+
+/** Formata data ISO (YYYY-MM-DD) para "DD/MM - Dia da semana" (CR-005) */
+export function formatDateFull(isoDate: string): string {
+  const [yearStr, monthStr, dayStr] = isoDate.split("-");
+  const dateObj = new Date(
+    Number(yearStr),
+    Number(monthStr) - 1,
+    Number(dayStr)
+  );
+  const dayOfWeek = dateObj.toLocaleDateString("pt-BR", { weekday: "long" });
+  const capitalized = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+  return `${dayStr}/${monthStr} - ${capitalized}`;
+}

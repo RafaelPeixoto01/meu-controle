@@ -231,3 +231,38 @@ def get_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict
         "expenses": expenses,
         "incomes": incomes,
     }
+
+
+def get_daily_expenses_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict:
+    """
+    CR-005: Constroi a visao mensal de gastos diarios, agrupados por dia.
+    Retorna lista de dias com subtotais e total do mes.
+    """
+    daily_expenses = crud.get_daily_expenses_by_month(db, mes_referencia, user_id)
+
+    # Agrupar por dia
+    days_map: dict[date, list] = {}
+    for de in daily_expenses:
+        day = de.data
+        if day not in days_map:
+            days_map[day] = []
+        days_map[day].append(de)
+
+    # Construir sumarios por dia, ordenados por data desc (mais recente primeiro)
+    dias = []
+    for day in sorted(days_map.keys(), reverse=True):
+        gastos = days_map[day]
+        subtotal = sum(float(g.valor) for g in gastos)
+        dias.append({
+            "data": day,
+            "gastos": gastos,
+            "subtotal": round(subtotal, 2),
+        })
+
+    total_mes = sum(d["subtotal"] for d in dias)
+
+    return {
+        "mes_referencia": mes_referencia,
+        "total_mes": round(total_mes, 2),
+        "dias": dias,
+    }

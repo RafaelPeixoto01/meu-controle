@@ -1,11 +1,9 @@
-import { useMonthlyView } from "../hooks/useMonthTransition";
+import { useDailyExpensesView } from "../hooks/useDailyExpensesView";
 import MonthNavigator from "../components/MonthNavigator";
-import IncomeTable from "../components/IncomeTable";
-import ExpenseTable from "../components/ExpenseTable";
-import SaldoLivre from "../components/SaldoLivre";
+import DailyExpenseTable from "../components/DailyExpenseTable";
 import ViewSelector from "../components/ViewSelector";
 
-export default function MonthlyView() {
+export default function DailyExpensesView() {
   const {
     year,
     month,
@@ -15,7 +13,7 @@ export default function MonthlyView() {
     error,
     goToPreviousMonth,
     goToNextMonth,
-  } = useMonthlyView();
+  } = useDailyExpensesView();
 
   if (isLoading) {
     return (
@@ -23,7 +21,9 @@ export default function MonthlyView() {
         <ViewSelector />
         <div className="flex flex-col justify-center items-center py-24 gap-3">
           <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-          <p className="text-text-muted text-sm font-medium">Carregando dados...</p>
+          <p className="text-text-muted text-sm font-medium">
+            Carregando dados...
+          </p>
         </div>
       </div>
     );
@@ -56,25 +56,11 @@ export default function MonthlyView() {
         onPrevious={goToPreviousMonth}
         onNext={goToNextMonth}
       />
-      <IncomeTable
-        incomes={data.incomes}
-        totalReceitas={data.total_receitas}
+      <DailyExpenseTable
+        dias={data.dias}
+        totalMes={data.total_mes}
         year={year}
         month={month}
-      />
-      <ExpenseTable
-        expenses={data.expenses}
-        totalDespesas={data.total_despesas}
-        totalPago={data.total_pago}
-        totalPendente={data.total_pendente}
-        totalAtrasado={data.total_atrasado}
-        year={year}
-        month={month}
-      />
-      <SaldoLivre
-        totalReceitas={data.total_receitas}
-        totalDespesas={data.total_despesas}
-        saldoLivre={data.saldo_livre}
       />
     </div>
   );

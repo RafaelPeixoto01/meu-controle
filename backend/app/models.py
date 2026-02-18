@@ -34,6 +34,7 @@ class User(Base):
     expenses = relationship("Expense", back_populates="user", cascade="all, delete-orphan")
     incomes = relationship("Income", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    daily_expenses = relationship("DailyExpense", back_populates="user", cascade="all, delete-orphan")  # CR-005
 
 
 class Expense(Base):
@@ -95,6 +96,34 @@ class Income(Base):
     )
 
     user = relationship("User", back_populates="incomes")  # CR-002
+
+
+class DailyExpense(Base):
+    """CR-005: Gastos diários não planejados."""
+    __tablename__ = "daily_expenses"
+    __table_args__ = (
+        Index("ix_daily_expenses_user_month", "user_id", "mes_referencia"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    mes_referencia: Mapped[date] = mapped_column(Date, nullable=False)
+    descricao: Mapped[str] = mapped_column(String(255), nullable=False)
+    valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    data: Mapped[date] = mapped_column(Date, nullable=False)
+    categoria: Mapped[str] = mapped_column(String(50), nullable=False)
+    subcategoria: Mapped[str] = mapped_column(String(50), nullable=False)
+    metodo_pagamento: Mapped[str] = mapped_column(String(30), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=datetime.now, onupdate=datetime.now
+    )
+
+    user = relationship("User", back_populates="daily_expenses")
 
 
 class RefreshToken(Base):

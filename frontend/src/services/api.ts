@@ -6,6 +6,11 @@ import type {
   IncomeCreate,
   IncomeUpdate,
   Income,
+  DailyExpenseMonthlySummary,
+  DailyExpenseCreate,
+  DailyExpenseUpdate,
+  DailyExpense,
+  CategoriesData,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -136,4 +141,44 @@ export function updateIncome(
 
 export function deleteIncome(id: string): Promise<void> {
   return request<void>(`/incomes/${id}`, { method: "DELETE" });
+}
+
+// ========== Daily Expenses (CR-005) ==========
+
+export function fetchDailyExpensesCategories(): Promise<CategoriesData> {
+  return request<CategoriesData>("/daily-expenses/categories");
+}
+
+export function fetchDailyExpensesMonthly(
+  year: number,
+  month: number
+): Promise<DailyExpenseMonthlySummary> {
+  return request<DailyExpenseMonthlySummary>(
+    `/daily-expenses/${year}/${month}`
+  );
+}
+
+export function createDailyExpense(
+  year: number,
+  month: number,
+  data: DailyExpenseCreate
+): Promise<DailyExpense> {
+  return request<DailyExpense>(`/daily-expenses/${year}/${month}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateDailyExpense(
+  id: string,
+  data: DailyExpenseUpdate
+): Promise<DailyExpense> {
+  return request<DailyExpense>(`/daily-expenses/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteDailyExpense(id: string): Promise<void> {
+  return request<void>(`/daily-expenses/${id}`, { method: "DELETE" });
 }

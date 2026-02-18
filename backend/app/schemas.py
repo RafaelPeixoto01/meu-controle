@@ -106,6 +106,62 @@ class MonthlySummary(BaseModel):
     incomes: list[IncomeResponse]
 
 
+# ========== Daily Expense Schemas (CR-005) ==========
+
+class DailyExpenseCreate(BaseModel):
+    """Schema para criacao de gasto diario. mes_referencia derivado da URL."""
+    descricao: str = Field(..., min_length=1, max_length=255)
+    valor: float = Field(..., gt=0)
+    data: date
+    subcategoria: str = Field(..., min_length=1, max_length=50)
+    metodo_pagamento: str = Field(..., min_length=1, max_length=30)
+
+
+class DailyExpenseUpdate(BaseModel):
+    """Schema para atualizacao parcial de gasto diario."""
+    descricao: Optional[str] = Field(None, min_length=1, max_length=255)
+    valor: Optional[float] = Field(None, gt=0)
+    data: Optional[date] = None
+    subcategoria: Optional[str] = Field(None, min_length=1, max_length=50)
+    metodo_pagamento: Optional[str] = Field(None, min_length=1, max_length=30)
+
+
+class DailyExpenseResponse(BaseModel):
+    """Schema de resposta para gasto diario."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    mes_referencia: date
+    descricao: str
+    valor: float
+    data: date
+    categoria: str
+    subcategoria: str
+    metodo_pagamento: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class DailyExpenseDaySummary(BaseModel):
+    """Gastos de um unico dia, agrupados."""
+    data: date
+    gastos: list[DailyExpenseResponse]
+    subtotal: float
+
+
+class DailyExpenseMonthlySummary(BaseModel):
+    """Resposta da visao mensal de gastos diarios."""
+    mes_referencia: date
+    total_mes: float
+    dias: list[DailyExpenseDaySummary]
+
+
+class CategoriesResponse(BaseModel):
+    """Resposta com categorias e metodos de pagamento disponiveis."""
+    categorias: dict[str, list[str]]
+    metodos_pagamento: list[str]
+
+
 # ========== Auth Schemas (CR-002) ==========
 
 class UserCreate(BaseModel):

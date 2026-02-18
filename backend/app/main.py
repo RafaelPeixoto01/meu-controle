@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from app.routers import expenses, incomes, months, auth, users  # CR-002: auth, users
+from app.routers import expenses, incomes, months, auth, users, daily_expenses  # CR-002: auth, users; CR-005: daily_expenses
 
 
 @asynccontextmanager
@@ -37,6 +37,7 @@ app.include_router(users.router)   # CR-002: perfil de usuario (GET/PATCH /me, c
 app.include_router(months.router)
 app.include_router(expenses.router)
 app.include_router(incomes.router)
+app.include_router(daily_expenses.router)  # CR-005: gastos diarios
 
 
 @app.get("/api/health")

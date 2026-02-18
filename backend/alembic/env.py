@@ -4,7 +4,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from app.database import DATABASE_URL, Base
-from app.models import Expense, Income, User, RefreshToken  # noqa: F401 — ensure models are registered
+from app.models import Expense, Income, User, RefreshToken, DailyExpense  # noqa: F401 — ensure models are registered
 
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)

@@ -76,6 +76,54 @@ export interface MonthlySummary {
   incomes: Income[];
 }
 
+// ========== Daily Expense Types (CR-005) ==========
+
+export interface DailyExpense {
+  id: string;
+  mes_referencia: string;
+  descricao: string;
+  valor: number;
+  data: string;
+  categoria: string;
+  subcategoria: string;
+  metodo_pagamento: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyExpenseCreate {
+  descricao: string;
+  valor: number;
+  data: string;
+  subcategoria: string;
+  metodo_pagamento: string;
+}
+
+export interface DailyExpenseUpdate {
+  descricao?: string;
+  valor?: number;
+  data?: string;
+  subcategoria?: string;
+  metodo_pagamento?: string;
+}
+
+export interface DailyExpenseDaySummary {
+  data: string;
+  gastos: DailyExpense[];
+  subtotal: number;
+}
+
+export interface DailyExpenseMonthlySummary {
+  mes_referencia: string;
+  total_mes: number;
+  dias: DailyExpenseDaySummary[];
+}
+
+export interface CategoriesData {
+  categorias: Record<string, string[]>;
+  metodos_pagamento: string[];
+}
+
 // ========== Auth Types (CR-002) ==========
 
 export interface User {

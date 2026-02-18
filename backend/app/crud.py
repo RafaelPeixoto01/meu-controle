@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from datetime import date
 
-from app.models import Expense, Income, User, RefreshToken  # CR-002: User, RefreshToken
+from app.models import Expense, Income, User, RefreshToken, DailyExpense  # CR-002: User, RefreshToken; CR-005: DailyExpense
 
 
 # ========== Expenses ==========
@@ -126,6 +126,48 @@ def income_replica_exists(
         )
     )
     return db.scalars(stmt).first() is not None
+
+
+# ========== Daily Expenses (CR-005) ==========
+
+def get_daily_expenses_by_month(db: Session, mes_referencia: date, user_id: str) -> list[DailyExpense]:
+    """Retorna gastos diarios de um usuario em um mes, ordenados por data desc."""
+    stmt = (
+        select(DailyExpense)
+        .where(DailyExpense.user_id == user_id, DailyExpense.mes_referencia == mes_referencia)
+        .order_by(DailyExpense.data.desc(), DailyExpense.created_at.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def get_daily_expense_by_id(db: Session, daily_expense_id: str, user_id: str) -> DailyExpense | None:
+    """Retorna um gasto diario por ID se pertence ao usuario."""
+    stmt = (
+        select(DailyExpense)
+        .where(DailyExpense.id == daily_expense_id, DailyExpense.user_id == user_id)
+    )
+    return db.scalars(stmt).first()
+
+
+def create_daily_expense(db: Session, daily_expense: DailyExpense) -> DailyExpense:
+    """Persiste um novo gasto diario."""
+    db.add(daily_expense)
+    db.commit()
+    db.refresh(daily_expense)
+    return daily_expense
+
+
+def update_daily_expense(db: Session, daily_expense: DailyExpense) -> DailyExpense:
+    """Persiste alteracoes em um gasto diario existente."""
+    db.commit()
+    db.refresh(daily_expense)
+    return daily_expense
+
+
+def delete_daily_expense(db: Session, daily_expense: DailyExpense) -> None:
+    """Remove um gasto diario."""
+    db.delete(daily_expense)
+    db.commit()
 
 
 # ========== Users (CR-002) ==========
