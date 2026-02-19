@@ -10,6 +10,7 @@ export function useCreateExpense(year: number, month: number) {
     mutationFn: (data: ExpenseCreate) => api.createExpense(year, month, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MONTHLY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
     },
   });
 }
@@ -21,6 +22,7 @@ export function useUpdateExpense() {
       api.updateExpense(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MONTHLY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
     },
   });
 }
@@ -31,6 +33,7 @@ export function useDeleteExpense() {
     mutationFn: (id: string) => api.deleteExpense(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MONTHLY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
     },
   });
 }
@@ -41,6 +44,7 @@ export function useDuplicateExpense() {
     mutationFn: (id: string) => api.duplicateExpense(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MONTHLY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
     },
   });
 }

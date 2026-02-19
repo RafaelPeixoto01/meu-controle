@@ -11,6 +11,7 @@ import type {
   DailyExpenseUpdate,
   DailyExpense,
   CategoriesData,
+  InstallmentsResponse,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -114,6 +115,10 @@ export function deleteExpense(id: string): Promise<void> {
 
 export function duplicateExpense(id: string): Promise<Expense> {
   return request<Expense>(`/expenses/${id}/duplicate`, { method: "POST" });
+}
+
+export function fetchInstallments(): Promise<InstallmentsResponse> {
+  return request<InstallmentsResponse>("/expenses/installments");
 }
 
 // ========== Incomes ==========

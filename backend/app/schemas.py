@@ -229,3 +229,25 @@ class ChangePasswordRequest(BaseModel):
     """Schema para trocar senha pelo perfil."""
     current_password: str
     new_password: str = Field(..., min_length=6)
+
+
+# ========== Installments Schemas (CR-007) ==========
+
+class InstallmentGroup(BaseModel):
+    """Grupo de parcelas de uma mesma compra."""
+    nome: str
+    parcela_total: int
+    status_geral: str
+    valor_total_compra: float
+    valor_pago: float
+    valor_restante: float
+    installments: list[ExpenseResponse]
+
+
+class InstallmentsResponse(BaseModel):
+    """Resposta consolidada de parcelamentos."""
+    groups: list[InstallmentGroup]
+    total_gasto: float
+    total_pago: float
+    total_pendente: float
+    total_atrasado: float

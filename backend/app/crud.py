@@ -233,3 +233,108 @@ def delete_user_refresh_tokens(db: Session, user_id: str) -> None:
     for token in tokens:
         db.delete(token)
     db.commit()
+
+
+# ========== Installments (CR-007) ==========
+
+def get_installment_expenses_grouped(db: Session, user_id: str) -> dict:
+    """
+    Busca todas as despesas parceladas do usuario e agrupa por nome/total de parcelas.
+    Retorna dicionario com estrutura pronta para o schema InstallmentsResponse.
+    """
+    # 1. Buscar todas as despesas parceladas (parcela_total > 1)
+    stmt = (
+        select(Expense)
+        .where(
+            Expense.user_id == user_id,
+            Expense.parcela_total > 1
+        )
+        .order_by(Expense.vencimento)
+    )
+    expenses = list(db.scalars(stmt).all())
+
+    # 2. Agrupar em memoria
+    # Chave do grupo: (nome_normalizado, parcela_total) para diferenciar
+    # "Compra X (10x)" de "Compra X (5x)" se tiverem mesmo nome
+    groups_map = {}
+    
+    # Totais globais
+    global_gasto = 0.0
+    global_pago = 0.0
+    global_pendente = 0.0
+    global_atrasado = 0.0
+
+    from app.models import ExpenseStatus
+
+    for exp in expenses:
+        # Normalizar chave
+        key = (exp.nome.strip().lower(), exp.parcela_total)
+        
+        if key not in groups_map:
+            groups_map[key] = {
+                "nome": exp.nome,  # Mantem casing original do primeiro
+                "parcela_total": exp.parcela_total,
+                "installments": [],
+                "valor_total_compra": 0.0,
+                "valor_pago": 0.0,
+                "valor_restante": 0.0,
+                "tem_pendencia": False
+            }
+        
+        group = groups_map[key]
+        group["installments"].append(exp)
+        
+        # Somar valores
+        val = float(exp.valor)
+        group["valor_total_compra"] += val
+        
+        if exp.status == ExpenseStatus.PAGO.value:
+            group["valor_pago"] += val
+        else:
+            group["valor_restante"] += val
+            group["tem_pendencia"] = True
+            
+        # Totais globais
+        global_gasto += val
+        if exp.status == ExpenseStatus.PAGO.value:
+            global_pago += val
+        elif exp.status == ExpenseStatus.PENDENTE.value:
+            global_pendente += val
+        elif exp.status == ExpenseStatus.ATRASADO.value:
+            global_atrasado += val
+            # Atrasado tambem conta como pendente no 'restante' do grupo, mas separadamente no global
+
+    # 3. Formatar lista de grupos
+    final_groups = []
+    
+    # Ordenar grupos pelo input mais recente (vencimento da ultima parcela ou similar)
+    # Por simplicidade, vamos ordenar por nome
+    sorted_keys = sorted(groups_map.keys(), key=lambda k: k[0])
+    
+    for key in sorted_keys:
+        g = groups_map[key]
+        
+        # Determinar status geral do grupo
+        if g["valor_restante"] == 0 and not g["tem_pendencia"]:
+            status_geral = "Concluído"
+        else:
+            status_geral = "Em andamento"
+            
+        final_groups.append({
+            "nome": g["nome"],
+            "parcela_total": g["parcela_total"],
+            "status_geral": status_geral,
+            "valor_total_compra": round(g["valor_total_compra"], 2),
+            "valor_pago": round(g["valor_pago"], 2),
+            "valor_restante": round(g["valor_restante"], 2),
+            "installments": g["installments"]
+        })
+
+    return {
+        "groups": final_groups,
+        "total_gasto": round(global_gasto, 2),
+        "total_pago": round(global_pago, 2),
+        "total_pendente": round(global_pendente, 2),
+        "total_atrasado": round(global_atrasado, 2)
+    }
+

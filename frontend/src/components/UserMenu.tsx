@@ -26,6 +26,17 @@ export default function UserMenu() {
           <div className="absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl shadow-black/10
             border border-slate-100/80 py-1.5 z-50 overflow-hidden">
             <Link
+              to="/installments"
+              className="flex items-center gap-2.5 px-4 py-2.5 text-text-muted hover:text-text
+                hover:bg-primary-50 transition-colors duration-100 text-sm font-medium"
+              onClick={() => setIsOpen(false)}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              Parcelas
+            </Link>
+            <Link
               to="/profile"
               className="flex items-center gap-2.5 px-4 py-2.5 text-text-muted hover:text-text
                 hover:bg-primary-50 transition-colors duration-100 text-sm font-medium"

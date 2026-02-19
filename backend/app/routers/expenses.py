@@ -5,10 +5,21 @@ from datetime import date
 from app.database import get_db
 from app.auth import get_current_user  # CR-002
 from app.models import Expense, ExpenseStatus, User  # CR-002: User
-from app.schemas import ExpenseCreate, ExpenseUpdate, ExpenseResponse
+from app.schemas import ExpenseCreate, ExpenseUpdate, ExpenseResponse, InstallmentsResponse
 from app import crud
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
+
+
+@router.get("/installments", response_model=InstallmentsResponse)
+def get_installments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retorna todas as despesas parceladas agrupadas por compra.
+    """
+    return crud.get_installment_expenses_grouped(db, current_user.id)
 
 
 # NOTE: duplicate route MUST be before create route to avoid
@@ -40,6 +51,8 @@ def duplicate_expense(
     return crud.create_expense(db, new_expense)
 
 
+from app.utils import add_months
+
 @router.post("/{year}/{month}", response_model=ExpenseResponse, status_code=201)
 def create_expense(
     year: int,
@@ -48,11 +61,20 @@ def create_expense(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),  # CR-002
 ):
-    """Criar nova despesa no mes especificado. user_id setado automaticamente."""
-    mes_referencia = date(year, month, 1)
-    expense = Expense(
-        user_id=current_user.id,  # CR-002: isolamento de dados (RN-015)
-        mes_referencia=mes_referencia,
+    """
+    Criar nova despesa no mes especificado. 
+    Se for parcelada (parcela_total > 1), CRIA AUTOMATICAMENTE todas as parcelas futuras.
+    """
+    mes_referencia_inicial = date(year, month, 1)
+    
+    # Validações básicas
+    if data.parcela_total > 1 and data.parcela_atual > data.parcela_total:
+        raise HTTPException(status_code=400, detail="Parcela atual nao pode ser maior que total")
+
+    # 1. Criar a despesa do mês atual (que será retornada)
+    expense_atual = Expense(
+        user_id=current_user.id,
+        mes_referencia=mes_referencia_inicial,
         nome=data.nome,
         valor=data.valor,
         vencimento=data.vencimento,
@@ -61,7 +83,41 @@ def create_expense(
         recorrente=data.recorrente,
         status=ExpenseStatus.PENDENTE.value,
     )
-    return crud.create_expense(db, expense)
+    db.add(expense_atual)
+    
+    # 2. Se for parcelada, criar as futuras (apenas se nao for recorrente infinita, que tem logica propria)
+    # Assumindo que 'recorrente' flag é para fixas mensais (Netflix) e 'parcela_total > 1' é compras parceladas (Notebook)
+    if data.parcela_total > 1:
+        # Quantas parcelas faltam criar?
+        # Se usuario ta criando parcela 1 de 10, faltam 9 (2 a 10)
+        start_p = data.parcela_atual + 1
+        end_p = data.parcela_total
+        
+        for i in range(start_p, end_p + 1):
+            offset_months = i - data.parcela_atual
+            
+            # Calcular proximo mes de referencia
+            next_mes = add_months(mes_referencia_inicial, offset_months)
+            
+            # Calcular proximo vencimento (mantendo dia se possivel)
+            next_venc = add_months(data.vencimento, offset_months)
+            
+            future_expense = Expense(
+                user_id=current_user.id,
+                mes_referencia=next_mes,
+                nome=data.nome,
+                valor=data.valor,
+                vencimento=next_venc,
+                parcela_atual=i,
+                parcela_total=data.parcela_total,
+                recorrente=False, # Parcelas futuras nao sao "recorrentes" no sentido de flag
+                status=ExpenseStatus.PENDENTE.value
+            )
+            db.add(future_expense)
+
+    db.commit()
+    db.refresh(expense_atual)
+    return expense_atual
 
 
 @router.patch("/{expense_id}", response_model=ExpenseResponse)

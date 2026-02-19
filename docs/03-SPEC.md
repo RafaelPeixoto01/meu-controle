@@ -4,13 +4,23 @@
 **Data:** 2026-02-17
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.4
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas)
 
 ---
 
 ## 1. Resumo das Mudancas
 
 Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle financeiro pessoal mensal com CRUD de despesas e receitas, visao mensal consolidada com totalizadores, transicao automatica de mes e gestao de status de pagamento. Fase 3 (CR-002) adiciona autenticacao multi-usuario com JWT, login social Google OAuth2, recuperacao de senha via email, perfil de usuario e isolamento de dados por `user_id`. CR-005 adiciona Gastos Diarios: CRUD de gastos nao planejados com categorias fixas, visao mensal agrupada por dia e navegacao via ViewSelector.
+
+### 3.2. Parcelamento (CR-007 Atualizado)
+
+- **Criação**: No endpoint `POST /expenses`, se `parcela_total > 1`:
+  - O backend deve iterar de `i=0` até `parcela_total - 1`.
+  - Calcular `mes_referencia` e `vencimento` incrementando `i` meses.
+  - Criar e persistir `Expense` para cada mês.
+  - Isso substitui a estratégia anterior de "Lazy Creation".
+
+- **Consulta**: O endpoint `GET /expenses/installments` agrupa registros existentes baseando-se em `nome` e `parcela_total`. Como agora todos os registros existem, o cálculo de `valor_restante` e `total_pendente` será preciso imediatamente.
 
 ### Escopo desta Iteracao
 
@@ -38,6 +48,11 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 - Visao mensal agrupada por dia com subtotais e total do mes
 - ViewSelector para alternar entre Gastos Planejados e Gastos Diarios
 - Rota `/daily-expenses` protegida com autenticacao
+
+**Consulta de Parcelas (CR-007):**
+- Endpoint `/api/expenses/installments` para listar todas as parcelas de compras parceladas (`parcela_total > 1`)
+- Nova tela `InstallmentsView` acessivel pelo ViewSelector ou Menu
+- Exibicao de cards totalizadores: Total Gasto, Total Pago, Total Pendente, Total Atrasado
 
 ---
 
@@ -67,6 +82,7 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 | `PATCH`  | `/api/users/me/password`               | Sim   | `ChangePasswordRequest` | `{"message": "..."}`    | CR-002: Trocar senha (RF-12)                    |
 | `GET`    | `/api/config`                          | Nao   | —                       | `{ google_client_id: string }` | Configuracao publica (Google Client ID runtime) |
 | `GET`    | `/api/daily-expenses/categories`       | Nao   | —                       | `CategoriesResponse`    | CR-005: Categorias + metodos de pagamento       |
+| `GET`    | `/api/expenses/installments`           | Sim   | —                       | `InstallmentsSummary`   | CR-007: Lista de parcelas + totalizadores       |
 | `GET`    | `/api/daily-expenses/{year}/{month}`   | Sim   | —                       | `DailyExpenseMonthlySummary` | CR-005: Visao mensal agrupada por dia      |
 | `POST`   | `/api/daily-expenses/{year}/{month}`   | Sim   | `DailyExpenseCreate`    | `DailyExpenseResponse` (201) | CR-005: Criar gasto diario               |
 | `PATCH`  | `/api/daily-expenses/{id}`             | Sim   | `DailyExpenseUpdate`    | `DailyExpenseResponse`  | CR-005: Atualizar gasto diario                  |

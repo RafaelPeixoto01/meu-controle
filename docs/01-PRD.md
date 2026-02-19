@@ -3,8 +3,8 @@
 **Versao:** 2.2
 **Data:** 2026-02-17
 **Status:** Aprovado
-**Fase:** 1 + 3 + Gastos Diarios — Registro de Despesas + Multi-usuario e Autenticacao + Gastos Diarios
-**CR Ref:** CR-002, CR-004, CR-005
+**Fase:** 1 + 3 + Gastos Diarios + Parcelas — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas
+**CR Ref:** CR-002, CR-004, CR-005, CR-007
 
 ---
 
@@ -62,6 +62,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RF-01 | CRUD de despesas com nome, valor, vencimento, parcela opcional e status | Alta | Rafael |
 | RF-05 | Gestao de status (Pendente/Pago/Atrasado) com auto-deteccao de atraso | Alta | Rafael |
 | RF-07 | Duplicar despesa existente para cadastro rapido | Alta | Rafael |
+| RF-14 | Consulta unificada de todas as despesas parceladas com totalizadores | Media | Rafael |
 
 **RF-01 — Detalhamento:**
 - Campos obrigatorios: nome (texto), valor (decimal em R$), data de vencimento.
@@ -76,6 +77,12 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 
 **RF-07 — Detalhamento:**
 - O usuario pode duplicar uma despesa existente para acelerar o cadastro de itens similares.
+
+**RF-14 — Detalhamento:**
+- Nova visualizacao (lista ou tabela) exibindo todas as despesas do usuario que possuem parcelamento (`parcela_total > 1`).
+- Deve exibir colunas: Parcela (X/Y), Vencimento, Valor e Status.
+- Deve apresentar totalizadores consolidados: Valor Total Gasto (soma de todas as parcelas), Valor Ja Pago, Valor Pendente e Valor em Atraso.
+- Permite ao usuario ter uma nocao clara do seu "passivo" futuro de parcelamentos.
 
 ### Modulo: Receitas
 
@@ -232,6 +239,8 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - **US-07:** Como usuario, quero que despesas recorrentes sejam replicadas automaticamente no proximo mes, para que eu nao precise recadastrar todo mes.
   - Criterios de aceite:
     - [ ] Dado que existe uma despesa recorrente sem parcela no mes de janeiro, quando o mes de fevereiro e gerado, entao a mesma despesa aparece em fevereiro com status "Pendente".
+- **RN-004**: Despesas parceladas devem gerar automaticamente todos os registros futuros no banco de dados no momento da criação, garantindo visibilidade imediata do passivo total.
+- **RN-005**: Ao excluir uma despesa parcelada "pai" (parcela 1), o sistema deve perguntar se deseja excluir todas as futuras ou manter o histórico. (Por enquanto, manter comportamento padrão de exclusão individual ou implementar em CR futura).
 
 - **US-08:** Como usuario, quero que parcelas avancem automaticamente ao virar o mes, para que eu nao precise atualizar manualmente "5 de 11" para "6 de 11".
   - Criterios de aceite:

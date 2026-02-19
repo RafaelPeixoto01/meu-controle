@@ -25,6 +25,7 @@
 | CR-002-VL | Validacao: Regressao, Testes, Documentacao         | CR2-VL-01 a CR2-VL-11 | Pendente |
 | CR-004 | Totalizadores de Despesa por Status                       | CR4-T-01 a CR4-T-06   | Concluido |
 | CR-005 | Gastos Diarios (Daily Expenses)                           | CR5-T-01 a CR5-T-21   | Concluido |
+| CR-007 | Consulta de Despesas Parceladas                           | CR7-T-01 a CR7-T-08   | Pendente |
 
 ---
 
@@ -512,3 +513,22 @@ graph TD
 | CR5-T-21 | Atualizar documentacao | docs/*, CLAUDE.md | CR5-T-20 | Todos docs atualizados |
 
 *Atualizado em 2026-02-17. Adicionado grupo CR-005 (Gastos Diarios). 21 tarefas.*
+
+---
+
+## Grupo CR-007: Consulta de Despesas Parceladas
+
+> Ref: `/docs/changes/CR-007-consulta-parcelas.md`
+>
+> Nova funcionalidade para listar todas as parcelas (planejadas) e exibir totalizadores de passivo.
+
+| ID | Tarefa | Arquivos | Depende de | Done When |
+|----|--------|----------|------------|-----------|
+| CR7-T-01 | Criar CR-007 | `docs/changes/CR-007-consulta-parcelas.md` | — | Documento criado |
+| CR7-T-02 | Definir schemas de resposta | `backend/app/schemas.py` | CR7-T-01 | Schema `InstallmentsSummary` criado |
+| CR7-T-03 | Criar funcao CRUD de busca | `backend/app/crud.py` | CR7-T-02 | `get_all_installment_expenses` retorna lista filtrada por `parcela_total > 1` |
+| CR7-T-04 | Criar endpoint `/installments` | `backend/app/routers/expenses.py` | CR7-T-03 | Endpoint retorna lista + totais calculados |
+| CR7-T-05 | Adicionar tipos TypeScript | `frontend/src/types.ts` | CR7-T-02 | Interfaces `InstallmentsSummary` adicionadas |
+| CR7-T-06 | Adicionar funcao API frontend | `frontend/src/services/api.ts` | CR7-T-05 | `fetchInstallments` funciona |
+| CR7-T-07 | Criar pagina `InstallmentsView` | `frontend/src/pages/InstallmentsView.tsx` | CR7-T-06 | Pagina com Tabela e Cards renderiza dados reais |
+| CR7-T-08 | Adicionar rota e navegacao | `frontend/src/App.tsx`, `frontend/src/components/UserMenu.tsx` | CR7-T-07 | Rota `/installments` acessivel pelo menu |

@@ -35,6 +35,24 @@ export interface ExpenseUpdate {
   status?: ExpenseStatus;
 }
 
+export interface InstallmentGroup {
+  nome: string;
+  parcela_total: number;
+  status_geral: string;
+  valor_total_compra: number;
+  valor_pago: number;
+  valor_restante: number;
+  installments: Expense[];
+}
+
+export interface InstallmentsResponse {
+  groups: InstallmentGroup[];
+  total_gasto: number;
+  total_pago: number;
+  total_pendente: number;
+  total_atrasado: number;
+}
+
 // ========== Income Types ==========
 
 export interface Income {
