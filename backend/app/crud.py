@@ -92,6 +92,23 @@ def expense_replica_exists(
     return db.scalars(stmt).first() is not None
 
 
+def expense_installment_exists(
+    db: Session, target_mes: date, user_id: str, nome: str, parcela_atual: int, parcela_total: int
+) -> bool:
+    """Checa se ja existe uma parcela especifica gerada (evita duplicacao do CR-007 upfront creation)."""
+    stmt = (
+        select(Expense)
+        .where(
+            Expense.user_id == user_id,
+            Expense.mes_referencia == target_mes,
+            Expense.nome == nome,
+            Expense.parcela_atual == parcela_atual,
+            Expense.parcela_total == parcela_total,
+        )
+    )
+    return db.scalars(stmt).first() is not None
+
+
 # ========== Incomes ==========
 
 def get_incomes_by_month(db: Session, mes_referencia: date, user_id: str) -> list[Income]:

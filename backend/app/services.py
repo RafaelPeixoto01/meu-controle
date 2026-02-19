@@ -97,6 +97,9 @@ def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
                 if crud.expense_replica_exists(db, target_mes, user_id, exp.id):
                     logger.debug("SKIP already replicated: '%s'", exp.nome)
                     continue
+                if crud.expense_installment_exists(db, target_mes, user_id, exp.nome, exp.parcela_atual + 1, exp.parcela_total):
+                    logger.debug("SKIP already upfront-created: '%s'", exp.nome)
+                    continue
                 logger.info(
                     "REPLICATE installment: '%s' parcela %d/%d -> %d/%d",
                     exp.nome, exp.parcela_atual, exp.parcela_total,
