@@ -109,8 +109,9 @@ export function updateExpense(
   });
 }
 
-export function deleteExpense(id: string): Promise<void> {
-  return request<void>(`/expenses/${id}`, { method: "DELETE" });
+export function deleteExpense(id: string, deleteAll: boolean = false): Promise<void> {
+  const url = deleteAll ? `/expenses/${id}?delete_all=true` : `/expenses/${id}`;
+  return request<void>(url, { method: "DELETE" });
 }
 
 export function duplicateExpense(id: string): Promise<Expense> {

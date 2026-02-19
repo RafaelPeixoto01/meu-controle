@@ -26,6 +26,7 @@
 | CR-004 | Totalizadores de Despesa por Status                       | CR4-T-01 a CR4-T-06   | Concluido |
 | CR-005 | Gastos Diarios (Daily Expenses)                           | CR5-T-01 a CR5-T-21   | Concluido |
 | CR-007 | Consulta de Despesas Parceladas                           | CR7-T-01 a CR7-T-08   | Pendente |
+| CR-009 | Exclusão em Série (Parcelas)                              | CR9-T-01 a CR9-T-05   | Pendente |
 
 ---
 
@@ -532,3 +533,20 @@ graph TD
 | CR7-T-06 | Adicionar funcao API frontend | `frontend/src/services/api.ts` | CR7-T-05 | `fetchInstallments` funciona |
 | CR7-T-07 | Criar pagina `InstallmentsView` | `frontend/src/pages/InstallmentsView.tsx` | CR7-T-06 | Pagina com Tabela e Cards renderiza dados reais |
 | CR7-T-08 | Adicionar rota e navegacao | `frontend/src/App.tsx`, `frontend/src/components/UserMenu.tsx` | CR7-T-07 | Rota `/installments` acessivel pelo menu |
+
+---
+
+## Grupo CR-009: Exclusão em Série (Parcelas)
+
+> Ref: `/docs/changes/CR-009-exclusao-em-serie.md`
+>
+> Funcionalidade para excluir todas as parcelas de uma só vez quando o usuário selecionar deletar uma despesa parcelada.
+
+| ID | Tarefa | Arquivos | Depende de | Done When |
+|----|--------|----------|------------|-----------|
+| CR9-T-01 | Atualizar Documentos e Criar CR-009 | `docs/changes/CR-009-exclusao-em-serie.md` | — | Documento criado |
+| CR9-T-02 | Atualizar backend para suporte ao `delete_all` | `backend/app/routers/expenses.py`, `backend/app/crud.py` | CR9-T-01 | Rota `DELETE` processa flag e remove logs correspondentes |
+| CR9-T-03 | Atualizar hooks e api client no frontend | `frontend/src/services/api.ts`, `frontend/src/hooks/useExpenses.ts` | CR9-T-02 | A chamada ao delete repassa o arg `deleteAll = true` corretamente |
+| CR9-T-04 | Customizar Modal de Exclusão UI | `frontend/src/components/ExpenseTable.tsx` | CR9-T-03 | O usuário vê checkboxes ou um aviso distinto se for despesa parcelada |
+| CR9-T-05 | Testar build local | — | CR9-T-04 | Backend tests && tsc build sem erros |
+

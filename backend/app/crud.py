@@ -47,6 +47,22 @@ def delete_expense(db: Session, expense: Expense) -> None:
     db.commit()
 
 
+def delete_expense_installments(db: Session, target_expense: Expense) -> None:
+    """Remove uma despesa e TODAS as parcelas com o mesmo nome e parcela_total do usuario (CR-009)."""
+    stmt = (
+        select(Expense)
+        .where(
+            Expense.user_id == target_expense.user_id,
+            Expense.nome == target_expense.nome,
+            Expense.parcela_total == target_expense.parcela_total
+        )
+    )
+    expenses = db.scalars(stmt).all()
+    for e in expenses:
+        db.delete(e)
+    db.commit()
+
+
 def count_expenses_by_month(db: Session, mes_referencia: date, user_id: str) -> int:
     """Conta despesas do usuario no mes (check de idempotencia da transicao). (CR-002: user_id)"""
     stmt = (

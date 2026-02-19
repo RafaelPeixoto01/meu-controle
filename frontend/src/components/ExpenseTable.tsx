@@ -54,9 +54,9 @@ export default function ExpenseTable({
     setEditingExpense(null);
   }
 
-  function handleDelete() {
+  function handleDelete(deleteAllChecked: boolean = false) {
     if (!deletingExpense) return;
-    deleteExpense.mutate(deletingExpense.id);
+    deleteExpense.mutate({ id: deletingExpense.id, deleteAll: deleteAllChecked });
     setDeletingExpense(null);
   }
 
@@ -239,6 +239,11 @@ export default function ExpenseTable({
         isOpen={deletingExpense !== null}
         title="Excluir Despesa"
         message={`Tem certeza que deseja excluir "${deletingExpense?.nome}"?`}
+        checkboxLabel={
+          deletingExpense?.parcela_total && deletingExpense.parcela_total > 1
+            ? "Excluir simultaneamente todas as parcelas desta despesa"
+            : undefined
+        }
         onConfirm={handleDelete}
         onCancel={() => setDeletingExpense(null)}
       />

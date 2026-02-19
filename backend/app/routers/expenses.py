@@ -145,11 +145,16 @@ def update_expense(
 @router.delete("/{expense_id}", status_code=204)
 def delete_expense(
     expense_id: str,
+    delete_all: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),  # CR-002
 ):
-    """Excluir despesa por ID."""
+    """Excluir despesa por ID. Suporta exclusao em serie (CR-009)."""
     expense = crud.get_expense_by_id(db, expense_id, current_user.id)  # CR-002: ownership check
     if not expense:
         raise HTTPException(status_code=404, detail="Despesa nao encontrada")
-    crud.delete_expense(db, expense)
+    
+    if delete_all and expense.parcela_total is not None and expense.parcela_total > 1:
+        crud.delete_expense_installments(db, expense)
+    else:
+        crud.delete_expense(db, expense)

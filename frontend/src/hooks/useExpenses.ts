@@ -30,7 +30,8 @@ export function useUpdateExpense() {
 export function useDeleteExpense() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.deleteExpense(id),
+    mutationFn: ({ id, deleteAll }: { id: string; deleteAll?: boolean }) =>
+      api.deleteExpense(id, deleteAll),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MONTHLY_KEY });
       queryClient.invalidateQueries({ queryKey: ["installments"] });

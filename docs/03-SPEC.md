@@ -65,7 +65,7 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 | `GET`    | `/api/months/{year}/{month}`           | Sim   | —                       | `MonthlySummary`        | Visao mensal completa. Dispara RF-06 + RF-05.   |
 | `POST`   | `/api/expenses/{year}/{month}`         | Sim   | `ExpenseCreate`         | `ExpenseResponse` (201) | Criar despesa no mes                            |
 | `PATCH`  | `/api/expenses/{expense_id}`           | Sim   | `ExpenseUpdate`         | `ExpenseResponse`       | Atualizar campos da despesa                     |
-| `DELETE` | `/api/expenses/{expense_id}`           | Sim   | —                       | 204 No Content          | Excluir despesa                                 |
+| `DELETE` | `/api/expenses/{expense_id}`           | Sim   | — (`?delete_all=...`)   | 204 No Content          | Excluir despesa (com exclusão em série CR-009)  |
 | `POST`   | `/api/expenses/{expense_id}/duplicate` | Sim   | —                       | `ExpenseResponse` (201) | RF-07: Duplicar despesa                         |
 | `POST`   | `/api/incomes/{year}/{month}`          | Sim   | `IncomeCreate`          | `IncomeResponse` (201)  | Criar receita no mes                            |
 | `PATCH`  | `/api/incomes/{income_id}`             | Sim   | `IncomeUpdate`          | `IncomeResponse`        | Atualizar campos da receita                     |
@@ -738,11 +738,12 @@ def count_expenses_by_month(db: Session, mes_referencia: date, user_id: str) -> 
 5. Persistir via `crud.update_expense()`
 6. Retornar `ExpenseResponse` atualizado
 
-**Excluir Despesa:**
-1. Receber `expense_id` do path
-2. Buscar despesa por ID — se nao existe: 404
-3. Remover via `crud.delete_expense()`
-4. Retornar 204 No Content
+**Excluir Despesa (CR-009):**
+1. Receber `expense_id` do path e `delete_all: bool = False` da query.
+2. Buscar despesa por ID — se nao existe: 404.
+3. Se `delete_all` for `True` e `parcela_total > 1`: chamar func CRUD que remove em massa via DB (onde `nome` e `parcela_total` sejam iguais) para aquele `user_id`.
+4. Caso contrario, remover isoladamente via `crud.delete_expense()`.
+5. Retornar 204 No Content.
 
 #### 2.5 API Endpoints
 
