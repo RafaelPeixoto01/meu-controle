@@ -47,16 +47,21 @@ def delete_expense(db: Session, expense: Expense) -> None:
     db.commit()
 
 
-def delete_expense_installments(db: Session, target_expense: Expense) -> None:
-    """Remove uma despesa e TODAS as parcelas com o mesmo nome e parcela_total do usuario (CR-009)."""
-    stmt = (
-        select(Expense)
-        .where(
-            Expense.user_id == target_expense.user_id,
-            Expense.nome == target_expense.nome,
-            Expense.parcela_total == target_expense.parcela_total
-        )
-    )
+def delete_expense_related(db: Session, target_expense: Expense) -> None:
+    """Remove uma despesa e TODAS as relacionadas (parcelas ou recorrentes com mesmo nome) (CR-009)."""
+    conditions = [
+        Expense.user_id == target_expense.user_id,
+        Expense.nome == target_expense.nome,
+    ]
+    
+    if target_expense.parcela_total is not None and target_expense.parcela_total > 1:
+        conditions.append(Expense.parcela_total == target_expense.parcela_total)
+    elif target_expense.recorrente:
+        conditions.append(Expense.recorrente == True)
+    else:
+        conditions.append(Expense.id == target_expense.id)
+
+    stmt = select(Expense).where(*conditions)
     expenses = db.scalars(stmt).all()
     for e in expenses:
         db.delete(e)

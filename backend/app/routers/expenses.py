@@ -154,7 +154,7 @@ def delete_expense(
     if not expense:
         raise HTTPException(status_code=404, detail="Despesa nao encontrada")
     
-    if delete_all and expense.parcela_total is not None and expense.parcela_total > 1:
-        crud.delete_expense_installments(db, expense)
+    if delete_all and ((expense.parcela_total is not None and expense.parcela_total > 1) or expense.recorrente):
+        crud.delete_expense_related(db, expense)
     else:
         crud.delete_expense(db, expense)

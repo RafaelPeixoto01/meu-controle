@@ -10,7 +10,7 @@
 
 ## 1. Resumo da Mudança
 
-Permitir que o usuário exclua não apenas uma despesa individual, mas também todas as parcelas futuras ou relacionadas a uma compra parcelada de uma só vez. 
+Permitir que o usuário exclua não apenas uma despesa individual, mas também todas as parcelas futuras ou todas as despesas relacionadas a uma compra parcelada/despesa recorrente de uma só vez. 
 
 ---
 
@@ -88,7 +88,7 @@ Ao clicar em Excluir em uma despesa que faz parte de um parcelamento (`parcela_t
 | ID      | Tarefa                              | Depende de | Done When                          |
 |---------|-------------------------------------|------------|------------------------------------|
 | CR-T-01 | Atualizar Docs (PRD/Spec)           | —          | Documentos refletem nova flag      |
-| CR-T-02 | Backend: Suporte a `delete_all`     | CR-T-01    | Endpoint exclui parcelas relacionadas |
+| CR-T-02 | Backend: Suporte a `delete_all`     | CR-T-01    | Endpoint exclui parcelas relacionadas ou recorrentes |
 | CR-T-03 | Frontend: Customizar Modal Exclusão | CR-T-02    | Usuário pode escolher excluir tudo |
 | CR-T-04 | Verificações de Build & Deploy      | CR-T-03    | `npm run build` passa sem erros    |
 
@@ -96,8 +96,8 @@ Ao clicar em Excluir em uma despesa que faz parte de um parcelamento (`parcela_t
 
 ## 8. Critérios de Aceite
 
-- [x] É possível excluir uma despesa isolada do parcelamento (mantendo as outras).
-- [x] É possível excluir o parcelamento inteiro (remove todas as despesas com mesmo nome e parcela_total do usuário).
+- [x] É possível excluir uma despesa isolada do parcelamento/recorrente (mantendo as outras).
+- [x] É possível excluir o parcelamento inteiro ou toda a cadeia de uma recorrente (remove todas as despesas com mesmo nome e parcela_total ou flag recorrente).
 - [x] Despesas não parceladas continuam sendo excluídas normalmente.
 - [x] O frontend atualiza a visualização corretamente.
 

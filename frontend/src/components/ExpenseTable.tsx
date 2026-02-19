@@ -240,8 +240,10 @@ export default function ExpenseTable({
         title="Excluir Despesa"
         message={`Tem certeza que deseja excluir "${deletingExpense?.nome}"?`}
         checkboxLabel={
-          deletingExpense?.parcela_total && deletingExpense.parcela_total > 1
-            ? "Excluir simultaneamente todas as parcelas desta despesa"
+          (deletingExpense?.parcela_total && deletingExpense.parcela_total > 1) || deletingExpense?.recorrente
+            ? deletingExpense?.recorrente
+              ? "Excluir simultaneamente todas as despesas recorrentes com este nome"
+              : "Excluir simultaneamente todas as parcelas desta despesa"
             : undefined
         }
         onConfirm={handleDelete}
