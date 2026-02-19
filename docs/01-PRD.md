@@ -240,7 +240,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
   - Criterios de aceite:
     - [ ] Dado que existe uma despesa recorrente sem parcela no mes de janeiro, quando o mes de fevereiro e gerado, entao a mesma despesa aparece em fevereiro com status "Pendente".
 - **RN-004**: Despesas parceladas devem gerar automaticamente todos os registros futuros no banco de dados no momento da criação, garantindo visibilidade imediata do passivo total.
-- **RN-005**: Ao excluir uma despesa parcelada, o sistema oferece a opção de excluir apenas aquela parcela ou todas as parcelas compondo a compra, limpando o parcelamento inteiro. (CR-009)
+- **RN-005**: Ao excluir uma despesa parcelada ou recorrente, o sistema oferece a opção de excluir apenas o lançamento atual ou todas as instâncias relacionadas (mesmo parcelamento ou mesma série recorrente). (CR-009)
 
 - **US-08:** Como usuario, quero que parcelas avancem automaticamente ao virar o mes, para que eu nao precise atualizar manualmente "5 de 11" para "6 de 11".
   - Criterios de aceite:
@@ -336,7 +336,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-021 | Metodo de pagamento deve ser um dos 6 metodos validos: Dinheiro, Cartao de Credito, Cartao de Debito, Pix, Vale Alimentacao, Vale Refeicao | Gastos Diarios (RF-13) |
 | RN-022 | Gastos diarios sao independentes de gastos planejados — nao participam da transicao automatica de mes | Gastos Diarios (RF-13) |
 | RN-023 | Gastos diarios pertencem a um usuario via FK user_id; isolamento de dados por usuario | Gastos Diarios (RF-13) |
-| RN-024 | Ao excluir uma despesa parcelada, o usuario deve ter a opcao de excluir todas as parcelas relacionadas simultaneamente | Despesas (RN-005 / CR-009) |
+| RN-024 | Ao excluir uma despesa parcelada ou recorrente, o usuario deve ter a opcao de excluir todas as relacionadas simultaneamente | Despesas (RN-005 / CR-009) |
 
 ---
 

@@ -741,7 +741,7 @@ def count_expenses_by_month(db: Session, mes_referencia: date, user_id: str) -> 
 **Excluir Despesa (CR-009):**
 1. Receber `expense_id` do path e `delete_all: bool = False` da query.
 2. Buscar despesa por ID — se nao existe: 404.
-3. Se `delete_all` for `True` e `parcela_total > 1`: chamar func CRUD que remove em massa via DB (onde `nome` e `parcela_total` sejam iguais) para aquele `user_id`.
+3. Se `delete_all` for `True` e a despesa possuir parcelamento ou for marcada como recorrente: chamar func CRUD `delete_expense_related` que remove em massa via DB as despesas correspondentes daquele `user_id`.
 4. Caso contrario, remover isoladamente via `crud.delete_expense()`.
 5. Retornar 204 No Content.
 
