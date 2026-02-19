@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import {
     ChevronDown,
     ChevronRight,
@@ -13,7 +12,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { fetchInstallments } from "../services/api";
-import { InstallmentGroup } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import ViewSelector from "../components/ViewSelector";
 

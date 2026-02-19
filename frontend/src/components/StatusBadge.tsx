@@ -2,7 +2,7 @@ import type { ExpenseStatus } from "../types";
 
 interface StatusBadgeProps {
   status: ExpenseStatus;
-  onClick: () => void;
+  onClick?: () => void;
 }
 
 const statusStyles: Record<ExpenseStatus, string> = {
