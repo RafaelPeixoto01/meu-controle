@@ -1,8 +1,9 @@
 # Arquitetura — [Nome do Produto]
 
-**Versão:** 1.0  
-**Data:** YYYY-MM-DD  
-**PRD Ref:** PRD v1.0
+**Versão:** 1.0
+**Data:** YYYY-MM-DD
+**PRD Ref:** 01-PRD v1.0
+**CR Ref:** — *(preencher quando atualizado por Change Requests)*
 
 ---
 
@@ -120,6 +121,14 @@ erDiagram
 - **Branches:** `feature/xxx`, `fix/xxx`, `hotfix/xxx`, `release/xxx`
 - **PR:** Requer descrição e referência à tarefa
 
+### API
+- Todas as rotas sob prefixo `/api/`.
+- Usar PATCH para atualização parcial — apenas campos enviados são alterados (`exclude_unset=True` em Pydantic / equivalente no ORM).
+- 201 Created para criação, 204 No Content para exclusão.
+- Derivar contexto de rota a partir de path parameters (ex: `{year}/{month}`), nunca do body.
+- Endpoints protegidos requerem header `Authorization: Bearer <token>`.
+- Ownership verification: operações em recursos verificam `user_id` antes de permitir.
+
 ### Estilo de Código
 - [Definir linter e configuração]
 - [Definir formatter e configuração]
@@ -165,3 +174,72 @@ erDiagram
 - **Decisão:** ...
 - **Alternativas Consideradas:** ...
 - **Consequências:** ...
+
+---
+
+## 9. Deploy e Infraestrutura
+
+### 9.1 Plataforma de Produção
+
+| Item | Valor |
+|------|-------|
+| Hosting | [Plataforma — ex: Railway, Render, AWS, Vercel] |
+| Banco de dados | [Banco + provedor] |
+| Build trigger | [ex: Push para branch `main` / CI/CD pipeline] |
+| Container base | [ex: `python:3.12-slim` + `node:20-alpine`] |
+
+### 9.2 Pipeline de Deploy
+
+```mermaid
+graph LR
+    A[git push main] --> B[CI/CD detecta push]
+    B --> C[Build / Docker build]
+    C --> D[Testes automatizados]
+    D --> E[Deploy]
+    E --> F[Migrations / Startup]
+    F --> G[App online]
+```
+
+### 9.3 Verificação e Rollback
+
+> Procedimentos detalhados em `/docs/05-DEPLOY-GUIDE.md`.
+
+### 9.4 Health Check
+
+- **Endpoint:** `GET /api/health` — retorna `{"status": "ok"}`
+- **Uso:** Verificação manual pós-deploy
+
+---
+
+## 10. Gestão de Dependências
+
+### 10.1 Política de Pinning
+
+| Ecossistema | Estratégia | Formato | Justificativa |
+|-------------|------------|---------|---------------|
+| [Backend]   | Major.Minor fixo, patch livre | `==X.Y.*` | Permite bug fixes, bloqueia breaking changes |
+| [Frontend]  | Caret ranges | `^X.Y.Z` | Padrão npm, permite minor+patch, bloqueia major |
+
+**Pins críticos (não alterar sem testar):**
+
+| Dependência | Pin | Motivo |
+|-------------|-----|--------|
+| [Pacote]    | [Versão] | [Motivo — ex: incompatibilidade conhecida] |
+
+### 10.2 Processo de Auditoria
+
+Executar periodicamente (antes de cada CR ou mensalmente):
+
+```bash
+# Backend
+[comando de auditoria — ex: pip audit]
+[comando de listagem — ex: pip list --outdated]
+
+# Frontend
+[comando de auditoria — ex: npm audit]
+[comando de listagem — ex: npm outdated]
+```
+
+---
+
+*Documento criado em YYYY-MM-DD.*

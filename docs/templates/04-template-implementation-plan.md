@@ -1,23 +1,26 @@
 # Plano de Implementação — [Nome do Produto]
 
-**Versão:** 1.0  
-**Data:** YYYY-MM-DD  
-**PRD Ref:** PRD v1.0  
-**Arquitetura Ref:** ARCHITECTURE v1.0  
-**Spec Ref:** SPEC v1.0
+**Versão:** 1.0
+**Data:** YYYY-MM-DD
+**PRD Ref:** 01-PRD v1.0
+**Arquitetura Ref:** 02-ARCHITECTURE v1.0
+**Spec Ref:** 03-SPEC v1.0
+**CR Ref:** — *(preencher quando CRs forem incorporados ao plano)*
 
 ---
 
 ## Visão Geral
 
-| Grupo | Descrição               | Tarefas | Estimativa |
-|-------|-------------------------|---------|------------|
-| 1     | Setup e Infraestrutura  | T-001 a T-00X | ...   |
-| 2     | Modelos e Entidades     | T-00X a T-00X | ...   |
-| 3     | Lógica de Negócio       | T-00X a T-00X | ...   |
-| 4     | API / Controllers       | T-00X a T-00X | ...   |
-| 5     | UI / Frontend           | T-00X a T-00X | ...   |
-| 6     | Testes e Refinamento    | T-00X a T-00X | ...   |
+| Grupo    | Descrição               | Tarefas        | Status    |
+|----------|-------------------------|----------------|-----------|
+| 1        | Setup e Infraestrutura  | T-001 a T-00X  | Pendente  |
+| 2        | Modelos e Entidades     | T-00X a T-00X  | Pendente  |
+| 3        | Lógica de Negócio       | T-00X a T-00X  | Pendente  |
+| 4        | API / Controllers       | T-00X a T-00X  | Pendente  |
+| 5        | UI / Frontend           | T-00X a T-00X  | Pendente  |
+| 6        | Testes e Refinamento    | T-00X a T-00X  | Pendente  |
+
+> **Status:** Pendente / Em andamento / Concluído
 
 ---
 
@@ -93,6 +96,35 @@
 | T-031 | Testar fluxos E2E (se UI) | `tests/e2e/x-flow.test.ts` | — | Grupo 5 | Fluxos críticos passam end-to-end |
 | T-032 | Code review e refactoring | Todos os arquivos | — | T-029 | Código segue padrões do ARCHITECTURE.md |
 | T-033 | Documentar README | `README.md` | — | T-032 | README com setup, uso e contribuição |
+
+---
+
+## Diagrama de Dependências
+
+---
+
+## CR-XXX: [Nome do Change Request]
+
+> Adicionar esta seção para cada CR incorporado após o plano inicial.
+
+### Visão Geral do CR
+
+| Grupo CR | Descrição                     | Tarefas             | Status   |
+|----------|-------------------------------|---------------------|----------|
+| CR-XXX-1 | [Backend — Model/Migration]   | CR-T-01 a CR-T-0X   | Pendente |
+| CR-XXX-2 | [Backend — API/Logic]         | CR-T-0X a CR-T-0X   | Pendente |
+| CR-XXX-3 | [Frontend — Types/API]        | CR-T-0X a CR-T-0X   | Pendente |
+| CR-XXX-4 | [Frontend — Components/Pages] | CR-T-0X a CR-T-0X   | Pendente |
+| CR-XXX-5 | [Verificação e Docs]          | CR-T-0X a CR-T-0X   | Pendente |
+
+### Tarefas
+
+| ID       | Tarefa                      | Arquivos                | Ref      | Depende de | Done When |
+|----------|-----------------------------|-------------------------|----------|------------|-----------|
+| CR-T-01  | [Tarefa de documentação]    | `docs/changes/CR-XXX.md`| —        | —          | CR criado e aprovado |
+| CR-T-02  | [Tarefa de backend]         | `backend/app/...`       | RF-XXX   | CR-T-01    | ... |
+| CR-T-03  | [Tarefa de frontend]        | `frontend/src/...`      | RF-XXX   | CR-T-02    | ... |
+| CR-T-04  | Atualizar documentação      | `docs/0X-*.md`          | —        | CR-T-03    | Docs refletem a mudança |
 
 ---
 

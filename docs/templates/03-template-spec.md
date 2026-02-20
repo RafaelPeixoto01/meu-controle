@@ -1,9 +1,10 @@
 # Especificação Técnica — [Nome do Produto/Feature]
 
-**Versão:** 1.0  
-**Data:** YYYY-MM-DD  
-**PRD Ref:** PRD v1.0  
-**Arquitetura Ref:** ARCHITECTURE v1.0
+**Versão:** 1.0
+**Data:** YYYY-MM-DD
+**PRD Ref:** 01-PRD v1.0
+**Arquitetura Ref:** 02-ARCHITECTURE v1.0
+**CR Ref:** — *(preencher quando atualizado por Change Requests)*
 
 ---
 
@@ -19,6 +20,21 @@
 ---
 
 ## 2. Detalhamento Técnico
+
+### Contratos da API (Visão Geral)
+
+> Tabela de referência rápida de todos os endpoints. Detalhe por feature nas seções abaixo.
+
+| Método   | Path                        | Auth? | Body               | Resposta              | Descrição                       |
+|----------|-----------------------------|-------|--------------------|-----------------------|---------------------------------|
+| `GET`    | `/api/[recurso]`            | Sim   | —                  | `[Tipo]`              | Listar recursos                 |
+| `POST`   | `/api/[recurso]`            | Sim   | `[CreateInput]`    | `[Tipo]` (201)        | Criar recurso                   |
+| `PATCH`  | `/api/[recurso]/{id}`       | Sim   | `[UpdateInput]`    | `[Tipo]`              | Atualizar campos (parcial)      |
+| `DELETE` | `/api/[recurso]/{id}`       | Sim   | —                  | 204 No Content        | Excluir recurso                 |
+
+**Nota:** Endpoints marcados com `Auth: Sim` requerem header `Authorization: Bearer <token>`. Retornam 401 se ausente/inválido.
+
+---
 
 ### Feature: [RF-001] [Nome da Feature]
 
@@ -138,18 +154,20 @@ Erros:
 - 404: Recurso não encontrado
 ```
 
-**PUT /api/v1/xyz/:id**
+**PATCH /api/v1/xyz/:id**
 ```
-Descrição: Atualizar recurso
+Descrição: Atualizar recurso (atualização parcial — apenas campos enviados são alterados)
 Auth: Requer autenticação
 
-Request Body: UpdateXyzInput (campos parciais)
+Request Body: UpdateXyzInput (todos os campos opcionais)
 Response 200: XyzResponse
 Erros:
 - 400: Validação falhou
 - 404: Recurso não encontrado
 - 409: Name duplicado
 ```
+
+> **Padrão PATCH:** Use `model_dump(exclude_unset=True)` (Pydantic) ou equivalente para aplicar apenas os campos enviados. Evite sobrescrever campos não incluídos no body.
 
 **DELETE /api/v1/xyz/:id**
 ```
@@ -162,6 +180,8 @@ Erros:
 ```
 
 #### 2.6 Banco de Dados
+
+> **Migrations:** Pode usar SQL direto (PostgreSQL/MySQL) ou ferramenta de migration do projeto (ex: Alembic para Python, Flyway para Java, Knex para Node). Ver padrão definido em `02-ARCHITECTURE.md`.
 
 **Migração:**
 ```sql
@@ -271,25 +291,24 @@ sequenceDiagram
 
 ## 6. Plano de Testes
 
-### Feature: [RF-001] [Nome da Feature]
+> **Nota:** Os prefixos de ID de teste podem variar conforme convenção do projeto. Exemplos comuns: `UT-` (Unit Tests), `IT-` (Integration Tests), `BT-` (Backend Tests), `FT-` (Full/Flow Tests). Use o padrão já estabelecido no projeto.
 
-#### Testes Unitários
-
-| ID     | Cenário                        | Input                    | Output Esperado      |
-|--------|--------------------------------|--------------------------|----------------------|
-| UT-001 | Criar com dados válidos        | { name, value }          | XyzResponse          |
-| UT-002 | Criar sem nome                 | { value }                | ValidationError      |
-| UT-003 | Criar com valor negativo       | { name, value: -1 }     | ValidationError      |
-| UT-004 | Criar com nome duplicado       | { name existente }       | ConflictError        |
-
-#### Testes de Integração
+### Backend isolado
 
 | ID     | Cenário                        | Método/Rota              | Status Esperado |
 |--------|--------------------------------|--------------------------|-----------------|
-| IT-001 | POST com body válido           | POST /api/v1/xyz         | 201             |
-| IT-002 | POST sem autenticação          | POST /api/v1/xyz         | 401             |
-| IT-003 | GET lista paginada             | GET /api/v1/xyz?page=1   | 200             |
-| IT-004 | GET recurso inexistente        | GET /api/v1/xyz/invalid  | 404             |
+| BT-001 | Health check                   | GET /api/health          | 200             |
+| BT-002 | POST com body válido           | POST /api/v1/xyz         | 201             |
+| BT-003 | POST sem autenticação          | POST /api/v1/xyz         | 401             |
+| BT-004 | GET recurso inexistente        | GET /api/v1/xyz/invalid  | 404             |
+
+### Fluxo completo (backend + frontend)
+
+| ID     | Cenário                        | Resultado Esperado                   |
+|--------|--------------------------------|--------------------------------------|
+| FT-001 | Criar recurso via formulário   | Aparece na lista, totais atualizam   |
+| FT-002 | Editar recurso                 | Valores atualizados na UI            |
+| FT-003 | Excluir recurso com confirmação| Remove da lista, totais recalculam   |
 
 ---
 

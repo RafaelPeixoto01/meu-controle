@@ -57,12 +57,13 @@
 
 ## 5. Impacto nos Documentos
 
-| Documento                  | Impactado? | Seções Afetadas              | Ação Necessária       |
-|----------------------------|------------|------------------------------|-----------------------|
-| `/docs/PRD.md`             | Sim / Não  | [ex: Requisitos Funcionais]  | Atualizar RF-003      |
-| `/docs/ARCHITECTURE.md`    | Sim / Não  | [ex: Modelagem de Dados]     | Adicionar ADR-005     |
-| `/docs/SPEC.md`            | Sim / Não  | [ex: Feature RF-003]         | Reescrever seção 2.3  |
-| `/docs/IMPLEMENTATION_PLAN.md` | Sim / Não | [ex: Grupo 3]            | Adicionar tarefas     |
+| Documento                       | Impactado? | Seções Afetadas              | Ação Necessária       |
+|---------------------------------|------------|------------------------------|-----------------------|
+| `/docs/01-PRD.md`               | Sim / Não  | [ex: Requisitos Funcionais]  | Atualizar RF-XXX      |
+| `/docs/02-ARCHITECTURE.md`      | Sim / Não  | [ex: Modelagem de Dados]     | Adicionar ADR-XXX     |
+| `/docs/03-SPEC.md`              | Sim / Não  | [ex: Feature RF-XXX]         | Reescrever seção 2.X  |
+| `/docs/04-IMPLEMENTATION-PLAN.md` | Sim / Não | [ex: Grupo 3]              | Adicionar tarefas     |
+| `/docs/05-DEPLOY-GUIDE.md`      | Sim / Não  | [ex: Checklist pré-deploy]   | Atualizar procedimento|
 
 ---
 

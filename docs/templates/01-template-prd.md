@@ -1,8 +1,10 @@
 # PRD — [Nome do Produto]
 
-**Versão:** 1.0  
-**Data:** YYYY-MM-DD  
+**Versão:** 1.0
+**Data:** YYYY-MM-DD
 **Status:** Rascunho | Em Revisão | Aprovado
+**Fase:** [Nome da fase — ex: MVP / Fase 1 — Feature X]
+**CR Ref:** — *(preencher quando atualizado por Change Requests)*
 
 ---
 
@@ -43,11 +45,22 @@
 | RF-001 | ...       | Alta       | ...     |
 | RF-002 | ...       | Média      | ...     |
 
+**RF-001 — Detalhamento:**
+- Campos obrigatórios: ...
+- Campos opcionais: ...
+- Regras específicas: ...
+
+**RF-002 — Detalhamento:**
+- ...
+
 ### Módulo: [Nome do Módulo]
 
 | ID     | Requisito | Prioridade | Persona |
 |--------|-----------|------------|---------|
 | RF-003 | ...       | Alta       | ...     |
+
+**RF-003 — Detalhamento:**
+- ...
 
 ---
 
@@ -106,3 +119,18 @@
 | Termo | Definição |
 |-------|-----------|
 | ...   | ...       |
+
+---
+
+## Apêndice: Roadmap Futuro
+
+### Fase [N+1] — [Nome da Próxima Fase]
+- [Feature planejada]
+- [Feature planejada]
+
+### Fase [N+2] — [Nome]
+- [Feature planejada]
+
+---
+
+*Documento criado em YYYY-MM-DD.*
