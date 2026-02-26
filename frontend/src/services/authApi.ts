@@ -35,21 +35,19 @@ export function googleAuth(code: string): Promise<TokenResponse> {
   });
 }
 
-export function refreshTokenApi(refreshToken: string): Promise<TokenResponse> {
+export function refreshTokenApi(): Promise<TokenResponse> {
   return authRequest<TokenResponse>("/auth/refresh", {
     method: "POST",
-    body: JSON.stringify({ refresh_token: refreshToken }),
   });
 }
 
-export function logoutUser(refreshToken: string, accessToken: string): Promise<void> {
+export function logoutUser(accessToken: string): Promise<void> {
   return authRequest<void>("/auth/logout", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ refresh_token: refreshToken }),
   });
 }
 

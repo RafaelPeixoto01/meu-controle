@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.2
-**Data:** 2026-02-17
+**Versao:** 2.3
+**Data:** 2026-02-26
 **PRD Ref:** 01-PRD v2.1
-**Arquitetura Ref:** 02-ARCHITECTURE v2.0
-**Spec Ref:** 03-SPEC v2.2
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios)
+**Arquitetura Ref:** 02-ARCHITECTURE v2.5
+**Spec Ref:** 03-SPEC v2.3
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca)
 
 ---
 
@@ -27,6 +27,7 @@
 | CR-005 | Gastos Diarios (Daily Expenses)                           | CR5-T-01 a CR5-T-21   | Concluido |
 | CR-007 | Consulta de Despesas Parceladas                           | CR7-T-01 a CR7-T-08   | Pendente |
 | CR-009 | Exclusão em Série (Parcelas e Recorrentes)                | CR9-T-01 a CR9-T-05   | Concluido |
+| CR-010 | Hardening de Seguranca                                    | CR10-T-01 a CR10-T-07 | Concluido |
 
 ---
 
@@ -549,4 +550,22 @@ graph TD
 | CR9-T-03 | Atualizar hooks e api client no frontend | `frontend/src/services/api.ts`, `frontend/src/hooks/useExpenses.ts` | CR9-T-02 | A chamada ao delete repassa o arg `deleteAll = true` corretamente |
 | CR9-T-04 | Customizar Modal de Exclusão UI | `frontend/src/components/ExpenseTable.tsx` | CR9-T-03 | O usuário vê checkboxes ou um aviso distinto se for despesa parcelada/recorrente |
 | CR9-T-05 | Testar build local | — | CR9-T-04 | Backend tests && tsc build sem erros |
+
+---
+
+## Grupo CR-010: Hardening de Seguranca
+
+> Ref: `/docs/changes/CR-010-hardening-seguranca.md`
+>
+> Correcoes de segurança identificadas em revisão OWASP: SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, security headers HTTP, warnings de startup para variaveis opcionais.
+
+| ID        | Tarefa                                                          | Arquivos                                                                                   | Depende de         | Done When                                                        |
+|-----------|-----------------------------------------------------------------|--------------------------------------------------------------------------------------------|--------------------|------------------------------------------------------------------|
+| CR10-T-01 | SECRET_KEY fail-fast                                            | `backend/app/auth.py`                                                                      | —                  | App recusa iniciar sem SECRET_KEY com RuntimeError               |
+| CR10-T-02 | HttpOnly cookie para refresh token — backend                   | `backend/app/routers/auth.py`, `backend/app/schemas.py`                                    | CR10-T-01          | Login/register/google emitem Set-Cookie; refresh/logout leem cookie |
+| CR10-T-03 | Remover refresh_token do localStorage — frontend               | `frontend/src/contexts/AuthContext.tsx`, `frontend/src/services/api.ts`, `frontend/src/services/authApi.ts`, `frontend/src/types.ts` | CR10-T-02 | Nenhum localStorage.setItem("refresh_token") no frontend |
+| CR10-T-04 | CORS: headers restritos + ALLOWED_ORIGINS via env              | `backend/app/main.py`                                                                      | —                  | allow_headers especificos; origin configuravel via ALLOWED_ORIGINS |
+| CR10-T-05 | SecurityHeadersMiddleware                                       | `backend/app/main.py`                                                                      | CR10-T-04          | X-Content-Type-Options, X-Frame-Options, Referrer-Policy presentes |
+| CR10-T-06 | Startup warnings para env vars opcionais                       | `backend/app/main.py`                                                                      | —                  | Log mostra WARNING se GOOGLE_CLIENT_ID ou SENDGRID_API_KEY ausentes |
+| CR10-T-07 | Atualizar documentos: CR-010, Architecture, Spec, Plano, Deploy | `docs/changes/CR-010-*.md`, `docs/02-ARCHITECTURE.md`, `docs/03-SPEC.md`, `docs/04-IMPLEMENTATION-PLAN.md`, `docs/05-DEPLOY-GUIDE.md`, `CLAUDE.md` | CR10-T-01..06 | Todos os docs refletem as mudancas; versoes incrementadas |
 

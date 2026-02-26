@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import httpx
@@ -15,7 +15,7 @@ from app.auth import (
 from app.models import User, RefreshToken
 from app.schemas import (
     UserCreate, TokenResponse, LoginRequest, GoogleAuthRequest,
-    RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest, UserResponse,
+    ForgotPasswordRequest, ResetPasswordRequest, UserResponse,
 )
 from app import crud
 from app.email_service import send_password_reset_email
@@ -27,6 +27,20 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI")
 
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+_IS_PRODUCTION = os.environ.get("ENVIRONMENT", "development").lower() != "development"
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    """Define o refresh token como HttpOnly cookie (nao acessivel via JS)."""
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=_IS_PRODUCTION,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/api/auth",
+    )
 
 
 def _create_tokens_for_user(db: Session, user: User) -> dict:
@@ -50,7 +64,7 @@ def _create_tokens_for_user(db: Session, user: User) -> dict:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-def register(data: UserCreate, db: Session = Depends(get_db)):
+def register(data: UserCreate, response: Response, db: Session = Depends(get_db)):
     """RF-08: Cadastro de usuario com nome, email e senha."""
     existing = crud.get_user_by_email(db, data.email)
     if existing:
@@ -63,22 +77,24 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
     )
     user = crud.create_user(db, user)
     tokens = _create_tokens_for_user(db, user)
-    return {**tokens, "user": user}
+    _set_refresh_cookie(response, tokens["refresh_token"])
+    return {"access_token": tokens["access_token"], "token_type": tokens["token_type"], "user": user}
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
+def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """RF-09: Login com email e senha."""
     user = crud.get_user_by_email(db, data.email)
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciais invalidas")  # Mensagem generica
 
     tokens = _create_tokens_for_user(db, user)
-    return {**tokens, "user": user}
+    _set_refresh_cookie(response, tokens["refresh_token"])
+    return {"access_token": tokens["access_token"], "token_type": tokens["token_type"], "user": user}
 
 
 @router.post("/google", response_model=TokenResponse)
-async def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
+async def google_auth(data: GoogleAuthRequest, response: Response, db: Session = Depends(get_db)):
     """RF-09: Login com Google OAuth2 (Authorization Code flow)."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=400, detail="Google OAuth nao configurado")
@@ -133,18 +149,23 @@ async def google_auth(data: GoogleAuthRequest, db: Session = Depends(get_db)):
             user = crud.create_user(db, user)
 
     tokens = _create_tokens_for_user(db, user)
-    return {**tokens, "user": user}
+    _set_refresh_cookie(response, tokens["refresh_token"])
+    return {"access_token": tokens["access_token"], "token_type": tokens["token_type"], "user": user}
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_tokens(data: RefreshTokenRequest, db: Session = Depends(get_db)):
-    """RF-10: Renovar tokens via refresh token (com rotacao — RN-014)."""
-    payload = verify_token(data.refresh_token)
+def refresh_tokens(request: Request, response: Response, db: Session = Depends(get_db)):
+    """RF-10: Renovar tokens via refresh token (com rotacao — RN-014). Lê refresh token do HttpOnly cookie."""
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Refresh token ausente")
+
+    payload = verify_token(refresh_token)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Refresh token invalido")
 
     # Verificar se token existe no banco (nao foi revogado)
-    token_hash = hash_token(data.refresh_token)
+    token_hash = hash_token(refresh_token)
     stored_token = crud.get_refresh_token_by_hash(db, token_hash)
     if not stored_token or stored_token.expires_at < datetime.utcnow():
         raise HTTPException(status_code=401, detail="Refresh token expirado ou revogado")
@@ -158,20 +179,25 @@ def refresh_tokens(data: RefreshTokenRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Usuario nao encontrado")
 
     tokens = _create_tokens_for_user(db, user)
-    return tokens
+    _set_refresh_cookie(response, tokens["refresh_token"])
+    return {"access_token": tokens["access_token"], "token_type": tokens["token_type"]}
 
 
 @router.post("/logout")
 def logout(
-    data: RefreshTokenRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """RF-10: Logout — invalida refresh token no banco."""
-    token_hash = hash_token(data.refresh_token)
-    stored_token = crud.get_refresh_token_by_hash(db, token_hash)
-    if stored_token:
-        crud.delete_refresh_token(db, stored_token)
+    """RF-10: Logout — invalida refresh token no banco e limpa o cookie."""
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        token_hash = hash_token(refresh_token)
+        stored_token = crud.get_refresh_token_by_hash(db, token_hash)
+        if stored_token:
+            crud.delete_refresh_token(db, stored_token)
+    response.delete_cookie(key="refresh_token", path="/api/auth")
     return {"message": "Logout realizado com sucesso"}
 
 

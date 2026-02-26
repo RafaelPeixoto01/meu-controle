@@ -12,7 +12,12 @@ from app.database import get_db
 from app import crud
 
 # Configuracao
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-production")
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY nao definido. "
+        "Defina a variavel de ambiente SECRET_KEY antes de iniciar a aplicacao."
+    )
 ALGORITHM = os.environ.get("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_DAYS", "7"))

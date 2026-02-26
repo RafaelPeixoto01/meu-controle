@@ -156,7 +156,7 @@ export interface User {
 
 export interface AuthTokens {
   access_token: string;
-  refresh_token: string;
+  refresh_token?: string;  // Enviado via HttpOnly cookie, pode estar ausente no body
   token_type: string;
 }
 

@@ -1,20 +1,39 @@
 import logging
+import os
 from pathlib import Path
 from contextlib import asynccontextmanager
 
 logging.basicConfig(level=logging.INFO)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.routers import expenses, incomes, months, auth, users, daily_expenses  # CR-002: auth, users; CR-005: daily_expenses
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Adiciona headers de segurança HTTP em todas as respostas."""
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: migrations gerenciadas pelo Alembic (ver CR-001)
+    # Startup: validar variáveis de ambiente obrigatórias
+    optional_with_warning = {
+        "GOOGLE_CLIENT_ID": "Login com Google desabilitado",
+        "SENDGRID_API_KEY": "Recuperacao de senha por email desabilitada",
+    }
+    for var, warning in optional_with_warning.items():
+        if not os.environ.get(var):
+            logging.warning("Variavel de ambiente %s nao definida: %s", var, warning)
     yield
 
 
@@ -24,12 +43,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
+
+_ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router)    # CR-002: autenticacao (register, login, Google, refresh, logout, forgot/reset password)

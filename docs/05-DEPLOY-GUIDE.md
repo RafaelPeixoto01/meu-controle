@@ -76,7 +76,7 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 | Variavel | Obrigatoria | Default | Onde definir |
 |----------|-------------|---------|--------------|
 | `DATABASE_URL` | Nao | `sqlite:///meu_controle.db` | `backend/.env` |
-| `SECRET_KEY` | Nao | `dev-secret-key-change-in-production` | `backend/.env` |
+| `SECRET_KEY` | **Sim** | — | `backend/.env` (obrigatoria — app nao inicia sem ela) |
 | `ALGORITHM` | Nao | `HS256` | `backend/.env` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Nao | `15` | `backend/.env` |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Nao | `7` | `backend/.env` |
@@ -86,19 +86,23 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 | `SENDGRID_API_KEY` | Nao | Loga token no console | `backend/.env` |
 | `SENDGRID_FROM_EMAIL` | Nao | — | `backend/.env` |
 | `FRONTEND_URL` | Nao | `http://localhost:5173` | `backend/.env` |
+| `ALLOWED_ORIGINS` | Nao | `http://localhost:5173` | `backend/.env` (CSV, ex: `http://localhost:5173,http://localhost:3000`) |
+| `ENVIRONMENT` | Nao | `development` | `backend/.env` (use `production` para habilitar Secure no cookie) |
 
 ### 2.2 Producao (Railway)
 
 | Variavel | Obrigatoria | Provisionamento | Observacao |
 |----------|-------------|-----------------|------------|
 | `DATABASE_URL` | Sim | Railway add-on PostgreSQL (automatico) | Prefixo `postgres://` convertido para `postgresql://` em `database.py` |
-| `SECRET_KEY` | Sim | Manual (Railway Variables) | String aleatoria longa (32+ chars). **Alterar invalida tokens existentes** |
+| `SECRET_KEY` | **Sim** | Manual (Railway Variables) | String aleatoria longa (32+ chars). **App nao inicia sem ela (CR-010)**. Alterar invalida tokens existentes |
 | `GOOGLE_CLIENT_ID` | Sim* | Manual | OAuth app ID do Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | Sim* | Manual | OAuth secret |
 | `GOOGLE_REDIRECT_URI` | Sim* | Manual | `https://<domain>/login` |
 | `SENDGRID_API_KEY` | Sim* | Manual | API key do SendGrid |
 | `SENDGRID_FROM_EMAIL` | Sim* | Manual | Email verificado no SendGrid |
 | `FRONTEND_URL` | Sim | Manual | `https://<railway-domain>` |
+| `ALLOWED_ORIGINS` | Recomendado | Manual | CSV de origins permitidas no CORS. Default `http://localhost:5173` — **definir para dominio de producao** |
+| `ENVIRONMENT` | Recomendado | Manual | Definir como `production` para habilitar flag `Secure` no cookie de refresh token |
 
 > (*) Obrigatorio apenas se a feature correspondente estiver habilitada (Google login, email recovery).
 

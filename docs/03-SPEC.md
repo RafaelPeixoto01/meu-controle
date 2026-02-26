@@ -1,10 +1,10 @@
 # Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios)
 
-**Versao:** 2.2
-**Data:** 2026-02-17
+**Versao:** 2.3
+**Data:** 2026-02-26
 **PRD Ref:** 01-PRD v2.2
-**Arquitetura Ref:** 02-ARCHITECTURE v2.4
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas)
+**Arquitetura Ref:** 02-ARCHITECTURE v2.5
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca)
 
 ---
 
@@ -73,8 +73,8 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 | `POST`   | `/api/auth/register`                   | Nao   | `UserCreate`            | `TokenResponse` (201)   | CR-002: Cadastro de usuario (RF-08)             |
 | `POST`   | `/api/auth/login`                      | Nao   | `LoginRequest`          | `TokenResponse`         | CR-002: Login email/senha (RF-09)               |
 | `POST`   | `/api/auth/google`                     | Nao   | `GoogleAuthRequest`     | `TokenResponse`         | CR-002: Login Google OAuth2 (RF-09)             |
-| `POST`   | `/api/auth/refresh`                    | Nao   | `RefreshTokenRequest`   | `TokenResponse`         | CR-002: Renovar tokens (RF-10)                  |
-| `POST`   | `/api/auth/logout`                     | Sim   | `RefreshTokenRequest`   | `{"message": "..."}`    | CR-002: Invalidar refresh token (RF-10)         |
+| `POST`   | `/api/auth/refresh`                    | Nao   | — (lê cookie HttpOnly)  | `TokenResponse`         | CR-002/CR-010: Renovar tokens (RF-10)           |
+| `POST`   | `/api/auth/logout`                     | Sim   | — (lê cookie HttpOnly)  | `{"message": "..."}`    | CR-002/CR-010: Invalidar refresh token (RF-10)  |
 | `POST`   | `/api/auth/forgot-password`            | Nao   | `ForgotPasswordRequest` | `{"message": "..."}`    | CR-002: Solicitar reset de senha (RF-11)        |
 | `POST`   | `/api/auth/reset-password`             | Nao   | `ResetPasswordRequest`  | `{"message": "..."}`    | CR-002: Redefinir senha (RF-11)                 |
 | `GET`    | `/api/users/me`                        | Sim   | —                       | `UserResponse`          | CR-002: Perfil do usuario (RF-12)               |
@@ -2554,9 +2554,11 @@ class RefreshTokenRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Schema de resposta com tokens JWT."""
+    """Schema de resposta com tokens JWT.
+    CR-010: refresh_token nao e mais enviado no body — emitido via HttpOnly cookie (Set-Cookie).
+    """
     access_token: str
-    refresh_token: str
+    refresh_token: Optional[str] = None  # Ausente no body; enviado via Set-Cookie: refresh_token (HttpOnly)
     token_type: str = "bearer"
     user: Optional[UserResponse] = None
 
@@ -4028,3 +4030,4 @@ sequenceDiagram
 *Atualizado para v2.0 em 2026-02-09 — CR-002: Multi-usuario e Autenticacao (RF-08 a RF-12).*
 *Atualizado para v2.1 em 2026-02-11 — CR-003: Design System e descricoes visuais dos componentes.*
 *Atualizado para v2.2 em 2026-02-17 — CR-005: Gastos Diarios (RF-13) — API contracts, feature section, testes, checklist.*
+*Atualizado para v2.3 em 2026-02-26 — CR-010: Hardening de Seguranca — TokenResponse.refresh_token opcional, /refresh e /logout leem cookie HttpOnly (sem body), tabela de endpoints atualizada.*

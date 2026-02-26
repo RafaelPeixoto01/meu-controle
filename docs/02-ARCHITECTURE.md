@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.4
-**Data:** 2026-02-17
+**Versao:** 2.5
+**Data:** 2026-02-26
 **PRD Ref:** 01-PRD v2.2
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca)
 
 ---
 
@@ -74,14 +74,15 @@ graph TD
 2. FastAPI serve tanto a API quanto os arquivos estaticos
 3. Alembic executa migrations antes do startup (`alembic upgrade head`)
 4. SQLAlchemy conecta ao PostgreSQL via DATABASE_URL (CR-001)
-5. Variaveis de ambiente obrigatorias: `SECRET_KEY`, `DATABASE_URL`. Opcionais: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `SENDGRID_API_KEY`
-6. `GOOGLE_CLIENT_ID` e servido ao frontend em runtime via `GET /api/config` (nao depende de build-time injection)
+5. Variaveis de ambiente obrigatorias: `SECRET_KEY`, `DATABASE_URL`. Opcionais: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `SENDGRID_API_KEY`, `ALLOWED_ORIGINS`, `ENVIRONMENT`
+6. `SECRET_KEY` e obrigatoria — app recusa iniciar (RuntimeError) se ausente (CR-010)
+7. `GOOGLE_CLIENT_ID` e servido ao frontend em runtime via `GET /api/config` (nao depende de build-time injection)
 
-**Fluxo de autenticacao (CR-002):**
+**Fluxo de autenticacao (CR-002, CR-010):**
 1. Usuario se registra via `/api/auth/register` (email/senha) ou `/api/auth/google` (Google OAuth2)
-2. Backend retorna access token (15min) + refresh token (7 dias)
-3. Frontend armazena tokens em localStorage e inclui access token em todas requisicoes
-4. Quando access token expira, frontend usa refresh token para obter novo par de tokens
+2. Backend retorna access token (15min) no body + refresh token (7 dias) em HttpOnly cookie
+3. Frontend armazena access token em localStorage e inclui em todas requisicoes; refresh token e gerenciado pelo browser via cookie
+4. Quando access token expira, frontend chama `/api/auth/refresh` (sem body) — browser envia cookie automaticamente
 5. Quando refresh token expira, usuario e redirecionado para tela de login
 
 ---
@@ -406,7 +407,9 @@ GastoDiario (N) ---- pertence a ----> Mes de referencia (1)
 - **Password hashing:** bcrypt via passlib. Nunca armazenar senha em texto plano.
 - **Dependency injection:** `get_current_user` como `Depends()` do FastAPI — extrai e valida token do header, retorna instancia `User`.
 - **Google OAuth2:** Authorization Code flow. Frontend redireciona para Google, backend troca `code` por tokens via httpx.
-- **Armazenamento frontend:** Tokens em `localStorage`. Access token incluso automaticamente via wrapper `request()` em `api.ts`.
+- **Armazenamento frontend (CR-010):** Access token em `localStorage` (incluso automaticamente via wrapper `request()` em `api.ts`). Refresh token em HttpOnly cookie — inacessivel via JavaScript, enviado automaticamente pelo browser nas chamadas a `/api/auth/refresh` e `/api/auth/logout`.
+- **Security headers (CR-010):** `SecurityHeadersMiddleware` adiciona `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` em todas as respostas.
+- **CORS (CR-010):** Headers restritos a `["Authorization", "Content-Type"]`. Origins configuravel via env var `ALLOWED_ORIGINS` (CSV, default `http://localhost:5173`).
 
 ### Estilo de Codigo
 
@@ -632,17 +635,18 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
   - Positivas: Schema versionado, migrations reversiveis, suporte a alteracoes incrementais.
   - Negativas: Complexidade adicional; devs precisam rodar `alembic upgrade head` apos pull.
 
-### ADR-015: JWT tokens em localStorage (CR-002)
-- **Status:** Aceita
-- **Data:** 2026-02-09
+### ADR-015: JWT token storage — access token em localStorage, refresh token em HttpOnly cookie (CR-002, CR-010)
+- **Status:** Aceita (atualizado em CR-010)
+- **Data:** 2026-02-09 (revisado 2026-02-26)
 - **Contexto:** O frontend SPA precisa armazenar tokens JWT para autenticacao stateless. As opcoes sao localStorage, sessionStorage, ou httpOnly cookies.
-- **Decisao:** Usar `localStorage` para armazenar access token (15 minutos) e refresh token (7 dias). Tokens sao lidos pelo wrapper `request()` em `api.ts` e incluidos automaticamente como header `Authorization: Bearer`.
+- **Decisao original (CR-002):** Usar `localStorage` para ambos os tokens.
+- **Decisao revisada (CR-010):** Access token permanece em `localStorage` (lido pelo wrapper `request()` em `api.ts` e incluido como `Authorization: Bearer`). Refresh token movido para HttpOnly cookie — inacessivel via JavaScript, protege contra roubo por XSS. Cookie tem `SameSite=Lax`, `Path=/api/auth`, `Secure=True` em producao.
 - **Alternativas Consideradas:**
-  - httpOnly cookies: Mais seguro contra XSS, mas adiciona complexidade de protecao CSRF e complica o setup do proxy Vite. Tokens em cookies exigem configuracao `SameSite`, `Secure`, e `Domain` — mais complexo para dev/prod.
+  - Access token em memoria (React state): Token perdido em refresh de pagina — experiencia ruim; usuario precisaria re-autenticar. Mantido em localStorage pela praticidade, com mitigacao pelo tempo de vida curto (15min).
   - sessionStorage: Tokens perdidos ao fechar a aba do browser. Experiencia ruim para o usuario.
 - **Consequencias:**
-  - Positivas: Implementacao simples, funciona bem com Vite proxy e fetch nativo, persiste entre sessoes.
-  - Negativas: Vulneravel a XSS. Mitigado pela ausencia de conteudo HTML gerado por usuario (UGC) e pela curta vida util do access token (15min). Documentado como limitacao conhecida para futura melhoria.
+  - Positivas: Refresh token protegido contra XSS (HttpOnly). Access token de vida curta (15min) limita janela de exposicao. Vite proxy mantém same-origin, cookies funcionam em dev sem `credentials: include`.
+  - Negativas: Access token em localStorage ainda vulneravel a XSS — mitigado pela ausencia de UGC e vida curta do token.
 
 ### ADR-016: Google OAuth2 direto, sem Firebase/Auth0 (CR-002)
 - **Status:** Aceita
@@ -766,4 +770,4 @@ npm outdated                       # Lista pacotes com versao mais nova disponiv
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003 e CR-005.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005 e CR-010.*

@@ -207,9 +207,9 @@ class RefreshTokenRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Schema de resposta com tokens JWT."""
+    """Schema de resposta com tokens JWT. refresh_token enviado via HttpOnly cookie, nao no body."""
     access_token: str
-    refresh_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: Optional[UserResponse] = None
 

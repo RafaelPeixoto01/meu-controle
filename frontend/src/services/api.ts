@@ -31,40 +31,34 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     ...options,
   });
 
-  // CR-002: interceptar 401 para tentar refresh
+  // CR-002: interceptar 401 para tentar refresh via cookie HttpOnly
   if (response.status === 401 && token) {
-    const refreshToken = localStorage.getItem("refresh_token");
-    if (refreshToken) {
-      try {
-        const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: refreshToken }),
+    try {
+      const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (refreshResponse.ok) {
+        const tokens = await refreshResponse.json();
+        localStorage.setItem("access_token", tokens.access_token);
+        // Retry original request com novo token
+        headers["Authorization"] = `Bearer ${tokens.access_token}`;
+        const retryResponse = await fetch(`${BASE_URL}${url}`, {
+          headers,
+          ...options,
         });
-        if (refreshResponse.ok) {
-          const tokens = await refreshResponse.json();
-          localStorage.setItem("access_token", tokens.access_token);
-          localStorage.setItem("refresh_token", tokens.refresh_token);
-          // Retry original request com novo token
-          headers["Authorization"] = `Bearer ${tokens.access_token}`;
-          const retryResponse = await fetch(`${BASE_URL}${url}`, {
-            headers,
-            ...options,
-          });
-          if (!retryResponse.ok) {
-            const error = await retryResponse.json().catch(() => ({}));
-            throw new Error(error.detail || `HTTP ${retryResponse.status}`);
-          }
-          if (retryResponse.status === 204) return undefined as T;
-          return retryResponse.json();
+        if (!retryResponse.ok) {
+          const error = await retryResponse.json().catch(() => ({}));
+          throw new Error(error.detail || `HTTP ${retryResponse.status}`);
         }
-      } catch {
-        // Refresh falhou — limpar tokens e redirecionar
+        if (retryResponse.status === 204) return undefined as T;
+        return retryResponse.json();
       }
+    } catch {
+      // Refresh falhou — limpar token e redirecionar
     }
-    // Refresh token invalido ou ausente
+    // Refresh falhou ou cookie ausente
     localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
     window.location.href = "/login";
     throw new Error("Sessao expirada");
   }

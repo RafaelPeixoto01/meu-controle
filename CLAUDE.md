@@ -145,6 +145,13 @@ Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que j
 
 ```
 Personal Finance/
+├── .claude/
+│   ├── hooks/
+│   │   └── check-typescript.js   # Bloqueia commit se tsc --noEmit falhar
+│   ├── skills/
+│   │   └── feature/
+│   │       └── SKILL.md          # Skill /feature: pipeline CR → commit
+│   └── settings.json             # Hook PreToolUse para git commit
 ├── docs/
 │   ├── 01-PRD.md
 │   ├── 02-ARCHITECTURE.md
@@ -260,15 +267,24 @@ Personal Finance/
 - [x] Plano de Implementação (`/docs/04-IMPLEMENTATION-PLAN.md`)
 - [x] Guia de Deploy (`/docs/05-DEPLOY-GUIDE.md`)
 - [x] Plano de Evolução (`/docs/Plano-de-evolucao.md`)
+- [x] Plano de Insights (`/docs/Plano-insights.md`) — melhorias P0/P1/P2 baseadas em uso
+- [x] Design Brief Frontend (`/docs/design-brief.md`) — CR-003
+- [x] Referência de Categorias (`/docs/categorias_gastos.md`) — CR-005
 
-### Change Requests Ativos
+### Change Requests
 - CR-001: Migracao PostgreSQL + Alembic (concluido)
-- CR-002: Multi-usuario + Autenticacao JWT/Google OAuth2 (AR + FN + VL concluidos)
+- CR-002: Multi-usuario + Autenticacao JWT/Google OAuth2 (concluido)
+- CR-003: Redesign Frontend UI — sistema de design coeso (concluido)
 - CR-004: Totalizadores de despesa por status — Pago, Pendente, Atrasado (concluido)
-- CR-005: Gastos Diarios — registro de gastos nao planejados com categorias, metodos de pagamento, visao mensal agrupada por dia (concluido)
+- CR-005: Gastos Diarios — modelo DailyExpense, API REST, visao mensal agrupada por dia (concluido)
+- CR-006: Sincronizacao e Config (concluido)
+- CR-007: Consulta de Parcelas — filtros e busca avancada (rascunho/planejamento)
+- CR-009: Exclusao em Serie — exclusao em massa de parcelas e despesas recorrentes (concluido)
+- CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, security headers (concluido)
 
 ### Última Tarefa Implementada
-- CR-005: Gastos Diarios — modelo DailyExpense, API REST, visao mensal agrupada por dia, ViewSelector para navegacao
+- CR-010: Hardening de Seguranca — revisao OWASP, correcoes criticas de auth e configuracao (concluido)
+- CR-007: Consulta de Parcelas — em planejamento (rascunho)
 
 ---
 
@@ -282,6 +298,8 @@ Personal Finance/
 - **Docs sempre sincronizados.** Ao concluir uma feature ou CR, atualize TODOS os documentos relacionados na mesma sessão (Implementation Plan, PRD, Spec, CR). A tarefa só está completa quando os docs estão atualizados.
 - **Não fabrique ferramentas.** Nunca invente ou adivinhe a existência de plugins, comandos CLI ou ferramentas. Se não tiver certeza, verifique a documentação primeiro. Se um comando falhar, reconheça o erro imediatamente.
 - **Planeje antes de codar.** Em tarefas complexas (3+ etapas), crie um plano TodoWrite detalhado antes de escrever qualquer código. Inclua: CR, arquivos a modificar, verificação de build, atualizações de docs, commit.
+- **Hook TypeScript ativo.** O hook `.claude/hooks/check-typescript.js` intercepta `git commit` e executa `tsc --noEmit` automaticamente. Se o commit for bloqueado, corrija os erros TypeScript antes de tentar novamente — não use `--no-verify`.
+- **Use `/feature` para novas features/CRs.** A skill `/feature` automatiza todo o pipeline: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/feature` no início de qualquer implementação.
 
 ---
 
