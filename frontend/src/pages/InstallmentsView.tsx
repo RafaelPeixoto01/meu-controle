@@ -34,17 +34,24 @@ export function InstallmentsView() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center p-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            <div className="px-4 py-6 sm:p-6 space-y-6 max-w-7xl mx-auto">
+                <ViewSelector />
+                <div className="flex flex-col justify-center items-center py-24 gap-3">
+                    <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    <p className="text-text-muted text-sm font-medium">Carregando dados...</p>
+                </div>
             </div>
         );
     }
 
     if (isError || !data) {
         return (
-            <div className="p-8 text-center text-red-500">
-                <p className="font-bold">Erro ao carregar parcelamentos</p>
-                <p className="text-sm text-gray-400 mt-2">{String(error || "Erro desconhecido")}</p>
+            <div className="px-4 py-6 sm:p-6 space-y-6 max-w-7xl mx-auto">
+                <ViewSelector />
+                <div className="flex flex-col justify-center items-center py-24 gap-2">
+                    <p className="text-danger font-bold text-lg">Erro ao carregar parcelamentos</p>
+                    <p className="text-text-muted text-sm">{String(error || "Erro desconhecido")}</p>
+                </div>
             </div>
         );
     }
@@ -57,7 +64,7 @@ export function InstallmentsView() {
         }).format(val);
 
     return (
-        <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="px-4 py-6 sm:p-6 space-y-6 max-w-7xl mx-auto">
             <ViewSelector />
             <header className="mb-8">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">

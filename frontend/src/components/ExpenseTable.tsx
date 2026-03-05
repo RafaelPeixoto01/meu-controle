@@ -106,7 +106,7 @@ export default function ExpenseTable({
 
   return (
     <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
         <h3 className="text-base font-bold text-text uppercase tracking-wide">
           Despesas
         </h3>
@@ -122,9 +122,9 @@ export default function ExpenseTable({
       </div>
 
       {selectedIds.size > 0 && (
-        <div className="mx-6 mb-2 px-4 py-2.5 bg-primary-50 border border-primary-light rounded-xl
-          flex items-center justify-between animate-fade-in-up">
-          <div className="flex items-center gap-4">
+        <div className="mx-3 sm:mx-6 mb-2 px-3 sm:px-4 py-2.5 bg-primary-50 border border-primary-light rounded-xl
+          flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 animate-fade-in-up">
+          <div className="flex items-center gap-2 sm:gap-4">
             <span className="text-sm font-semibold text-primary">
               {selectedIds.size} {selectedIds.size === 1 ? "item selecionado" : "itens selecionados"}
             </span>
@@ -157,22 +157,22 @@ export default function ExpenseTable({
                   aria-label="Selecionar todas as despesas"
                 />
               </th>
-              <th className="text-left px-6 py-3 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-left px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Nome
               </th>
-              <th className="text-right px-6 py-3 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-right px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Valor
               </th>
-              <th className="text-center px-6 py-3 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Parcela
               </th>
-              <th className="text-center px-6 py-3 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Venc.
               </th>
-              <th className="text-center px-6 py-3 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Status
               </th>
-              <th className="text-center px-6 py-3 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Acoes
               </th>
             </tr>
@@ -193,30 +193,30 @@ export default function ExpenseTable({
                     aria-label={`Selecionar ${expense.nome}`}
                   />
                 </td>
-                <td className="px-6 py-3.5 font-medium text-text">
+                <td className="px-3 py-3.5 sm:px-6 font-medium text-text">
                   {expense.nome}
                 </td>
-                <td className="px-6 py-3.5 text-right text-text-muted tabular-nums font-medium">
+                <td className="px-3 py-3.5 sm:px-6 text-right text-text-muted tabular-nums font-medium">
                   {formatBRL(expense.valor)}
                 </td>
-                <td className="px-6 py-3.5 text-center text-text-muted text-sm">
+                <td className="px-3 py-3.5 sm:px-6 text-center text-text-muted text-sm">
                   {formatParcela(expense.parcela_atual, expense.parcela_total)}
                 </td>
-                <td className="px-6 py-3.5 text-center text-text-muted text-sm tabular-nums">
+                <td className="px-3 py-3.5 sm:px-6 text-center text-text-muted text-sm tabular-nums">
                   {formatDateBR(expense.vencimento)}
                 </td>
-                <td className="px-6 py-3.5 text-center">
+                <td className="px-3 py-3.5 sm:px-6 text-center">
                   <StatusBadge
                     status={expense.status}
                     onClick={() => handleStatusToggle(expense)}
                   />
                 </td>
-                <td className="px-6 py-3.5 text-center">
+                <td className="px-3 py-3.5 sm:px-6 text-center">
                   <div className="flex justify-center gap-1">
                     <button
                       type="button"
                       onClick={() => setEditingExpense(expense)}
-                      className="px-2.5 py-1 text-primary hover:bg-primary/10 rounded-lg text-sm font-semibold
+                      className="px-1.5 py-1 sm:px-2.5 text-primary hover:bg-primary/10 rounded-lg text-sm font-semibold
                         transition-colors duration-100"
                     >
                       Editar
@@ -224,7 +224,7 @@ export default function ExpenseTable({
                     <button
                       type="button"
                       onClick={() => handleDuplicate(expense.id)}
-                      className="px-2.5 py-1 text-text-muted hover:bg-slate-100 hover:text-text rounded-lg text-sm font-semibold
+                      className="px-1.5 py-1 sm:px-2.5 text-text-muted hover:bg-slate-100 hover:text-text rounded-lg text-sm font-semibold
                         transition-colors duration-100"
                     >
                       Duplicar
@@ -232,7 +232,7 @@ export default function ExpenseTable({
                     <button
                       type="button"
                       onClick={() => setDeletingExpense(expense)}
-                      className="px-2.5 py-1 text-danger hover:bg-danger/10 rounded-lg text-sm font-semibold
+                      className="px-1.5 py-1 sm:px-2.5 text-danger hover:bg-danger/10 rounded-lg text-sm font-semibold
                         transition-colors duration-100"
                     >
                       Excluir
@@ -257,40 +257,40 @@ export default function ExpenseTable({
           <tfoot>
             <tr className="border-t-2 border-slate-200 bg-pago-bg/50">
               <td />
-              <td className="px-6 py-2.5 text-sm font-semibold text-pago">
+              <td className="px-3 py-2.5 sm:px-6 text-sm font-semibold text-pago">
                 Pago
               </td>
-              <td className="px-6 py-2.5 text-right text-sm font-semibold text-pago tabular-nums">
+              <td className="px-3 py-2.5 sm:px-6 text-right text-sm font-semibold text-pago tabular-nums">
                 {formatBRL(totalPago)}
               </td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-pendente-bg/50">
               <td />
-              <td className="px-6 py-2.5 text-sm font-semibold text-pendente">
+              <td className="px-3 py-2.5 sm:px-6 text-sm font-semibold text-pendente">
                 Pendente
               </td>
-              <td className="px-6 py-2.5 text-right text-sm font-semibold text-pendente tabular-nums">
+              <td className="px-3 py-2.5 sm:px-6 text-right text-sm font-semibold text-pendente tabular-nums">
                 {formatBRL(totalPendente)}
               </td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-atrasado-bg/50">
               <td />
-              <td className="px-6 py-2.5 text-sm font-semibold text-atrasado">
+              <td className="px-3 py-2.5 sm:px-6 text-sm font-semibold text-atrasado">
                 Atrasado
               </td>
-              <td className="px-6 py-2.5 text-right text-sm font-semibold text-atrasado tabular-nums">
+              <td className="px-3 py-2.5 sm:px-6 text-right text-sm font-semibold text-atrasado tabular-nums">
                 {formatBRL(totalAtrasado)}
               </td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-slate-50 border-t-2 border-slate-200">
               <td />
-              <td className="px-6 py-3.5 font-bold text-text">
+              <td className="px-3 py-3.5 sm:px-6 font-bold text-text">
                 Total Despesas
               </td>
-              <td className="px-6 py-3.5 text-right font-bold text-text tabular-nums">
+              <td className="px-3 py-3.5 sm:px-6 text-right font-bold text-text tabular-nums">
                 {formatBRL(totalDespesas)}
               </td>
               <td colSpan={4} />

@@ -18,23 +18,23 @@ export default function MonthNavigator({
       <button
         type="button"
         onClick={onPrevious}
-        className="px-4 py-2.5 text-primary font-semibold rounded-xl
+        className="px-3 py-2.5 sm:px-4 text-primary font-semibold rounded-xl
           hover:bg-primary/10 active:bg-primary/20 active:scale-[0.97]
           transition-all duration-150"
       >
-        ← Anterior
+        ← <span className="hidden sm:inline">Anterior</span>
       </button>
-      <h2 className="text-xl font-bold text-text">
+      <h2 className="text-lg sm:text-xl font-bold text-text">
         {getMonthLabel(year, month)}
       </h2>
       <button
         type="button"
         onClick={onNext}
-        className="px-4 py-2.5 text-primary font-semibold rounded-xl
+        className="px-3 py-2.5 sm:px-4 text-primary font-semibold rounded-xl
           hover:bg-primary/10 active:bg-primary/20 active:scale-[0.97]
           transition-all duration-150"
       >
-        Proximo →
+        <span className="hidden sm:inline">Proximo</span> →
       </button>
     </div>
   );

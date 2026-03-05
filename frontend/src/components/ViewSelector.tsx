@@ -11,13 +11,13 @@ export default function ViewSelector() {
         : "planejados";
 
   return (
-    <div className="flex items-center justify-center gap-1 bg-slate-100 rounded-xl p-1">
+    <div className="flex items-center justify-center gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto">
       <button
         type="button"
         onClick={() => {
           if (activeView !== "planejados") navigate("/");
         }}
-        className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-150
+        className={`px-3 py-2 sm:px-5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-150 whitespace-nowrap
           ${activeView === "planejados"
             ? "bg-surface text-primary shadow-sm"
             : "text-text-muted hover:text-text"
@@ -30,7 +30,7 @@ export default function ViewSelector() {
         onClick={() => {
           if (activeView !== "diarios") navigate("/daily-expenses");
         }}
-        className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-150
+        className={`px-3 py-2 sm:px-5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-150 whitespace-nowrap
           ${activeView === "diarios"
             ? "bg-surface text-primary shadow-sm"
             : "text-text-muted hover:text-text"
@@ -43,7 +43,7 @@ export default function ViewSelector() {
         onClick={() => {
           if (activeView !== "parcelas") navigate("/installments");
         }}
-        className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-150
+        className={`px-3 py-2 sm:px-5 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-150 whitespace-nowrap
           ${activeView === "parcelas"
             ? "bg-surface text-primary shadow-sm"
             : "text-text-muted hover:text-text"
