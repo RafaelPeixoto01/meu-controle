@@ -4,7 +4,7 @@
 **Data:** 2026-03-05
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.5
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend)
 
 ---
 
@@ -2007,9 +2007,9 @@ export interface CategoriesData {
 
 **Frontend — Componentes:**
 
-- `ViewSelector.tsx` — Pills/tabs usando `useNavigate` e `useLocation`. Alterna entre `/` (Gastos Planejados) e `/daily-expenses` (Gastos Diarios). Integrado no topo de `MonthlyView` e `DailyExpensesView`.
+- `ViewSelector.tsx` — Pills/tabs usando `useNavigate` e `useLocation`. Alterna entre `/` (Gastos Planejados), `/daily-expenses` (Gastos Diarios) e `/installments` (Parcelas). Integrado no topo de `MonthlyView`, `DailyExpensesView` e `InstallmentsView`. Responsivo: padding compacto em mobile (`px-3 sm:px-5`), font menor (`text-xs sm:text-sm`), `overflow-x-auto` e `whitespace-nowrap` para seguranca (CR-012).
 - `DailyExpenseFormModal.tsx` — Modal com 5 campos: descricao, valor, data (default=hoje), categoria+subcategoria (selects cascateados), metodo_pagamento (select). Suporta criacao e edicao via prop `initialData`.
-- `DailyExpenseTable.tsx` — Tabela agrupada por dia com sub-componente `DayGroup`. Header do dia com data formatada (`formatDateFull`) + subtotal. Rows com descricao, valor, subcategoria (badge), metodo_pagamento, acoes (Editar/Excluir). Footer com "Total do Mes". Estado vazio com mensagem.
+- `DailyExpenseTable.tsx` — Tabela agrupada por dia com sub-componente `DayGroup`. Header do dia com data formatada (`formatDateFull`) + subtotal. Rows com descricao, valor, subcategoria (badge), metodo_pagamento, acoes (Editar/Excluir). Footer com "Total do Mes". Estado vazio com mensagem. Responsivo: padding `px-3 sm:px-6` em cells, botoes de acao compactos em mobile (`px-1.5 sm:px-2.5`), header compacto (`px-3 py-3 sm:px-6 sm:py-4`) (CR-012).
 - `DailyExpensesView.tsx` — Pagina principal: ViewSelector + MonthNavigator + DailyExpenseTable. Loading/error states.
 
 **Frontend — Utilidade (em `format.ts`):**
@@ -2167,7 +2167,7 @@ Definidas em `frontend/src/index.css` como `@keyframes` + classes utilitarias:
 | onPrevious | () => void   | Sim         | Callback mes anterior  |
 | onNext     | () => void   | Sim         | Callback proximo mes   |
 
-**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`) com flex row: botao "← Anterior" (`rounded-xl hover:bg-primary/10 active:scale-[0.97]`), label do mes (`text-xl font-bold text-text`), botao "Proximo →".
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`) com flex row: botao "← Anterior" (`rounded-xl hover:bg-primary/10 active:scale-[0.97]`), label do mes (`text-lg sm:text-xl font-bold text-text`), botao "Proximo →". Responsivo (CR-012): em mobile (< 640px), texto "Anterior"/"Proximo" oculto via `hidden sm:inline`, mostrando apenas setas; padding compacto `px-3 sm:px-4`.
 
 **Dependencias:** `utils/date.ts` (getMonthLabel)
 
@@ -2203,6 +2203,7 @@ Definidas em `frontend/src/index.css` como `@keyframes` + classes utilitarias:
 - Validacao client-side: `parcela_atual <= parcela_total`.
 - Overlay com backdrop blur (`bg-black/40 backdrop-blur-[2px]`) com modal centralizado (`bg-surface rounded-2xl shadow-2xl`).
 - Inputs seguem padrao do Design System (`rounded-xl px-4 py-3 bg-slate-50/50`).
+- Grid de parcelas empilhavel em mobile: `grid-cols-1 sm:grid-cols-2` (CR-012).
 
 ### Componente: IncomeFormModal
 
@@ -2236,7 +2237,7 @@ Definidas em `frontend/src/index.css` como `@keyframes` + classes utilitarias:
 | year          | number    | Sim         | Ano (para mutations)   |
 | month         | number    | Sim         | Mes (para mutations)   |
 
-**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "RECEITAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Receita" (`bg-primary rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Linhas alternadas (`bg-slate-50/50`), hover `bg-primary-50/50`. Footer com total em `font-bold`.
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "RECEITAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Receita" (`bg-primary rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Linhas alternadas (`bg-slate-50/50`), hover `bg-primary-50/50`. Footer com total em `font-bold`. Responsivo (CR-012): padding compacto em mobile (`px-3 sm:px-6` em cells, `px-3 py-3 sm:px-6 sm:py-4` no header), botoes de acao compactos (`px-1.5 sm:px-2.5`).
 
 **Comportamento:** Gerencia estado de modal (criar/editar) e dialogo de confirmacao (excluir). Usa hooks `useCreateIncome`, `useUpdateIncome`, `useDeleteIncome`.
 
@@ -2252,7 +2253,7 @@ Definidas em `frontend/src/index.css` como `@keyframes` + classes utilitarias:
 | year           | number    | Sim         | Ano (para mutations)               |
 | month          | number    | Sim         | Mes (para mutations)               |
 
-**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "DESPESAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Despesa" (`bg-primary rounded-xl`). Barra de resumo de selecao condicional (CR-011): aparece entre header e tabela quando ha itens selecionados, mostrando contagem + soma formatada + botao "Limpar" (`bg-primary-50 border-primary-light rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Colunas: Checkbox (CR-011) | Nome | Valor | Parcela | Venc. | Status | Acoes. Linhas alternadas, hover `bg-primary-50/50`. Linhas selecionadas com `bg-primary-50/70` (CR-011). Footer com 3 linhas de resumo por status (CR-004) seguidas de total em `font-bold`.
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "DESPESAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Despesa" (`bg-primary rounded-xl`). Barra de resumo de selecao condicional (CR-011): aparece entre header e tabela quando ha itens selecionados, mostrando contagem + soma formatada + botao "Limpar" (`bg-primary-50 border-primary-light rounded-xl`); empilha verticalmente em mobile (`flex-col sm:flex-row`) (CR-012). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Colunas: Checkbox (CR-011) | Nome | Valor | Parcela | Venc. | Status | Acoes. Linhas alternadas, hover `bg-primary-50/50`. Linhas selecionadas com `bg-primary-50/70` (CR-011). Footer com 3 linhas de resumo por status (CR-004) seguidas de total em `font-bold`. Responsivo (CR-012): padding compacto em mobile (`px-3 sm:px-6` em cells, `px-3 py-3 sm:px-6 sm:py-4` no header), botoes de acao compactos (`px-1.5 sm:px-2.5`).
 
 **Footer — Linhas de resumo por status (CR-004):** 3 linhas acima do "Total Despesas", cada uma com cor do Design System:
 - Pago: `bg-pago-bg/50 text-pago text-sm font-semibold`
