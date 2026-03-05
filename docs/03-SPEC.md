@@ -1,10 +1,10 @@
 # Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios)
 
-**Versao:** 2.3
-**Data:** 2026-02-26
+**Versao:** 2.4
+**Data:** 2026-03-05
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.5
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas)
 
 ---
 
@@ -2252,7 +2252,7 @@ Definidas em `frontend/src/index.css` como `@keyframes` + classes utilitarias:
 | year           | number    | Sim         | Ano (para mutations)               |
 | month          | number    | Sim         | Mes (para mutations)               |
 
-**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "DESPESAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Despesa" (`bg-primary rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Colunas: Nome | Valor | Parcela | Venc. | Status | Acoes. Linhas alternadas, hover `bg-primary-50/50`. Footer com 3 linhas de resumo por status (CR-004) seguidas de total em `font-bold`.
+**Renderiza:** Card (`bg-surface rounded-2xl shadow-lg border border-slate-100/80`). Header "DESPESAS" (`text-base font-bold uppercase tracking-wide`) com botao "+ Nova Despesa" (`bg-primary rounded-xl`). Barra de resumo de selecao condicional (CR-011): aparece entre header e tabela quando ha itens selecionados, mostrando contagem + soma formatada + botao "Limpar" (`bg-primary-50 border-primary-light rounded-xl`). Tabela com headers `bg-primary-50 border-y border-primary-light text-primary`. Colunas: Checkbox (CR-011) | Nome | Valor | Parcela | Venc. | Status | Acoes. Linhas alternadas, hover `bg-primary-50/50`. Linhas selecionadas com `bg-primary-50/70` (CR-011). Footer com 3 linhas de resumo por status (CR-004) seguidas de total em `font-bold`.
 
 **Footer — Linhas de resumo por status (CR-004):** 3 linhas acima do "Total Despesas", cada uma com cor do Design System:
 - Pago: `bg-pago-bg/50 text-pago text-sm font-semibold`
@@ -2266,6 +2266,13 @@ Hierarquia visual: linhas de status usam `text-sm font-semibold py-2.5`, total g
 - Botao Duplicar chama `useDuplicateExpense`
 - Gerencia modal (criar/editar) e dialogo de confirmacao (excluir)
 - Usa 4 hooks: `useCreateExpense`, `useUpdateExpense`, `useDeleteExpense`, `useDuplicateExpense`
+- **Calculadora de selecao (CR-011):**
+  - Checkbox na primeira coluna (header + body) para selecao individual e "selecionar todos"
+  - Header checkbox com estado `indeterminate` nativo (via ref callback) quando ha selecao parcial
+  - Barra de resumo: "{N} itens selecionados" + soma formatada com `formatBRL()` + botao "Limpar"
+  - Linhas selecionadas destacadas com `bg-primary-50/70`
+  - Selecao limpa automaticamente ao trocar de mes (`useEffect` em `[year, month]`)
+  - Estado local via `useState<Set<string>>` — sem persistencia, sem chamadas ao backend
 
 ### Componente: SaldoLivre
 
