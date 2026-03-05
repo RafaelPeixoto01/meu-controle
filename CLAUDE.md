@@ -23,8 +23,9 @@ Este projeto segue um fluxo de desenvolvimento baseado em documentação. **Nunc
 | 3 | Spec Técnica | `/docs/03-SPEC.md` | Detalhamento técnico de cada feature |
 | 4 | Plano de Implementação | `/docs/04-IMPLEMENTATION-PLAN.md` | Ordem e dependências das tarefas |
 | 5 | Implementação | Código-fonte | Construção efetiva |
-| 6 | Validação | Checklist "Done When" | Verificar critérios de aceite antes do deploy |
-| 7 | Deploy e Release | `/docs/05-DEPLOY-GUIDE.md` | Procedimentos de deploy, rollback e verificação |
+| 6 | Revisão de Segurança | Checklist OWASP | Novos endpoints, auth, CRUD com dados de usuário, novas dependências |
+| 7 | Validação | Checklist "Done When" | Verificar critérios de aceite antes do deploy |
+| 8 | Deploy e Release | `/docs/05-DEPLOY-GUIDE.md` | Procedimentos de deploy, rollback e verificação |
 
 ### Regra de Ouro
 
@@ -96,6 +97,44 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 - [ ] Endpoints respondem com status codes corretos
 - [ ] Documentos afetados atualizados (Spec, Architecture, CLAUDE.md)
 - [ ] Sem erros/warnings no console do browser (frontend)
+- [ ] Revisão de segurança realizada (checklist OWASP — ver seção "Revisão de Segurança")
+
+### Revisão de Segurança
+
+**Quando executar** — obrigatório se o CR envolver:
+- Novo endpoint ou mudança em endpoint existente
+- Autenticação, tokens, cookies ou sessões
+- CRUD com dados de outros usuários (verificação de ownership)
+- Nova dependência (biblioteca externa)
+
+Pular com justificativa explícita apenas se o CR for exclusivamente: mudança de UI sem novos endpoints, atualização de documentação, ou refactoring interno sem alteração de contrato.
+
+**Checklist OWASP (adaptado ao projeto):**
+- [ ] Sem segredos hardcoded no código (SECRET_KEY, API keys, tokens)
+- [ ] Inputs do usuário validados via Pydantic (backend) antes de uso no banco
+- [ ] Tokens sensíveis não em `localStorage` (refresh token via HttpOnly cookie)
+- [ ] Endpoints de dados verificam ownership (usuário acessa só seus próprios recursos)
+- [ ] Queries usam ORM parametrizado — sem concatenação de SQL raw
+- [ ] CORS: origins e headers explícitos; `allow_credentials=True` exige origins não-wildcard
+- [ ] Headers de segurança HTTP presentes (`SecurityHeadersMiddleware` ativo)
+- [ ] Novas dependências auditadas: `pip audit` / `npm audit`
+
+### Fluxo de Branches
+
+- Nunca commitar diretamente em `master`
+- Criar uma branch para cada CR: `git checkout -b feat/CR-XXX-slug`
+- Nomenclatura:
+  - Nova feature/CR: `feat/CR-XXX-slug`
+  - Correção/CR:     `fix/CR-XXX-slug`
+  - Hotfix urgente:  `hotfix/descricao`
+- Ao concluir o CR, merge em `master` com `--no-ff` e limpar a branch:
+  ```bash
+  git checkout master
+  git merge feat/CR-XXX-slug --no-ff
+  git branch -d feat/CR-XXX-slug
+  git push origin master
+  ```
+- Push em `master` dispara o auto-deploy no Railway
 
 ### Commits
 
@@ -111,6 +150,7 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 - Antes de push, verifique se o build TypeScript passa: `cd frontend && npx tsc --noEmit -p tsconfig.app.json`
 - Commits devem referenciar o CR relevante (ex: `feat: CR-004 - descricao`)
 - Após implementação, atualize TODOS os documentos relacionados antes de push
+- Faça merge da branch do CR em `master` e então `git push origin master`
 
 ---
 
@@ -118,14 +158,15 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 
 Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que já existe:
 
-1. **Crie um Change Request (CR)** usando o template em `/docs/templates/00-template-change-request.md`
+1. **Crie um Change Request (CR)** usando o template em `/docs/templates/00-template-change-request.md` e **crie a branch**: `git checkout -b feat/CR-[XXX]-[slug]`
 2. **Salve** em `/docs/changes/CR-[XXX]-[slug].md` (numere sequencialmente)
 3. **Avalie o impacto** nos documentos existentes (PRD, Arquitetura, Spec, Plano)
 4. **Atualize os documentos afetados** antes de implementar
 5. **Implemente** seguindo as tarefas do CR
-6. **Valide** os critérios de aceite do CR + checklist "Done When Universal"
-7. **Verifique o build** TypeScript: `cd frontend && npx tsc --noEmit -p tsconfig.app.json`
-8. **Commit e push** referenciando o CR: `feat: CR-XXX - descricao`
+6. **Execute a revisão de segurança** (checklist OWASP — ver seção "Revisão de Segurança")
+7. **Valide** os critérios de aceite do CR + checklist "Done When Universal"
+8. **Verifique o build** TypeScript: `cd frontend && npx tsc --noEmit -p tsconfig.app.json`
+9. **Merge e push** da branch em `master`: `git checkout master && git merge feat/CR-XXX-slug --no-ff && git branch -d feat/CR-XXX-slug && git push origin master`
 
 **Nunca faça alterações direto no código sem antes documentar o CR.**
 
@@ -281,9 +322,10 @@ Personal Finance/
 - CR-007: Consulta de Parcelas — filtros e busca avancada (rascunho/planejamento)
 - CR-009: Exclusao em Serie — exclusao em massa de parcelas e despesas recorrentes (concluido)
 - CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, security headers (concluido)
+- CR-011: Calculadora de Selecao de Despesas — checkboxes na tabela de despesas para somar valores selecionados (concluido)
 
 ### Última Tarefa Implementada
-- CR-010: Hardening de Seguranca — revisao OWASP, correcoes criticas de auth e configuracao (concluido)
+- CR-011: Calculadora de Selecao de Despesas — selecao de despesas com soma dos valores (concluido)
 - CR-007: Consulta de Parcelas — em planejamento (rascunho)
 
 ---
