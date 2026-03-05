@@ -323,9 +323,10 @@ Personal Finance/
 - CR-009: Exclusao em Serie — exclusao em massa de parcelas e despesas recorrentes (concluido)
 - CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, security headers (concluido)
 - CR-011: Calculadora de Selecao de Despesas — checkboxes na tabela de despesas para somar valores selecionados (concluido)
+- CR-012: Melhorias de Responsividade no Frontend — padding responsivo, grid empilhavel, ViewSelector compacto, MonthNavigator mobile (concluido)
 
 ### Última Tarefa Implementada
-- CR-011: Calculadora de Selecao de Despesas — selecao de despesas com soma dos valores (concluido)
+- CR-012: Melhorias de Responsividade no Frontend — correcoes de usabilidade mobile em 7 componentes (concluido)
 - CR-007: Consulta de Parcelas — em planejamento (rascunho)
 
 ---
