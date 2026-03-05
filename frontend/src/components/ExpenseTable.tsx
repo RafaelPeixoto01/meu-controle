@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Expense, ExpenseCreate, ExpenseStatus } from "../types";
 import { formatBRL, formatParcela, formatDateBR } from "../utils/format";
 import {
@@ -38,6 +38,17 @@ export default function ExpenseTable({
   const [showForm, setShowForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const allSelected = expenses.length > 0 && selectedIds.size === expenses.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < expenses.length;
+  const selectedTotal = expenses
+    .filter((e) => selectedIds.has(e.id))
+    .reduce((sum, e) => sum + e.valor, 0);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [year, month]);
 
   const createExpense = useCreateExpense(year, month);
   const updateExpense = useUpdateExpense();
@@ -72,6 +83,27 @@ export default function ExpenseTable({
     duplicateExpense.mutate(expenseId);
   }
 
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function handleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(expenses.map((e) => e.id)));
+    }
+  }
+
+  function handleClearSelection() {
+    setSelectedIds(new Set());
+  }
+
   return (
     <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4">
@@ -89,10 +121,42 @@ export default function ExpenseTable({
         </button>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="mx-6 mb-2 px-4 py-2.5 bg-primary-50 border border-primary-light rounded-xl
+          flex items-center justify-between animate-fade-in-up">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-semibold text-primary">
+              {selectedIds.size} {selectedIds.size === 1 ? "item selecionado" : "itens selecionados"}
+            </span>
+            <span className="text-sm font-bold text-text tabular-nums">
+              {formatBRL(selectedTotal)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearSelection}
+            className="px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg
+              transition-colors duration-100"
+          >
+            Limpar
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="bg-primary-50 border-y border-primary-light">
+              <th className="w-10 px-3 py-3 text-center">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                  onChange={handleSelectAll}
+                  className="rounded text-primary border-border focus:ring-primary w-4 h-4 cursor-pointer"
+                  aria-label="Selecionar todas as despesas"
+                />
+              </th>
               <th className="text-left px-6 py-3 text-xs font-bold text-primary uppercase tracking-wide">
                 Nome
               </th>
@@ -118,8 +182,17 @@ export default function ExpenseTable({
               <tr
                 key={expense.id}
                 className={`border-b border-slate-100 hover:bg-primary-50/50 transition-colors duration-100
-                  ${index % 2 === 1 ? "bg-slate-50/50" : ""}`}
+                  ${selectedIds.has(expense.id) ? "bg-primary-50/70" : index % 2 === 1 ? "bg-slate-50/50" : ""}`}
               >
+                <td className="px-3 py-3.5 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(expense.id)}
+                    onChange={() => handleToggleSelect(expense.id)}
+                    className="rounded text-primary border-border focus:ring-primary w-4 h-4 cursor-pointer"
+                    aria-label={`Selecionar ${expense.nome}`}
+                  />
+                </td>
                 <td className="px-6 py-3.5 font-medium text-text">
                   {expense.nome}
                 </td>
@@ -170,7 +243,7 @@ export default function ExpenseTable({
             ))}
             {expenses.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-14 text-center">
+                <td colSpan={7} className="px-6 py-14 text-center">
                   <p className="text-text-muted text-base font-medium">
                     Nenhuma despesa cadastrada
                   </p>
@@ -183,6 +256,7 @@ export default function ExpenseTable({
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-slate-200 bg-pago-bg/50">
+              <td />
               <td className="px-6 py-2.5 text-sm font-semibold text-pago">
                 Pago
               </td>
@@ -192,6 +266,7 @@ export default function ExpenseTable({
               <td colSpan={4} />
             </tr>
             <tr className="bg-pendente-bg/50">
+              <td />
               <td className="px-6 py-2.5 text-sm font-semibold text-pendente">
                 Pendente
               </td>
@@ -201,6 +276,7 @@ export default function ExpenseTable({
               <td colSpan={4} />
             </tr>
             <tr className="bg-atrasado-bg/50">
+              <td />
               <td className="px-6 py-2.5 text-sm font-semibold text-atrasado">
                 Atrasado
               </td>
@@ -210,6 +286,7 @@ export default function ExpenseTable({
               <td colSpan={4} />
             </tr>
             <tr className="bg-slate-50 border-t-2 border-slate-200">
+              <td />
               <td className="px-6 py-3.5 font-bold text-text">
                 Total Despesas
               </td>
