@@ -144,7 +144,7 @@ export default function ExpenseTable({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[850px]">
+        <table className="w-full min-w-[900px]">
           <thead>
             <tr className="bg-primary-50 border-y border-primary-light">
               <th className="w-10 px-3 py-3 text-center">
@@ -211,7 +211,7 @@ export default function ExpenseTable({
                     onClick={() => handleStatusToggle(expense)}
                   />
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 text-center">
+                <td className="px-3 py-3.5 sm:px-6 text-center whitespace-nowrap">
                   <div className="flex justify-center gap-1">
                     <button
                       type="button"
