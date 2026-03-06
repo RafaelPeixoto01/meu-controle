@@ -106,7 +106,7 @@ export default function ExpenseTable({
 
   return (
     <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-200 overflow-clip">
-      <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
+      <div className="flex items-center justify-between px-3 py-3 sm:px-4 sm:py-4">
         <h3 className="text-base font-bold text-text uppercase tracking-wide">
           Despesas
         </h3>
@@ -144,7 +144,7 @@ export default function ExpenseTable({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px]">
+        <table className="w-full">
           <thead>
             <tr className="bg-primary-50 border-y border-primary-light">
               <th className="w-10 px-3 py-3 text-center">
@@ -157,22 +157,22 @@ export default function ExpenseTable({
                   aria-label="Selecionar todas as despesas"
                 />
               </th>
-              <th className="text-left px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-left px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Nome
               </th>
-              <th className="text-right px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-right px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Valor
               </th>
-              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Parcela
               </th>
-              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Venc.
               </th>
-              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Status
               </th>
-              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Acoes
               </th>
             </tr>
@@ -193,25 +193,25 @@ export default function ExpenseTable({
                     aria-label={`Selecionar ${expense.nome}`}
                   />
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 font-medium text-text">
+                <td className="px-3 py-3.5 sm:px-4 font-medium text-text">
                   {expense.nome}
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 text-right text-text-muted tabular-nums font-medium">
+                <td className="px-3 py-3.5 sm:px-4 text-right text-text-muted tabular-nums font-medium">
                   {formatBRL(expense.valor)}
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 text-center text-text-muted text-sm">
+                <td className="px-3 py-3.5 sm:px-4 text-center text-text-muted text-sm">
                   {formatParcela(expense.parcela_atual, expense.parcela_total)}
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 text-center text-text-muted text-sm tabular-nums">
+                <td className="px-3 py-3.5 sm:px-4 text-center text-text-muted text-sm tabular-nums">
                   {formatDateBR(expense.vencimento)}
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 text-center">
+                <td className="px-3 py-3.5 sm:px-4 text-center">
                   <StatusBadge
                     status={expense.status}
                     onClick={() => handleStatusToggle(expense)}
                   />
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 text-center whitespace-nowrap">
+                <td className="px-3 py-3.5 sm:px-4 text-center whitespace-nowrap">
                   <div className="flex justify-center gap-1">
                     <button
                       type="button"
@@ -257,40 +257,40 @@ export default function ExpenseTable({
           <tfoot>
             <tr className="border-t-2 border-slate-200 bg-pago-bg/50">
               <td />
-              <td className="px-3 py-2.5 sm:px-6 text-sm font-semibold text-pago">
+              <td className="px-3 py-2.5 sm:px-4 text-sm font-semibold text-pago">
                 Pago
               </td>
-              <td className="px-3 py-2.5 sm:px-6 text-right text-sm font-semibold text-pago tabular-nums">
+              <td className="px-3 py-2.5 sm:px-4 text-right text-sm font-semibold text-pago tabular-nums">
                 {formatBRL(totalPago)}
               </td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-pendente-bg/50">
               <td />
-              <td className="px-3 py-2.5 sm:px-6 text-sm font-semibold text-pendente">
+              <td className="px-3 py-2.5 sm:px-4 text-sm font-semibold text-pendente">
                 Pendente
               </td>
-              <td className="px-3 py-2.5 sm:px-6 text-right text-sm font-semibold text-pendente tabular-nums">
+              <td className="px-3 py-2.5 sm:px-4 text-right text-sm font-semibold text-pendente tabular-nums">
                 {formatBRL(totalPendente)}
               </td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-atrasado-bg/50">
               <td />
-              <td className="px-3 py-2.5 sm:px-6 text-sm font-semibold text-atrasado">
+              <td className="px-3 py-2.5 sm:px-4 text-sm font-semibold text-atrasado">
                 Atrasado
               </td>
-              <td className="px-3 py-2.5 sm:px-6 text-right text-sm font-semibold text-atrasado tabular-nums">
+              <td className="px-3 py-2.5 sm:px-4 text-right text-sm font-semibold text-atrasado tabular-nums">
                 {formatBRL(totalAtrasado)}
               </td>
               <td colSpan={4} />
             </tr>
             <tr className="bg-slate-50 border-t-2 border-slate-200">
               <td />
-              <td className="px-3 py-3.5 sm:px-6 font-bold text-text">
+              <td className="px-3 py-3.5 sm:px-4 font-bold text-text">
                 Total Despesas
               </td>
-              <td className="px-3 py-3.5 sm:px-6 text-right font-bold text-text tabular-nums">
+              <td className="px-3 py-3.5 sm:px-4 text-right font-bold text-text tabular-nums">
                 {formatBRL(totalDespesas)}
               </td>
               <td colSpan={4} />
