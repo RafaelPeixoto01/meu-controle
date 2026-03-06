@@ -190,8 +190,8 @@ Personal Finance/
 │   ├── hooks/
 │   │   └── check-typescript.js   # Bloqueia commit se tsc --noEmit falhar
 │   ├── skills/
-│   │   └── feature/
-│   │       └── SKILL.md          # Skill /feature: pipeline CR → commit
+│   │   └── sdd-pipeline/
+│   │       └── SKILL.md          # Skill /sdd-pipeline: pipeline SDD completo (CR → commit)
 │   └── settings.json             # Hook PreToolUse para git commit
 ├── docs/
 │   ├── 01-PRD.md
@@ -324,9 +324,10 @@ Personal Finance/
 - CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, security headers (concluido)
 - CR-011: Calculadora de Selecao de Despesas — checkboxes na tabela de despesas para somar valores selecionados (concluido)
 - CR-012: Melhorias de Responsividade no Frontend — padding responsivo, grid empilhavel, ViewSelector compacto, MonthNavigator mobile (concluido)
+- CR-013: Fix Layout Tabela de Despesas — botao Excluir cortado na borda direita, adicionado min-width na tabela (concluido)
 
 ### Última Tarefa Implementada
-- CR-012: Melhorias de Responsividade no Frontend — correcoes de usabilidade mobile em 7 componentes (concluido)
+- CR-013: Fix Layout Tabela de Despesas — botao Excluir cortado na borda direita (concluido)
 - CR-007: Consulta de Parcelas — em planejamento (rascunho)
 
 ---
@@ -342,7 +343,7 @@ Personal Finance/
 - **Não fabrique ferramentas.** Nunca invente ou adivinhe a existência de plugins, comandos CLI ou ferramentas. Se não tiver certeza, verifique a documentação primeiro. Se um comando falhar, reconheça o erro imediatamente.
 - **Planeje antes de codar.** Em tarefas complexas (3+ etapas), crie um plano TodoWrite detalhado antes de escrever qualquer código. Inclua: CR, arquivos a modificar, verificação de build, atualizações de docs, commit.
 - **Hook TypeScript ativo.** O hook `.claude/hooks/check-typescript.js` intercepta `git commit` e executa `tsc --noEmit` automaticamente. Se o commit for bloqueado, corrija os erros TypeScript antes de tentar novamente — não use `--no-verify`.
-- **Use `/feature` para novas features/CRs.** A skill `/feature` automatiza todo o pipeline: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/feature` no início de qualquer implementação.
+- **Use `/sdd-pipeline` para novas features/CRs.** A skill `/sdd-pipeline` automatiza todo o pipeline SDD: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/sdd-pipeline` no início de qualquer implementação.
 
 ---
 
