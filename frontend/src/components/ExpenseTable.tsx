@@ -105,7 +105,7 @@ export default function ExpenseTable({
   }
 
   return (
-    <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 overflow-hidden">
+    <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-200 overflow-clip">
       <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
         <h3 className="text-base font-bold text-text uppercase tracking-wide">
           Despesas
@@ -144,7 +144,7 @@ export default function ExpenseTable({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[700px]">
+        <table className="w-full min-w-[850px]">
           <thead>
             <tr className="bg-primary-50 border-y border-primary-light">
               <th className="w-10 px-3 py-3 text-center">
@@ -172,7 +172,7 @@ export default function ExpenseTable({
               <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Status
               </th>
-              <th className="text-center px-3 py-3 sm:px-6 pr-4 sm:pr-8 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Acoes
               </th>
             </tr>
@@ -211,7 +211,7 @@ export default function ExpenseTable({
                     onClick={() => handleStatusToggle(expense)}
                   />
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 pr-4 sm:pr-8 text-center">
+                <td className="px-3 py-3.5 sm:px-6 text-center">
                   <div className="flex justify-center gap-1">
                     <button
                       type="button"
