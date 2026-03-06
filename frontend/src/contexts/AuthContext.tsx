@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, useCallback, type ReactNode } from 
 import { jwtDecode } from "jwt-decode";
 import type { User, LoginCredentials, RegisterData } from "../types";
 import * as authApi from "../services/authApi";
+import { queryClient } from "../main";
 
 interface AuthContextType {
   user: User | null;
@@ -52,18 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (credentials: LoginCredentials) => {
     const response = await authApi.loginUser(credentials);
+    queryClient.clear();
     localStorage.setItem("access_token", response.access_token);
     if (response.user) setUser(response.user);
   }, []);
 
   const register = useCallback(async (data: RegisterData) => {
     const response = await authApi.registerUser(data);
+    queryClient.clear();
     localStorage.setItem("access_token", response.access_token);
     if (response.user) setUser(response.user);
   }, []);
 
   const loginWithGoogle = useCallback(async (code: string) => {
     const response = await authApi.googleAuth(code);
+    queryClient.clear();
     localStorage.setItem("access_token", response.access_token);
     if (response.user) setUser(response.user);
   }, []);
@@ -78,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     localStorage.removeItem("access_token");
+    queryClient.clear();
     setUser(null);
   }, []);
 

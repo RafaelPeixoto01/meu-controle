@@ -325,10 +325,10 @@ Personal Finance/
 - CR-011: Calculadora de Selecao de Despesas — checkboxes na tabela de despesas para somar valores selecionados (concluido)
 - CR-012: Melhorias de Responsividade no Frontend — padding responsivo, grid empilhavel, ViewSelector compacto, MonthNavigator mobile (concluido)
 - CR-013: Fix Layout Tabela de Despesas — botao Excluir cortado na borda direita, adicionado min-width na tabela (concluido)
+- CR-014: Isolamento de Cache entre Usuarios — queryClient.clear() no logout/login + userId nas cache keys do TanStack Query (concluido)
 
 ### Última Tarefa Implementada
-- CR-013: Fix Layout Tabela de Despesas — botao Excluir cortado na borda direita (concluido)
-- CR-007: Consulta de Parcelas — em planejamento (rascunho)
+- CR-014: Isolamento de Cache entre Usuarios — fix vazamento de dados entre usuarios via cache TanStack Query (concluido)
 
 ---
 

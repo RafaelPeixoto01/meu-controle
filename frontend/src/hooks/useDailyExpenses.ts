@@ -6,22 +6,27 @@ import type {
   DailyExpenseMonthlySummary,
   CategoriesData,
 } from "../types";
+import { useAuth } from "./useAuth";
 
 const DAILY_KEY = ["daily-expenses-summary"];
 const CATEGORIES_KEY = ["daily-expenses-categories"];
 
 export function useDailyExpensesMonthly(year: number, month: number) {
+  const { user } = useAuth();
   return useQuery<DailyExpenseMonthlySummary>({
-    queryKey: [...DAILY_KEY, year, month],
+    queryKey: [...DAILY_KEY, user?.id, year, month],
     queryFn: () => api.fetchDailyExpensesMonthly(year, month),
+    enabled: !!user,
   });
 }
 
 export function useDailyExpensesCategories() {
+  const { user } = useAuth();
   return useQuery<CategoriesData>({
-    queryKey: CATEGORIES_KEY,
+    queryKey: [...CATEGORIES_KEY, user?.id],
     queryFn: () => api.fetchDailyExpensesCategories(),
     staleTime: Infinity,
+    enabled: !!user,
   });
 }
 

@@ -14,11 +14,14 @@ import { useState } from "react";
 import { fetchInstallments } from "../services/api";
 import StatusBadge from "../components/StatusBadge";
 import ViewSelector from "../components/ViewSelector";
+import { useAuth } from "../hooks/useAuth";
 
 export function InstallmentsView() {
+    const { user } = useAuth();
     const { data, isLoading, isError, error } = useQuery({
-        queryKey: ["installments"],
+        queryKey: ["installments", user?.id],
         queryFn: fetchInstallments,
+        enabled: !!user,
     });
 
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
