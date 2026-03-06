@@ -172,7 +172,7 @@ export default function ExpenseTable({
               <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                 Status
               </th>
-              <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
+              <th className="text-center px-3 py-3 sm:px-6 pr-4 sm:pr-8 text-xs font-bold text-primary uppercase tracking-wide">
                 Acoes
               </th>
             </tr>
@@ -211,7 +211,7 @@ export default function ExpenseTable({
                     onClick={() => handleStatusToggle(expense)}
                   />
                 </td>
-                <td className="px-3 py-3.5 sm:px-6 text-center">
+                <td className="px-3 py-3.5 sm:px-6 pr-4 sm:pr-8 text-center">
                   <div className="flex justify-center gap-1">
                     <button
                       type="button"

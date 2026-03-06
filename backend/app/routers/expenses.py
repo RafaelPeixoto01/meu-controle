@@ -68,7 +68,7 @@ def create_expense(
     mes_referencia_inicial = date(year, month, 1)
     
     # Validações básicas
-    if data.parcela_total > 1 and data.parcela_atual > data.parcela_total:
+    if data.parcela_total and data.parcela_total > 1 and data.parcela_atual and data.parcela_atual > data.parcela_total:
         raise HTTPException(status_code=400, detail="Parcela atual nao pode ser maior que total")
 
     # 1. Criar a despesa do mês atual (que será retornada)
@@ -87,10 +87,10 @@ def create_expense(
     
     # 2. Se for parcelada, criar as futuras (apenas se nao for recorrente infinita, que tem logica propria)
     # Assumindo que 'recorrente' flag é para fixas mensais (Netflix) e 'parcela_total > 1' é compras parceladas (Notebook)
-    if data.parcela_total > 1:
+    if data.parcela_total and data.parcela_total > 1:
         # Quantas parcelas faltam criar?
         # Se usuario ta criando parcela 1 de 10, faltam 9 (2 a 10)
-        start_p = data.parcela_atual + 1
+        start_p = (data.parcela_atual or 1) + 1
         end_p = data.parcela_total
         
         for i in range(start_p, end_p + 1):
