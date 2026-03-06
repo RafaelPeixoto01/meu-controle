@@ -7,13 +7,16 @@ import {
   getPreviousMonth,
 } from "../utils/date";
 import type { MonthlySummary } from "../types";
+import { useAuth } from "./useAuth";
 
 export function useMonthlyView() {
+  const { user } = useAuth();
   const [monthRef, setMonthRef] = useState(getCurrentMonthRef);
 
   const query = useQuery<MonthlySummary>({
-    queryKey: ["monthly-summary", monthRef.year, monthRef.month],
+    queryKey: ["monthly-summary", user?.id, monthRef.year, monthRef.month],
     queryFn: () => fetchMonthlySummary(monthRef.year, monthRef.month),
+    enabled: !!user,
   });
 
   function goToPreviousMonth() {

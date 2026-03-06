@@ -5,7 +5,7 @@ import { BrowserRouter } from "react-router-dom";  // CR-002: ADR-017
 import App from "./App";
 import "./index.css";
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutos
