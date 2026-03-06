@@ -144,7 +144,7 @@ export default function ExpenseTable({
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[700px]">
           <thead>
             <tr className="bg-primary-50 border-y border-primary-light">
               <th className="w-10 px-3 py-3 text-center">
