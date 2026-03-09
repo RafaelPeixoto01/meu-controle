@@ -326,9 +326,10 @@ Personal Finance/
 - CR-012: Melhorias de Responsividade no Frontend — padding responsivo, grid empilhavel, ViewSelector compacto, MonthNavigator mobile (concluido)
 - CR-013: Fix Layout Tabela de Despesas — botao Excluir cortado na borda direita, adicionado min-width na tabela (concluido)
 - CR-014: Isolamento de Cache entre Usuarios — queryClient.clear() no logout/login + userId nas cache keys do TanStack Query (concluido)
+- CR-015: Agrupamento de Parcelas por Status — separar parcelamentos em secoes "Em Andamento" e "Concluidos" na InstallmentsView (concluido)
 
 ### Última Tarefa Implementada
-- CR-014: Isolamento de Cache entre Usuarios — fix vazamento de dados entre usuarios via cache TanStack Query (concluido)
+- CR-015: Agrupamento de Parcelas por Status — secoes "Em Andamento" e "Concluidos" na aba Parcelas (concluido)
 
 ---
 

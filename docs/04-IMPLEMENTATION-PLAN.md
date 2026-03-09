@@ -5,7 +5,7 @@
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.5
 **Spec Ref:** 03-SPEC v2.4
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status)
 
 ---
 
