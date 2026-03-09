@@ -54,6 +54,11 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 - Nova tela `InstallmentsView` acessivel pelo ViewSelector ou Menu
 - Exibicao de cards totalizadores: Total Gasto, Total Pago, Total Pendente, Total Atrasado
 
+**Agrupamento de Parcelas por Status (CR-015):**
+- Grupos de parcelamento separados em duas secoes: "Em Andamento" (primeiro) e "Concluidos" (depois)
+- Cada secao exibe header com titulo e badge de contagem
+- Secoes vazias ficam ocultas automaticamente
+
 ---
 
 ## 2. Detalhamento Tecnico

@@ -10,11 +10,19 @@ import {
     AlertCircle,
     Clock,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fetchInstallments } from "../services/api";
+import type { InstallmentGroup } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import ViewSelector from "../components/ViewSelector";
 import { useAuth } from "../hooks/useAuth";
+
+// Helper para formatar moeda
+const formatMoney = (val: number) =>
+    new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+    }).format(val);
 
 export function InstallmentsView() {
     const { user } = useAuth();
@@ -34,6 +42,14 @@ export function InstallmentsView() {
             [groupName]: !prev[groupName],
         }));
     };
+
+    const { emAndamento, concluidos } = useMemo(() => {
+        if (!data) return { emAndamento: [], concluidos: [] };
+        return {
+            emAndamento: data.groups.filter((g) => g.status_geral === "Em andamento"),
+            concluidos: data.groups.filter((g) => g.status_geral === "Concluído"),
+        };
+    }, [data]);
 
     if (isLoading) {
         return (
@@ -58,13 +74,6 @@ export function InstallmentsView() {
             </div>
         );
     }
-
-    // Helper para formatar moeda
-    const formatMoney = (val: number) =>
-        new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-        }).format(val);
 
     return (
         <div className="px-4 py-6 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -111,119 +120,178 @@ export function InstallmentsView() {
                 />
             </div>
 
-            {/* Lista de Grupos */}
-            <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                    Detalhamento por Compra
-                </h2>
+            {/* Lista de Grupos por Status */}
+            {data.groups.length === 0 ? (
+                <div className="p-8 text-center bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                    <p className="text-gray-500">Nenhuma compra parcelada encontrada.</p>
+                </div>
+            ) : (
+                <div className="space-y-8">
+                    {emAndamento.length > 0 && (
+                        <GroupSection
+                            title="Em Andamento"
+                            count={emAndamento.length}
+                            groups={emAndamento}
+                            expandedGroups={expandedGroups}
+                            toggleGroup={toggleGroup}
+                        />
+                    )}
 
-                {data.groups.length === 0 ? (
-                    <div className="p-8 text-center bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                        <p className="text-gray-500">Nenhuma compra parcelada encontrada.</p>
-                    </div>
-                ) : (
-                    data.groups.map((group, idx) => (
-                        <div
-                            key={`${group.nome}-${idx}`}
-                            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
-                        >
-                            {/* Header do Grupo (Clicável) */}
-                            <div
-                                onClick={() => toggleGroup(group.nome)}
-                                className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <span className="text-gray-400">
-                                        {expandedGroups[group.nome] ? (
-                                            <ChevronDown className="w-5 h-5" />
-                                        ) : (
-                                            <ChevronRight className="w-5 h-5" />
-                                        )}
-                                    </span>
-                                    <div>
-                                        <h3 className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                                            {group.nome}
-                                            <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-                                                {group.parcela_total}x
-                                            </span>
-                                        </h3>
-                                        <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
-                                            <StatusBadge status={group.status_geral as any} />
-                                        </div>
-                                    </div>
-                                </div>
+                    {concluidos.length > 0 && (
+                        <GroupSection
+                            title="Concluídos"
+                            count={concluidos.length}
+                            groups={concluidos}
+                            expandedGroups={expandedGroups}
+                            toggleGroup={toggleGroup}
+                        />
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
 
-                                <div className="flex items-center gap-6 text-right">
-                                    <div className="hidden sm:block">
-                                        <p className="text-xs text-gray-400 uppercase font-medium">
-                                            Pago
-                                        </p>
-                                        <p className="text-sm font-medium text-green-600">
-                                            {formatMoney(group.valor_pago)}
-                                        </p>
-                                    </div>
-                                    <div className="hidden sm:block">
-                                        <p className="text-xs text-gray-400 uppercase font-medium">
-                                            Restante
-                                        </p>
-                                        <p className="text-sm font-medium text-orange-600">
-                                            {formatMoney(group.valor_restante)}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-400 uppercase font-medium">
-                                            Total
-                                        </p>
-                                        <p className="text-base font-bold text-gray-900 dark:text-gray-100">
-                                            {formatMoney(group.valor_total_compra)}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+// Componente de seção (Em Andamento / Concluídos)
+function GroupSection({
+    title,
+    count,
+    groups,
+    expandedGroups,
+    toggleGroup,
+}: {
+    title: string;
+    count: number;
+    groups: InstallmentGroup[];
+    expandedGroups: Record<string, boolean>;
+    toggleGroup: (name: string) => void;
+}) {
+    return (
+        <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                {title}
+                <span className="text-sm font-normal px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                    {count}
+                </span>
+            </h2>
 
-                            {/* Body do Grupo (Tabela de Parcelas) */}
-                            {expandedGroups[group.nome] && (
-                                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="text-xs text-gray-500 uppercase bg-gray-100 dark:bg-gray-700/50">
-                                                <tr>
-                                                    <th className="px-4 py-2 rounded-l-lg">Parcela</th>
-                                                    <th className="px-4 py-2">Vencimento</th>
-                                                    <th className="px-4 py-2">Valor</th>
-                                                    <th className="px-4 py-2 rounded-r-lg">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {group.installments.map((inst) => (
-                                                    <tr
-                                                        key={inst.id}
-                                                        className="border-b border-gray-100 dark:border-gray-700/30 last:border-0 hover:bg-gray-100/50 dark:hover:bg-gray-700/30"
-                                                    >
-                                                        <td className="px-4 py-2 font-medium">
-                                                            {inst.parcela_atual}/{inst.parcela_total}
-                                                        </td>
-                                                        <td className="px-4 py-2 flex items-center gap-2">
-                                                            <Calendar className="w-3 h-3 text-gray-400" />
-                                                            {format(new Date(inst.vencimento), "dd/MM/yyyy")}
-                                                        </td>
-                                                        <td className="px-4 py-2">
-                                                            {formatMoney(inst.valor)}
-                                                        </td>
-                                                        <td className="px-4 py-2">
-                                                            <StatusBadge status={inst.status} />
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
+            {groups.map((group, idx) => (
+                <GroupCard
+                    key={`${group.nome}-${idx}`}
+                    group={group}
+                    isExpanded={!!expandedGroups[group.nome]}
+                    onToggle={() => toggleGroup(group.nome)}
+                />
+            ))}
+        </div>
+    );
+}
+
+// Card individual de um grupo de parcelamento
+function GroupCard({
+    group,
+    isExpanded,
+    onToggle,
+}: {
+    group: InstallmentGroup;
+    isExpanded: boolean;
+    onToggle: () => void;
+}) {
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Header do Grupo (Clicável) */}
+            <div
+                onClick={onToggle}
+                className="w-full flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
+                <div className="flex items-center gap-4">
+                    <span className="text-gray-400">
+                        {isExpanded ? (
+                            <ChevronDown className="w-5 h-5" />
+                        ) : (
+                            <ChevronRight className="w-5 h-5" />
+                        )}
+                    </span>
+                    <div>
+                        <h3 className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                            {group.nome}
+                            <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                                {group.parcela_total}x
+                            </span>
+                        </h3>
+                        <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                            <StatusBadge status={group.status_geral as any} />
                         </div>
-                    ))
-                )}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-6 text-right">
+                    <div className="hidden sm:block">
+                        <p className="text-xs text-gray-400 uppercase font-medium">
+                            Pago
+                        </p>
+                        <p className="text-sm font-medium text-green-600">
+                            {formatMoney(group.valor_pago)}
+                        </p>
+                    </div>
+                    <div className="hidden sm:block">
+                        <p className="text-xs text-gray-400 uppercase font-medium">
+                            Restante
+                        </p>
+                        <p className="text-sm font-medium text-orange-600">
+                            {formatMoney(group.valor_restante)}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-400 uppercase font-medium">
+                            Total
+                        </p>
+                        <p className="text-base font-bold text-gray-900 dark:text-gray-100">
+                            {formatMoney(group.valor_total_compra)}
+                        </p>
+                    </div>
+                </div>
             </div>
+
+            {/* Body do Grupo (Tabela de Parcelas) */}
+            {isExpanded && (
+                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-4">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-500 uppercase bg-gray-100 dark:bg-gray-700/50">
+                                <tr>
+                                    <th className="px-4 py-2 rounded-l-lg">Parcela</th>
+                                    <th className="px-4 py-2">Vencimento</th>
+                                    <th className="px-4 py-2">Valor</th>
+                                    <th className="px-4 py-2 rounded-r-lg">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {group.installments.map((inst) => (
+                                    <tr
+                                        key={inst.id}
+                                        className="border-b border-gray-100 dark:border-gray-700/30 last:border-0 hover:bg-gray-100/50 dark:hover:bg-gray-700/30"
+                                    >
+                                        <td className="px-4 py-2 font-medium">
+                                            {inst.parcela_atual}/{inst.parcela_total}
+                                        </td>
+                                        <td className="px-4 py-2 flex items-center gap-2">
+                                            <Calendar className="w-3 h-3 text-gray-400" />
+                                            {format(new Date(inst.vencimento), "dd/MM/yyyy")}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            {formatMoney(inst.valor)}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <StatusBadge status={inst.status} />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
