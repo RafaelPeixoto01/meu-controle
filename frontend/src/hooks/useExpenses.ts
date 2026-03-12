@@ -48,13 +48,3 @@ export function useDeleteExpense() {
   });
 }
 
-export function useDuplicateExpense() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => api.duplicateExpense(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: MONTHLY_KEY });
-      queryClient.invalidateQueries({ queryKey: ["installments"] });
-    },
-  });
-}

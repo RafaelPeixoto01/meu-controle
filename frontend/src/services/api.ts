@@ -108,10 +108,6 @@ export function deleteExpense(id: string, deleteAll: boolean = false): Promise<v
   return request<void>(url, { method: "DELETE" });
 }
 
-export function duplicateExpense(id: string): Promise<Expense> {
-  return request<Expense>(`/expenses/${id}/duplicate`, { method: "POST" });
-}
-
 export function fetchInstallments(): Promise<InstallmentsResponse> {
   return request<InstallmentsResponse>("/expenses/installments");
 }
