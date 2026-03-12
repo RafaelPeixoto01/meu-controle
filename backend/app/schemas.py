@@ -15,6 +15,7 @@ class ExpenseCreate(BaseModel):
     parcela_atual: Optional[int] = Field(None, ge=1)
     parcela_total: Optional[int] = Field(None, ge=1)
     recorrente: bool = True
+    subcategoria: Optional[str] = Field(None, max_length=50)  # CR-016
 
     @model_validator(mode="after")
     def validate_parcelas(self) -> "ExpenseCreate":
@@ -40,6 +41,7 @@ class ExpenseUpdate(BaseModel):
     parcela_total: Optional[int] = Field(None, ge=1)
     recorrente: Optional[bool] = None
     status: Optional[ExpenseStatus] = None
+    subcategoria: Optional[str] = Field(None, max_length=50)  # CR-016
 
 
 class ExpenseResponse(BaseModel):
@@ -49,6 +51,8 @@ class ExpenseResponse(BaseModel):
     id: str
     mes_referencia: date
     nome: str
+    categoria: Optional[str] = None  # CR-016
+    subcategoria: Optional[str] = None  # CR-016
     valor: float
     vencimento: date
     parcela_atual: Optional[int]

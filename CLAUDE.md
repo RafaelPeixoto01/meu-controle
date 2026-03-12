@@ -212,7 +212,8 @@ Personal Finance/
 │   │       ├── 001_initial_schema.py
 │   │       ├── 002_add_users_and_auth.py  # CR-002
 │   │       ├── 003_add_origem_id.py       # RF-06
-│       └── 004_add_daily_expenses.py  # CR-005
+│       ├── 004_add_daily_expenses.py  # CR-005
+│       └── 005_add_expense_categories.py  # CR-016
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py           # Entry point FastAPI + lifespan
@@ -221,7 +222,7 @@ Personal Finance/
 │       ├── schemas.py        # Pydantic: request/response + auth + daily expense schemas
 │       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD
 │       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary
-│       ├── categories.py     # CR-005: Categorias e metodos de pagamento (gastos diarios)
+│       ├── categories.py     # EXPENSE_CATEGORIES compartilhadas (CR-005, CR-016) + metodos de pagamento
 │       ├── auth.py           # CR-002: JWT + bcrypt auth module
 │       ├── email_service.py  # CR-002: SendGrid email (password reset)
 │       └── routers/
@@ -327,9 +328,10 @@ Personal Finance/
 - CR-013: Fix Layout Tabela de Despesas — botao Excluir cortado na borda direita, adicionado min-width na tabela (concluido)
 - CR-014: Isolamento de Cache entre Usuarios — queryClient.clear() no logout/login + userId nas cache keys do TanStack Query (concluido)
 - CR-015: Agrupamento de Parcelas por Status — separar parcelamentos em secoes "Em Andamento" e "Concluidos" na InstallmentsView (concluido)
+- CR-016: Categorizacao de Despesas Planejadas (F01) — campos categoria/subcategoria no modelo Expense, selects cascading no form, coluna na tabela (concluido)
 
 ### Última Tarefa Implementada
-- CR-015: Agrupamento de Parcelas por Status — secoes "Em Andamento" e "Concluidos" na aba Parcelas (concluido)
+- CR-016: Categorizacao de Despesas Planejadas (F01) — categorias opcionais para gastos planejados, reutilizando EXPENSE_CATEGORIES de categories.py (concluido)
 
 ---
 

@@ -1,8 +1,17 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "../services/api";
 import type { ExpenseCreate, ExpenseUpdate } from "../types";
 
 const MONTHLY_KEY = ["monthly-summary"];
+
+// CR-016: Hook para buscar categorias de despesas planejadas
+export function useExpenseCategories() {
+  return useQuery({
+    queryKey: ["expense-categories"],
+    queryFn: () => api.fetchExpenseCategories(),
+    staleTime: Infinity,
+  });
+}
 
 export function useCreateExpense(year: number, month: number) {
   const queryClient = useQueryClient();

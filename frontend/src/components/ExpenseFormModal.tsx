@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { Expense, ExpenseCreate } from "../types";
+import { useExpenseCategories } from "../hooks/useExpenses";
 
 interface ExpenseFormModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ export default function ExpenseFormModal({
   onSubmit,
   initialData,
 }: ExpenseFormModalProps) {
+  const { data: categoriesData } = useExpenseCategories();
+
   const [nome, setNome] = useState("");
   const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState("");
@@ -21,6 +24,8 @@ export default function ExpenseFormModal({
   const [parcelaTotal, setParcelaTotal] = useState("");
   const [recorrente, setRecorrente] = useState(true);
   const [parcelaError, setParcelaError] = useState("");
+  const [selectedCategoria, setSelectedCategoria] = useState("");
+  const [subcategoria, setSubcategoria] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -40,6 +45,8 @@ export default function ExpenseFormModal({
             : ""
         );
         setRecorrente(initialData.recorrente);
+        setSelectedCategoria(initialData.categoria ?? "");
+        setSubcategoria(initialData.subcategoria ?? "");
       } else {
         setNome("");
         setValor("");
@@ -47,6 +54,8 @@ export default function ExpenseFormModal({
         setParcelaAtual("");
         setParcelaTotal("");
         setRecorrente(true);
+        setSelectedCategoria("");
+        setSubcategoria("");
       }
     }
   }, [isOpen, initialData]);
@@ -54,6 +63,15 @@ export default function ExpenseFormModal({
   if (!isOpen) return null;
 
   const hasParcelas = parcelaAtual !== "" || parcelaTotal !== "";
+  const categorias = categoriesData?.categorias ?? {};
+  const subcategorias = selectedCategoria
+    ? categorias[selectedCategoria] ?? []
+    : [];
+
+  function handleCategoriaChange(cat: string) {
+    setSelectedCategoria(cat);
+    setSubcategoria("");
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +92,7 @@ export default function ExpenseFormModal({
       parcela_atual: atual,
       parcela_total: total,
       recorrente: hasParcelas ? recorrente : recorrente,
+      subcategoria: subcategoria || null,
     });
     onClose();
   }
@@ -110,6 +129,47 @@ export default function ExpenseFormModal({
                 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
                 transition-all duration-200"
             />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-text-muted mb-1.5">
+                Categoria
+              </label>
+              <select
+                value={selectedCategoria}
+                onChange={(e) => handleCategoriaChange(e.target.value)}
+                className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                  transition-all duration-200"
+              >
+                <option value="">Selecione...</option>
+                {Object.keys(categorias).map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-text-muted mb-1.5">
+                Subcategoria
+              </label>
+              <select
+                value={subcategoria}
+                onChange={(e) => setSubcategoria(e.target.value)}
+                disabled={!selectedCategoria}
+                className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
+                  focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+                  transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <option value="">Selecione...</option>
+                {subcategorias.map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-semibold text-text-muted mb-1.5">

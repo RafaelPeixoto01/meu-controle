@@ -1,11 +1,12 @@
 """
-CR-005: Categorias e métodos de pagamento para Gastos Diários.
+Categorias e métodos de pagamento para despesas.
 
 Categorias fixas no código, baseadas em docs/categorias_gastos.md.
-Fonte única de verdade para validação no backend e endpoint GET /categories.
+Fonte única de verdade para validação no backend e endpoints GET /categories.
+Compartilhada entre despesas planejadas (CR-016) e gastos diários (CR-005).
 """
 
-DAILY_EXPENSE_CATEGORIES: dict[str, list[str]] = {
+EXPENSE_CATEGORIES: dict[str, list[str]] = {
     "Alimentação": [
         "Supermercado",
         "Feira / Hortifruti",
@@ -131,7 +132,7 @@ PAYMENT_METHODS: list[str] = [
 
 def get_category_for_subcategory(subcategoria: str) -> str | None:
     """Retorna a categoria pai de uma subcategoria, ou None se não encontrada."""
-    for category, subcategories in DAILY_EXPENSE_CATEGORIES.items():
+    for category, subcategories in EXPENSE_CATEGORIES.items():
         if subcategoria in subcategories:
             return category
     return None

@@ -14,7 +14,7 @@ from app.schemas import (
     CategoriesResponse,
 )
 from app.categories import (
-    DAILY_EXPENSE_CATEGORIES,
+    EXPENSE_CATEGORIES,
     PAYMENT_METHODS,
     get_category_for_subcategory,
     is_valid_payment_method,
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/daily-expenses", tags=["daily-expenses"])
 def get_categories():
     """Retorna categorias, subcategorias e metodos de pagamento disponiveis."""
     return {
-        "categorias": DAILY_EXPENSE_CATEGORIES,
+        "categorias": EXPENSE_CATEGORIES,
         "metodos_pagamento": PAYMENT_METHODS,
     }
 

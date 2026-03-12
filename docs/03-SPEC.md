@@ -1,10 +1,10 @@
 # Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios)
 
-**Versao:** 2.4
-**Data:** 2026-03-05
+**Versao:** 2.5
+**Data:** 2026-03-12
 **PRD Ref:** 01-PRD v2.2
-**Arquitetura Ref:** 02-ARCHITECTURE v2.5
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend)
+**Arquitetura Ref:** 02-ARCHITECTURE v2.6
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-016 (Categorizacao de Despesas)
 
 ---
 
@@ -87,6 +87,7 @@ Fase 1 implementa o MVP completo do Meu Controle: aplicacao web para controle fi
 | `PATCH`  | `/api/users/me/password`               | Sim   | `ChangePasswordRequest` | `{"message": "..."}`    | CR-002: Trocar senha (RF-12)                    |
 | `GET`    | `/api/config`                          | Nao   | —                       | `{ google_client_id: string }` | Configuracao publica (Google Client ID runtime) |
 | `GET`    | `/api/daily-expenses/categories`       | Nao   | —                       | `CategoriesResponse`    | CR-005: Categorias + metodos de pagamento       |
+| `GET`    | `/api/expenses/categories`             | Sim   | —                       | `{ categorias: {...} }` | CR-016: Categorias para despesas planejadas     |
 | `GET`    | `/api/expenses/installments`           | Sim   | —                       | `InstallmentsSummary`   | CR-007: Lista de parcelas + totalizadores       |
 | `GET`    | `/api/daily-expenses/{year}/{month}`   | Sim   | —                       | `DailyExpenseMonthlySummary` | CR-005: Visao mensal agrupada por dia      |
 | `POST`   | `/api/daily-expenses/{year}/{month}`   | Sim   | `DailyExpenseCreate`    | `DailyExpenseResponse` (201) | CR-005: Criar gasto diario               |
@@ -580,6 +581,7 @@ class ExpenseCreate(BaseModel):
     parcela_atual: Optional[int] = Field(None, ge=1)
     parcela_total: Optional[int] = Field(None, ge=1)
     recorrente: bool = True
+    subcategoria: Optional[str] = Field(None, max_length=50)  # CR-016
 
     @model_validator(mode="after")
     def validate_parcelas(self) -> "ExpenseCreate":
@@ -605,6 +607,7 @@ class ExpenseUpdate(BaseModel):
     parcela_total: Optional[int] = Field(None, ge=1)
     recorrente: Optional[bool] = None
     status: Optional[ExpenseStatus] = None
+    subcategoria: Optional[str] = Field(None, max_length=50)  # CR-016
 
 
 class ExpenseResponse(BaseModel):
@@ -614,6 +617,8 @@ class ExpenseResponse(BaseModel):
     id: str
     mes_referencia: date
     nome: str
+    categoria: Optional[str] = None  # CR-016
+    subcategoria: Optional[str] = None  # CR-016
     valor: float
     vencimento: date
     parcela_atual: Optional[int]
