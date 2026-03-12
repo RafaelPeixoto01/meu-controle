@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.4
-**Data:** 2026-03-05
+**Versao:** 2.5
+**Data:** 2026-03-12
 **PRD Ref:** 01-PRD v2.2
-**Arquitetura Ref:** 02-ARCHITECTURE v2.5
-**Spec Ref:** 03-SPEC v2.4
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status)
+**Arquitetura Ref:** 02-ARCHITECTURE v2.6
+**Spec Ref:** 03-SPEC v2.5
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas)
 
 ---
 
@@ -30,6 +30,7 @@
 | CR-010 | Hardening de Seguranca                                    | CR10-T-01 a CR10-T-07 | Concluido |
 | CR-011 | Calculadora de Selecao de Despesas                         | CR11-T-01 a CR11-T-07 | Concluido |
 | CR-012 | Melhorias de Responsividade no Frontend                    | CR12-T-01 a CR12-T-07 | Concluido |
+| CR-016 | Categorizacao de Despesas Planejadas (F01)                  | CR16-T-01 a CR16-T-11 | Concluido |
 
 ---
 

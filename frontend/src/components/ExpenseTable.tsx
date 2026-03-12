@@ -160,6 +160,9 @@ export default function ExpenseTable({
               <th className="text-left px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Nome
               </th>
+              <th className="text-left px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
+                Categoria
+              </th>
               <th className="text-right px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
                 Valor
               </th>
@@ -195,6 +198,15 @@ export default function ExpenseTable({
                 </td>
                 <td className="px-3 py-3.5 sm:px-4 font-medium text-text">
                   {expense.nome}
+                </td>
+                <td className="px-3 py-3.5 sm:px-4 text-text-muted text-sm">
+                  {expense.subcategoria ? (
+                    <span className="inline-block px-2.5 py-1 bg-primary-50 text-primary text-xs font-semibold rounded-lg">
+                      {expense.subcategoria}
+                    </span>
+                  ) : (
+                    <span className="text-slate-300">&mdash;</span>
+                  )}
                 </td>
                 <td className="px-3 py-3.5 sm:px-4 text-right text-text-muted tabular-nums font-medium">
                   {formatBRL(expense.valor)}
@@ -243,7 +255,7 @@ export default function ExpenseTable({
             ))}
             {expenses.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-14 text-center">
+                <td colSpan={8} className="px-6 py-14 text-center">
                   <p className="text-text-muted text-base font-medium">
                     Nenhuma despesa cadastrada
                   </p>
@@ -263,7 +275,7 @@ export default function ExpenseTable({
               <td className="px-3 py-2.5 sm:px-4 text-right text-sm font-semibold text-pago tabular-nums">
                 {formatBRL(totalPago)}
               </td>
-              <td colSpan={4} />
+              <td colSpan={5} />
             </tr>
             <tr className="bg-pendente-bg/50">
               <td />
@@ -273,7 +285,7 @@ export default function ExpenseTable({
               <td className="px-3 py-2.5 sm:px-4 text-right text-sm font-semibold text-pendente tabular-nums">
                 {formatBRL(totalPendente)}
               </td>
-              <td colSpan={4} />
+              <td colSpan={5} />
             </tr>
             <tr className="bg-atrasado-bg/50">
               <td />
@@ -283,7 +295,7 @@ export default function ExpenseTable({
               <td className="px-3 py-2.5 sm:px-4 text-right text-sm font-semibold text-atrasado tabular-nums">
                 {formatBRL(totalAtrasado)}
               </td>
-              <td colSpan={4} />
+              <td colSpan={5} />
             </tr>
             <tr className="bg-slate-50 border-t-2 border-slate-200">
               <td />
@@ -293,7 +305,7 @@ export default function ExpenseTable({
               <td className="px-3 py-3.5 sm:px-4 text-right font-bold text-text tabular-nums">
                 {formatBRL(totalDespesas)}
               </td>
-              <td colSpan={4} />
+              <td colSpan={5} />
             </tr>
           </tfoot>
         </table>

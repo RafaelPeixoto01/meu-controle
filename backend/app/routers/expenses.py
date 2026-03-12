@@ -6,9 +6,16 @@ from app.database import get_db
 from app.auth import get_current_user  # CR-002
 from app.models import Expense, ExpenseStatus, User  # CR-002: User
 from app.schemas import ExpenseCreate, ExpenseUpdate, ExpenseResponse, InstallmentsResponse
+from app.categories import EXPENSE_CATEGORIES, get_category_for_subcategory, is_valid_subcategory  # CR-016
 from app import crud
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
+
+
+@router.get("/categories")
+def get_expense_categories():
+    """CR-016: Retorna categorias e subcategorias disponiveis para despesas planejadas."""
+    return {"categorias": EXPENSE_CATEGORIES}
 
 
 @router.get("/installments", response_model=InstallmentsResponse)
@@ -41,6 +48,8 @@ def duplicate_expense(
         user_id=current_user.id,  # CR-002: isolamento de dados
         mes_referencia=original.mes_referencia,
         nome=original.nome,
+        categoria=original.categoria,  # CR-016
+        subcategoria=original.subcategoria,  # CR-016
         valor=original.valor,
         vencimento=original.vencimento,
         parcela_atual=original.parcela_atual,
@@ -71,11 +80,20 @@ def create_expense(
     if data.parcela_total and data.parcela_total > 1 and data.parcela_atual and data.parcela_atual > data.parcela_total:
         raise HTTPException(status_code=400, detail="Parcela atual nao pode ser maior que total")
 
+    # CR-016: Validar e derivar categoria
+    categoria = None
+    if data.subcategoria:
+        if not is_valid_subcategory(data.subcategoria):
+            raise HTTPException(status_code=422, detail=f"Subcategoria inválida: {data.subcategoria}")
+        categoria = get_category_for_subcategory(data.subcategoria)
+
     # 1. Criar a despesa do mês atual (que será retornada)
     expense_atual = Expense(
         user_id=current_user.id,
         mes_referencia=mes_referencia_inicial,
         nome=data.nome,
+        categoria=categoria,  # CR-016
+        subcategoria=data.subcategoria,  # CR-016
         valor=data.valor,
         vencimento=data.vencimento,
         parcela_atual=data.parcela_atual,
@@ -106,6 +124,8 @@ def create_expense(
                 user_id=current_user.id,
                 mes_referencia=next_mes,
                 nome=data.nome,
+                categoria=categoria,  # CR-016
+                subcategoria=data.subcategoria,  # CR-016
                 valor=data.valor,
                 vencimento=next_venc,
                 parcela_atual=i,
@@ -133,6 +153,17 @@ def update_expense(
         raise HTTPException(status_code=404, detail="Despesa nao encontrada")
 
     update_data = data.model_dump(exclude_unset=True)
+
+    # CR-016: Se subcategoria mudou, re-derivar categoria
+    if "subcategoria" in update_data:
+        sub = update_data["subcategoria"]
+        if sub:
+            if not is_valid_subcategory(sub):
+                raise HTTPException(status_code=422, detail=f"Subcategoria inválida: {sub}")
+            update_data["categoria"] = get_category_for_subcategory(sub)
+        else:
+            update_data["categoria"] = None
+
     for field, value in update_data.items():
         if field == "status" and value is not None:
             setattr(expense, field, value.value)

@@ -116,6 +116,11 @@ export function fetchInstallments(): Promise<InstallmentsResponse> {
   return request<InstallmentsResponse>("/expenses/installments");
 }
 
+// CR-016: Expense categories
+export function fetchExpenseCategories(): Promise<{ categorias: Record<string, string[]> }> {
+  return request<{ categorias: Record<string, string[]> }>("/expenses/categories");
+}
+
 // ========== Incomes ==========
 
 export function createIncome(

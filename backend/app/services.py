@@ -109,6 +109,8 @@ def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
                     user_id=user_id,
                     mes_referencia=target_mes,
                     nome=exp.nome,
+                    categoria=exp.categoria,  # CR-016
+                    subcategoria=exp.subcategoria,  # CR-016
                     valor=exp.valor,
                     vencimento=adjust_vencimento_to_month(
                         exp.vencimento, target_mes
@@ -137,6 +139,8 @@ def generate_month_data(db: Session, target_mes: date, user_id: str) -> bool:
                     user_id=user_id,
                     mes_referencia=target_mes,
                     nome=exp.nome,
+                    categoria=exp.categoria,  # CR-016
+                    subcategoria=exp.subcategoria,  # CR-016
                     valor=exp.valor,
                     vencimento=adjust_vencimento_to_month(
                         exp.vencimento, target_mes

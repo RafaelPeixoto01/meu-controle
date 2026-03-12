@@ -6,6 +6,8 @@ export interface Expense {
   id: string;
   mes_referencia: string;
   nome: string;
+  categoria: string | null;  // CR-016
+  subcategoria: string | null;  // CR-016
   valor: number;
   vencimento: string;
   parcela_atual: number | null;
@@ -23,6 +25,7 @@ export interface ExpenseCreate {
   parcela_atual?: number | null;
   parcela_total?: number | null;
   recorrente: boolean;
+  subcategoria?: string | null;  // CR-016
 }
 
 export interface ExpenseUpdate {
@@ -33,6 +36,7 @@ export interface ExpenseUpdate {
   parcela_total?: number | null;
   recorrente?: boolean;
   status?: ExpenseStatus;
+  subcategoria?: string | null;  // CR-016
 }
 
 export interface InstallmentGroup {

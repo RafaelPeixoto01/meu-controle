@@ -51,6 +51,8 @@ class Expense(Base):
     )  # CR-002: FK para isolamento de dados (RN-015)
     mes_referencia: Mapped[date] = mapped_column(Date, nullable=False)
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
+    categoria: Mapped[str | None] = mapped_column(String(50), nullable=True)  # CR-016
+    subcategoria: Mapped[str | None] = mapped_column(String(50), nullable=True)  # CR-016
     valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     vencimento: Mapped[date] = mapped_column(Date, nullable=False)
     parcela_atual: Mapped[int | None] = mapped_column(Integer, nullable=True)

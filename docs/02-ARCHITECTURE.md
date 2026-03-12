@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.5
-**Data:** 2026-02-26
+**Versao:** 2.6
+**Data:** 2026-03-12
 **PRD Ref:** 01-PRD v2.2
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas)
 
 ---
 
@@ -127,7 +127,7 @@ Personal Finance/
 │       ├── crud.py
 │       ├── services.py
 │       ├── auth.py                          # CR-002: JWT, password hashing, get_current_user
-│       ├── categories.py                    # CR-005: Categorias + metodos pagamento + helpers
+│       ├── categories.py                    # Categorias compartilhadas (EXPENSE_CATEGORIES) + metodos pagamento + helpers (CR-005, CR-016)
 │       ├── email_service.py                 # CR-002: SendGrid integration
 │       └── routers/
 │           ├── __init__.py
@@ -215,6 +215,8 @@ erDiagram
         string user_id FK
         date mes_referencia
         string nome
+        string categoria
+        string subcategoria
         decimal valor
         date vencimento
         int parcela_atual
@@ -344,7 +346,7 @@ erDiagram
 
 > **Indice composto:** `ix_daily_expenses_user_month (user_id, mes_referencia)` para consultas por usuario + mes. Indice adicional `ix_daily_expenses_data` no campo `data`.
 
-> **Categorias:** 14 categorias fixas + "Outros" definidas em `backend/app/categories.py`. A categoria e derivada automaticamente da subcategoria via `get_category_for_subcategory()`.
+> **Categorias:** 14 categorias fixas + "Outros" definidas em `backend/app/categories.py` (`EXPENSE_CATEGORIES`). A categoria e derivada automaticamente da subcategoria via `get_category_for_subcategory()`. Compartilhada entre despesas planejadas (CR-016) e gastos diarios (CR-005).
 
 ### Relacionamentos
 
@@ -681,24 +683,26 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
 |------|-------|
 | Hosting | Railway (container Docker) |
 | Banco de dados | PostgreSQL (Railway add-on) |
-| Build trigger | Push para branch `master` (auto-deploy) |
+| Build trigger | Merge de branch CR em `master` + push (auto-deploy) |
 | Container base | `python:3.12-slim` (backend) + `node:20-alpine` (frontend build) |
 
 ### 9.2 Pipeline de Deploy
 
 ```mermaid
 graph LR
-    A[git push master] --> B[Railway detecta push]
-    B --> C[Docker build multi-stage]
-    C --> D[Stage 1: npm ci + build React]
-    D --> E[Stage 2: pip install + copy static]
-    E --> F[Container start]
-    F --> G[alembic upgrade head]
-    G --> H[uvicorn app.main:app]
-    H --> I[App online :8000]
+    A[feat/CR-XXX branch] --> B[git merge master --no-ff]
+    B --> C[git push origin master]
+    C --> D[Railway detecta push]
+    D --> E[Docker build multi-stage]
+    E --> F[Stage 1: npm ci + build React]
+    F --> G[Stage 2: pip install + copy static]
+    G --> H[Container start]
+    H --> I[alembic upgrade head]
+    I --> J[uvicorn app.main:app]
+    J --> K[App online :8000]
 ```
 
-1. Push para `master` aciona build automatico no Railway
+1. Merge da branch do CR em `master` + push aciona build automatico no Railway
 2. Dockerfile multi-stage: Stage 1 compila frontend (Node 20), Stage 2 prepara backend (Python 3.12)
 3. Container inicia: `alembic upgrade head` executa migrations pendentes
 4. `uvicorn` inicia o servidor FastAPI na porta 8000
