@@ -329,9 +329,10 @@ Personal Finance/
 - CR-014: Isolamento de Cache entre Usuarios — queryClient.clear() no logout/login + userId nas cache keys do TanStack Query (concluido)
 - CR-015: Agrupamento de Parcelas por Status — separar parcelamentos em secoes "Em Andamento" e "Concluidos" na InstallmentsView (concluido)
 - CR-016: Categorizacao de Despesas Planejadas (F01) — campos categoria/subcategoria no modelo Expense, selects cascading no form, coluna na tabela (concluido)
+- CR-017: Remover opcao Duplicar dos gastos planejados — botao Duplicar removido da tabela de despesas, codigo morto limpo (concluido)
 
 ### Última Tarefa Implementada
-- CR-016: Categorizacao de Despesas Planejadas (F01) — categorias opcionais para gastos planejados, reutilizando EXPENSE_CATEGORIES de categories.py (concluido)
+- CR-017: Remover opcao Duplicar dos gastos planejados — botao removido da ExpenseTable, hook e funcao API limpos (concluido)
 
 ---
 

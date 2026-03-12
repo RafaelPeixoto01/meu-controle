@@ -5,7 +5,6 @@ import {
   useCreateExpense,
   useUpdateExpense,
   useDeleteExpense,
-  useDuplicateExpense,
 } from "../hooks/useExpenses";
 import StatusBadge from "./StatusBadge";
 import ExpenseFormModal from "./ExpenseFormModal";
@@ -53,8 +52,6 @@ export default function ExpenseTable({
   const createExpense = useCreateExpense(year, month);
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
-  const duplicateExpense = useDuplicateExpense();
-
   function handleCreate(data: ExpenseCreate) {
     createExpense.mutate(data);
   }
@@ -77,10 +74,6 @@ export default function ExpenseTable({
       id: expense.id,
       data: { status: newStatus },
     });
-  }
-
-  function handleDuplicate(expenseId: string) {
-    duplicateExpense.mutate(expenseId);
   }
 
   function handleToggleSelect(id: string) {
@@ -232,14 +225,6 @@ export default function ExpenseTable({
                         transition-colors duration-100"
                     >
                       Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDuplicate(expense.id)}
-                      className="px-1.5 py-1 sm:px-2.5 text-text-muted hover:bg-slate-100 hover:text-text rounded-lg text-sm font-semibold
-                        transition-colors duration-100"
-                    >
-                      Duplicar
                     </button>
                     <button
                       type="button"
