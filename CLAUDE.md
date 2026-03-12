@@ -330,9 +330,10 @@ Personal Finance/
 - CR-015: Agrupamento de Parcelas por Status — separar parcelamentos em secoes "Em Andamento" e "Concluidos" na InstallmentsView (concluido)
 - CR-016: Categorizacao de Despesas Planejadas (F01) — campos categoria/subcategoria no modelo Expense, selects cascading no form, coluna na tabela (concluido)
 - CR-017: Remover opcao Duplicar dos gastos planejados — botao Duplicar removido da tabela de despesas, codigo morto limpo (concluido)
+- CR-018: Sincronizar categories.py com categorias_gastos.md — adicionar IPVA, IPTU, Impostos e Emprestimo (concluido)
 
 ### Última Tarefa Implementada
-- CR-017: Remover opcao Duplicar dos gastos planejados — botao removido da ExpenseTable, hook e funcao API limpos (concluido)
+- CR-018: Sincronizar categories.py com categorias_gastos.md — IPVA (Transporte), IPTU (Moradia), Impostos e Emprestimo (Financeiro) adicionados (concluido)
 
 ---
 

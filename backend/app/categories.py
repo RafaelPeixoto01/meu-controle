@@ -28,6 +28,7 @@ EXPENSE_CATEGORIES: dict[str, list[str]] = {
         "Manutenção do veículo",
         "Seguro do veículo",
         "Multas",
+        "IPVA",
     ],
     "Moradia": [
         "Aluguel",
@@ -40,6 +41,7 @@ EXPENSE_CATEGORIES: dict[str, list[str]] = {
         "Faxina",
         "Móveis",
         "Decoração",
+        "IPTU",
     ],
     "Compras Pessoais": [
         "Roupas",
@@ -96,6 +98,8 @@ EXPENSE_CATEGORIES: dict[str, list[str]] = {
         "Taxas",
         "Anuidade de cartão",
         "Parcelas",
+        "Impostos",
+        "Empréstimo",
     ],
     "Presentes e Doações": [
         "Presente",
