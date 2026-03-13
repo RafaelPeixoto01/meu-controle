@@ -58,11 +58,11 @@ Funcionalidades que eliminam os gaps mais básicos em relação ao mercado. Sem 
 
 ---
 
-### F02: Dashboard visual com gráficos
+### F02: Dashboard visual com gráficos — CONCLUÍDA (CR-019, 2026-03-13)
 
-| Prioridade | Esforço | Impacto | Horizonte |
-|---|---|---|---|
-| P0 - Crítica | Médio | Alto | H1 |
+| Prioridade | Esforço | Impacto | Horizonte | Status |
+|---|---|---|---|---|
+| P0 - Crítica | Médio | Alto | H1 | Concluída |
 
 **Descrição:** Dashboard com gráficos de pizza (composição), barras (evolução mensal), e indicadores-chave: saldo livre, % comprometimento, total de parcelas futuras. Visão rápida da saúde financeira.
 
@@ -283,7 +283,7 @@ A ordem abaixo considera dependências técnicas, impacto no usuário e viabilid
 | # | ID | Feature | Justificativa da ordem | Estimativa |
 |---|---|---|---|---|
 | 1 | F01 | Categorização de despesas | Pré-requisito para dashboard, IA e relatórios | Concluída (CR-016) |
-| 2 | F02 | Dashboard visual | Depende de F01. Maior impacto visual imediato | 2-3 semanas |
+| 2 | F02 | Dashboard visual | Depende de F01. Maior impacto visual imediato | Concluída (CR-019) |
 | 3 | F03 | Visão de parcelas futuras | Usa dados existentes. Diferenciador único | 2 semanas |
 | 4 | F05 | Alertas inteligentes | Baixo esforço, alto impacto percebido | 1 semana |
 | 5 | F04 | Score de saúde financeira | Depende de F01. Prompt base já existe | 1 semana |

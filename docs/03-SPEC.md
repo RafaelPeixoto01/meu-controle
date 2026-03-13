@@ -1,10 +1,10 @@
-# Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios)
+# Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios + Dashboard)
 
-**Versao:** 2.5
-**Data:** 2026-03-12
+**Versao:** 2.6
+**Data:** 2026-03-13
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.6
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-016 (Categorizacao de Despesas)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual)
 
 ---
 
@@ -4049,3 +4049,54 @@ sequenceDiagram
 *Atualizado para v2.1 em 2026-02-11 — CR-003: Design System e descricoes visuais dos componentes.*
 *Atualizado para v2.2 em 2026-02-17 — CR-005: Gastos Diarios (RF-13) — API contracts, feature section, testes, checklist.*
 *Atualizado para v2.3 em 2026-02-26 — CR-010: Hardening de Seguranca — TokenResponse.refresh_token opcional, /refresh e /logout leem cookie HttpOnly (sem body), tabela de endpoints atualizada.*
+
+---
+
+## Dashboard Visual (CR-019)
+
+### Endpoint
+
+**GET /api/dashboard/{year}/{month}** — Retorna dados agregados para o dashboard.
+
+Requer autenticacao JWT. Dados filtrados por `user_id`.
+
+### Response Schema — DashboardResponse
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| mes_referencia | date | Primeiro dia do mes |
+| total_receitas | float | Soma de todas as receitas |
+| total_despesas_planejadas | float | Soma de despesas planejadas |
+| total_gastos_diarios | float | Soma de gastos diarios |
+| total_despesas_geral | float | Planejadas + diarios |
+| saldo_livre | float | Receitas - geral |
+| percentual_comprometimento | float | (geral / receitas) * 100 |
+| total_parcelas_futuras | float | Valor restante de parcelas ativas |
+| total_pago | float | Despesas planejadas pagas |
+| total_pendente | float | Despesas planejadas pendentes |
+| total_atrasado | float | Despesas planejadas atrasadas |
+| categorias_planejadas | list[CategoryBreakdown] | Breakdown por categoria (planejadas) |
+| categorias_diarios | list[CategoryBreakdown] | Breakdown por categoria (diarios) |
+| evolucao | list[MonthEvolutionPoint] | Evolucao 6 meses |
+
+**CategoryBreakdown:** `{ categoria: str, total: float, percentual: float, count: int }`
+
+**MonthEvolutionPoint:** `{ mes_referencia: date, total_despesas: float, total_receitas: float, total_gastos_diarios: float, saldo_livre: float }`
+
+### Regras de Negocio
+
+- RN-D01: Despesas planejadas e gastos diarios sao separados nos graficos (donut charts distintos)
+- RN-D02: KPIs combinam ambos os tipos para saldo livre e percentual de comprometimento
+- RN-D03: Evolucao mensal mostra 6 meses (atual + 5 anteriores) com 3 series separadas
+- RN-D04: Meses historicos usam queries agregadas (SUM) sem triggering de auto-generate (RF-06)
+- RN-D05: Despesas sem categoria (pre-CR-016) sao agrupadas como "Outros"
+- RN-D06: Divisao por zero evitada quando receita = 0 (comprometimento = 0)
+- RN-D07: Status breakdown aplica-se apenas a despesas planejadas (diarios nao tem status)
+
+### Frontend
+
+- Dashboard e a primeira tab no ViewSelector
+- Rota: `/dashboard` (protegida)
+- Componentes: KeyIndicators, CategoryDonutChart (reutilizavel), EvolutionBarChart, StatusBreakdown
+- Biblioteca de graficos: recharts (SVG, React nativo)
+- Layout responsivo: 2 colunas desktop, empilhado mobile

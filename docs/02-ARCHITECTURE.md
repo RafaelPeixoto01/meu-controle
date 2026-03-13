@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.6
-**Data:** 2026-03-12
+**Versao:** 2.7
+**Data:** 2026-03-13
 **PRD Ref:** 01-PRD v2.2
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual)
 
 ---
 
@@ -18,6 +18,7 @@
 | HTTP Client         | fetch nativo                     | —             | Suficiente para a API REST; evita dependencia extra |
 | Frontend Routing    | react-router-dom                 | 7.x           | Rotas client-side para paginas de auth e app (CR-002, ADR-017) |
 | Token Decode        | jwt-decode                       | 4.x           | Decode de JWT no frontend para extrair expiry e user info (CR-002) |
+| Graficos            | recharts                         | 2.x           | Graficos SVG para React — donut charts e bar charts no dashboard (CR-019) |
 | Backend             | Python + FastAPI                 | FastAPI 0.115 | Framework async com validacao Pydantic nativa, Swagger auto |
 | ORM                 | SQLAlchemy                       | 2.0+          | ORM maduro; modo sincrono (SQLite nao suporta async I/O real) |
 | Banco de Dados      | PostgreSQL (prod) + SQLite (dev) | —             | PostgreSQL via Railway add-on em producao; SQLite local para desenvolvimento (CR-001) |
@@ -136,7 +137,8 @@ Personal Finance/
 │           ├── months.py
 │           ├── auth.py                      # CR-002: register, login, Google, refresh, logout, forgot/reset password
 │           ├── users.py                     # CR-002: GET/PATCH /me, change password
-│           └── daily_expenses.py            # CR-005: CRUD gastos diarios (5 endpoints)
+│           ├── daily_expenses.py            # CR-005: CRUD gastos diarios (5 endpoints)
+│           └── dashboard.py                # CR-019: endpoints de agregacao para dashboard visual
 ├── frontend/
 │   ├── package.json
 │   ├── tsconfig.json

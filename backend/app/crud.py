@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, func
 from datetime import date
 
 from app.models import Expense, Income, User, RefreshToken, DailyExpense  # CR-002: User, RefreshToken; CR-005: DailyExpense
@@ -271,6 +271,35 @@ def delete_user_refresh_tokens(db: Session, user_id: str) -> None:
     for token in tokens:
         db.delete(token)
     db.commit()
+
+
+# ========== Dashboard Aggregates (CR-019) ==========
+
+def get_expense_total_by_month(db: Session, mes_referencia: date, user_id: str) -> float:
+    """Retorna soma total de despesas planejadas de um usuario em um mes (query agregada)."""
+    stmt = (
+        select(func.coalesce(func.sum(Expense.valor), 0))
+        .where(Expense.user_id == user_id, Expense.mes_referencia == mes_referencia)
+    )
+    return round(float(db.scalar(stmt) or 0), 2)
+
+
+def get_income_total_by_month(db: Session, mes_referencia: date, user_id: str) -> float:
+    """Retorna soma total de receitas de um usuario em um mes (query agregada)."""
+    stmt = (
+        select(func.coalesce(func.sum(Income.valor), 0))
+        .where(Income.user_id == user_id, Income.mes_referencia == mes_referencia)
+    )
+    return round(float(db.scalar(stmt) or 0), 2)
+
+
+def get_daily_expense_total_by_month(db: Session, mes_referencia: date, user_id: str) -> float:
+    """Retorna soma total de gastos diarios de um usuario em um mes (query agregada)."""
+    stmt = (
+        select(func.coalesce(func.sum(DailyExpense.valor), 0))
+        .where(DailyExpense.user_id == user_id, DailyExpense.mes_referencia == mes_referencia)
+    )
+    return round(float(db.scalar(stmt) or 0), 2)
 
 
 # ========== Installments (CR-007) ==========

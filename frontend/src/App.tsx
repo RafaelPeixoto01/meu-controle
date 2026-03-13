@@ -11,6 +11,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
 import DailyExpensesView from "./pages/DailyExpensesView";
 import { InstallmentsView } from "./pages/InstallmentsView";
+import DashboardView from "./pages/DashboardView";
 
 function AppHeader() {
   const { isAuthenticated, user } = useAuth();
@@ -47,6 +48,7 @@ export default function App() {
             {/* Rotas protegidas */}
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<MonthlyView />} />
+              <Route path="/dashboard" element={<DashboardView />} />
               <Route path="/daily-expenses" element={<DailyExpensesView />} />
               <Route path="/installments" element={<InstallmentsView />} />
               <Route path="/profile" element={<ProfilePage />} />

@@ -4,6 +4,8 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from collections import defaultdict
+
 from app import crud
 from app.models import Expense, ExpenseStatus, Income
 
@@ -237,6 +239,112 @@ def get_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict
         "total_atrasado": round(total_atrasado, 2),
         "expenses": expenses,
         "incomes": incomes,
+    }
+
+
+def _build_category_breakdown(items: list, category_attr: str = "categoria") -> list[dict]:
+    """Agrupa itens por categoria e calcula percentuais. Retorna lista ordenada por total desc."""
+    cat_map: dict[str, dict] = defaultdict(lambda: {"total": 0.0, "count": 0})
+    for item in items:
+        cat = getattr(item, category_attr, None) or "Outros"
+        cat_map[cat]["total"] += float(item.valor)
+        cat_map[cat]["count"] += 1
+
+    total_geral = sum(v["total"] for v in cat_map.values())
+
+    result = []
+    for cat, data in cat_map.items():
+        pct = (data["total"] / total_geral * 100) if total_geral > 0 else 0
+        result.append({
+            "categoria": cat,
+            "total": round(data["total"], 2),
+            "percentual": round(pct, 1),
+            "count": data["count"],
+        })
+
+    return sorted(result, key=lambda x: x["total"], reverse=True)
+
+
+def get_dashboard_data(db: Session, mes_referencia: date, user_id: str) -> dict:
+    """
+    CR-019: Constroi dados completos do dashboard para um mes.
+    1. Dados do mes atual (com auto-generate e status detection via get_monthly_summary)
+    2. Gastos diarios do mes
+    3. Parcelas futuras
+    4. Breakdown por categoria (separados: planejadas e diarios)
+    5. Evolucao 6 meses (queries agregadas, sem auto-generate)
+    """
+    # 1. Dados do mes atual (triggers RF-05 e RF-06)
+    monthly = get_monthly_summary(db, mes_referencia, user_id)
+    expenses = monthly["expenses"]
+    total_despesas_planejadas = monthly["total_despesas"]
+    total_receitas = monthly["total_receitas"]
+
+    # 2. Gastos diarios do mes
+    daily_expenses = crud.get_daily_expenses_by_month(db, mes_referencia, user_id)
+    total_gastos_diarios = round(sum(float(de.valor) for de in daily_expenses), 2)
+
+    # 3. Totais combinados
+    total_despesas_geral = round(total_despesas_planejadas + total_gastos_diarios, 2)
+    saldo_livre = round(total_receitas - total_despesas_geral, 2)
+    pct_comprometimento = round(
+        (total_despesas_geral / total_receitas * 100) if total_receitas > 0 else 0, 1
+    )
+
+    # 4. Parcelas futuras (valor restante de todas as parcelas ativas)
+    installments_data = crud.get_installment_expenses_grouped(db, user_id)
+    total_parcelas_futuras = round(
+        sum(g["valor_restante"] for g in installments_data["groups"] if g["status_geral"] == "Em andamento"),
+        2
+    )
+
+    # 5. Breakdown por categoria — SEPARADOS
+    categorias_planejadas = _build_category_breakdown(expenses)
+    categorias_diarios = _build_category_breakdown(daily_expenses)
+
+    # 6. Evolucao 6 meses (atual + 5 anteriores) — queries agregadas leves
+    evolucao = []
+    current_mes = mes_referencia
+    for _ in range(6):
+        if current_mes == mes_referencia:
+            # Mes atual: usar dados ja calculados
+            ev_despesas = total_despesas_planejadas
+            ev_receitas = total_receitas
+            ev_diarios = total_gastos_diarios
+        else:
+            # Meses anteriores: queries agregadas (sem auto-generate)
+            ev_despesas = crud.get_expense_total_by_month(db, current_mes, user_id)
+            ev_receitas = crud.get_income_total_by_month(db, current_mes, user_id)
+            ev_diarios = crud.get_daily_expense_total_by_month(db, current_mes, user_id)
+
+        ev_saldo = round(ev_receitas - ev_despesas - ev_diarios, 2)
+        evolucao.append({
+            "mes_referencia": current_mes,
+            "total_despesas": ev_despesas,
+            "total_receitas": ev_receitas,
+            "total_gastos_diarios": ev_diarios,
+            "saldo_livre": ev_saldo,
+        })
+        current_mes = get_previous_month(current_mes)
+
+    # Inverter para ordem cronologica (mais antigo primeiro)
+    evolucao.reverse()
+
+    return {
+        "mes_referencia": mes_referencia,
+        "total_receitas": total_receitas,
+        "total_despesas_planejadas": total_despesas_planejadas,
+        "total_gastos_diarios": total_gastos_diarios,
+        "total_despesas_geral": total_despesas_geral,
+        "saldo_livre": saldo_livre,
+        "percentual_comprometimento": pct_comprometimento,
+        "total_parcelas_futuras": total_parcelas_futuras,
+        "total_pago": monthly["total_pago"],
+        "total_pendente": monthly["total_pendente"],
+        "total_atrasado": monthly["total_atrasado"],
+        "categorias_planejadas": categorias_planejadas,
+        "categorias_diarios": categorias_diarios,
+        "evolucao": evolucao,
     }
 
 
