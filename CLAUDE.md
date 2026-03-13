@@ -334,9 +334,10 @@ Personal Finance/
 - CR-017: Remover opcao Duplicar dos gastos planejados — botao Duplicar removido da tabela de despesas, codigo morto limpo (concluido)
 - CR-018: Sincronizar categories.py com categorias_gastos.md — adicionar IPVA, IPTU, Impostos e Emprestimo (concluido)
 - CR-019: Dashboard Visual com Graficos (F02) — endpoint /api/dashboard, KPI cards, donut charts por categoria (planejadas e diarios separados), bar chart evolucao 6 meses, status breakdown, recharts (concluido)
+- CR-020: Trocar card "Parcelas Futuras" por "Gastos Planejados" no Dashboard — KPI card exibe total_despesas_planejadas ao inves de total_parcelas_futuras (concluido)
 
 ### Última Tarefa Implementada
-- CR-019: Dashboard Visual com Graficos (F02) — endpoint dedicado com agregacao server-side, 4 KPI cards, 2 donut charts separados, bar chart 3 series, status breakdown, ViewSelector com tab Dashboard (concluido)
+- CR-020: Trocar card "Parcelas Futuras" por "Gastos Planejados" no Dashboard — mudanca frontend-only no KeyIndicators (concluido)
 
 ---
 

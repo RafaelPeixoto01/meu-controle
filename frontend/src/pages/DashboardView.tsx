@@ -53,7 +53,7 @@ export default function DashboardView() {
           <KeyIndicators
             saldoLivre={data.saldo_livre}
             percentualComprometimento={data.percentual_comprometimento}
-            totalParcelasFuturas={data.total_parcelas_futuras}
+            totalDespesasPlanejadas={data.total_despesas_planejadas}
             totalGastosDiarios={data.total_gastos_diarios}
           />
 

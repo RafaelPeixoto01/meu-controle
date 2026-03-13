@@ -5,7 +5,7 @@
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.6
 **Spec Ref:** 03-SPEC v2.5
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados)
 
 ---
 
@@ -32,6 +32,7 @@
 | CR-012 | Melhorias de Responsividade no Frontend                    | CR12-T-01 a CR12-T-07 | Concluido |
 | CR-016 | Categorizacao de Despesas Planejadas (F01)                  | CR16-T-01 a CR16-T-11 | Concluido |
 | CR-019 | Dashboard Visual com Graficos (F02)                            | CR19-T-01 a CR19-T-08 | Concluido |
+| CR-020 | Card Gastos Planejados no Dashboard                            | CR20-T-01 a CR20-T-04 | Concluido |
 
 ---
 
