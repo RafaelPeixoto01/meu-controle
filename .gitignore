@@ -33,3 +33,6 @@ Thumbs.db
 *.json.log
 logs.*.json
 .claude/
+
+# Playwright MCP logs
+.playwright-mcp/
