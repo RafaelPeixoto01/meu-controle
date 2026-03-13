@@ -130,7 +130,7 @@ ALTER TABLE ...;
 
 ### 10.1 Rollback de Codigo
 
-- **Metodo:** `git revert [hash(es)]` + push para `master` (Railway auto-deploy)
+- **Metodo:** `git checkout -b hotfix/revert-CR-XXX` → `git revert [hash(es)]` → merge em `master` → push
 - **Metodo alternativo:** Redeploy do deployment anterior via Railway Dashboard
 - **Commits a reverter:** [listar commits ou range]
 

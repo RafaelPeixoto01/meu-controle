@@ -65,6 +65,14 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | Descricao | Criada sub-secao "Done When Universal" em `CLAUDE.md` com checklist obrigatorio (5 itens) e condicional (4 itens). Passo 6 das regras de CR atualizado para referenciar o checklist |
 | Documento afetado | `CLAUDE.md` (regras de implementacao) |
 
+### P1-3: Revisao de Seguranca como Fase do Fluxo SDD
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Descricao | Adicionada Fase 6 "Revisao de Seguranca" ao fluxo SDD em `CLAUDE.md` (entre Implementacao e Validacao) e Step 4 na skill `/feature`. Inclui checklist OWASP adaptado ao stack do projeto (8 itens). Motivacao: CR-010 identificou vulnerabilidades de forma reativa; agora a revisao e proativa e obrigatoria para CRs com endpoints, auth, CRUD ou novas dependencias. |
+| Documentos afetados | `CLAUDE.md`, `.claude/skills/feature/SKILL.md` |
+
 ---
 
 ## P2 — Desejavel
@@ -113,3 +121,4 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 |------|-------|-----------|
 | 2026-02-11 | Rafael | Documento criado (v1.0) com itens P0-P3 |
 | 2026-02-11 | Rafael | P2-1 e P2-2 concluidos (Troubleshooting no CLAUDE.md, Gestao de Dependencias no 02-ARCHITECTURE.md) |
+| 2026-02-26 | Rafael | P1-3 concluido (Revisao de Seguranca como Fase do Fluxo SDD — CLAUDE.md + skill /feature) |

@@ -105,6 +105,23 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 - [ ] Documentos afetados atualizados (Spec, Architecture, CLAUDE.md)
 - [ ] Sem erros/warnings no console do browser (frontend)
 
+### Fluxo de Branches
+
+- Nunca commitar diretamente em `master`
+- Criar branch para cada CR: `git checkout -b feat/CR-XXX-slug`
+- Nomenclatura:
+  - Nova feature/CR: `feat/CR-XXX-slug`
+  - Correção/CR:     `fix/CR-XXX-slug`
+  - Hotfix urgente:  `hotfix/descricao`
+- Ao concluir: merge em `master` com `--no-ff` e deletar a branch:
+  ```bash
+  git checkout master
+  git merge feat/CR-XXX-slug --no-ff
+  git branch -d feat/CR-XXX-slug
+  git push origin master
+  ```
+- Push em `master` dispara o auto-deploy
+
 ### Commits
 
 - Formato: Conventional Commits
@@ -119,6 +136,7 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 - Antes de push, verifique se o build passa sem erros de tipo/lint
 - Commits devem referenciar o CR relevante (ex: `feat: CR-004 - descricao`)
 - Após implementação, atualize TODOS os documentos relacionados antes de push
+- Faça merge da branch do CR em `master` e então push: `git push origin master`
 
 ---
 
@@ -126,14 +144,14 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 
 Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que já existe:
 
-1. **Crie um Change Request (CR)** usando o template em `/docs/templates/00-template-change-request.md`
+1. **Crie um Change Request (CR)** usando o template em `/docs/templates/00-template-change-request.md` e **crie a branch**: `git checkout -b feat/CR-[XXX]-[slug]`
 2. **Salve** em `/docs/changes/CR-[XXX]-[slug].md` (numere sequencialmente)
 3. **Avalie o impacto** nos documentos existentes (PRD, Arquitetura, Spec, Plano)
 4. **Atualize os documentos afetados** antes de implementar
 5. **Implemente** seguindo as tarefas do CR
 6. **Valide** os critérios de aceite do CR + checklist "Done When Universal"
 7. **Verifique o build** antes de commitar
-8. **Commit e push** referenciando o CR: `feat: CR-XXX - descricao`
+8. **Merge e push**: `git checkout master && git merge feat/CR-XXX-slug --no-ff && git branch -d feat/CR-XXX-slug && git push origin master`
 
 **Nunca faça alterações direto no código sem antes documentar o CR.**
 

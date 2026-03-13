@@ -926,6 +926,18 @@ def add_prompt_inicio(doc):
         "para configurar el flujo SDD en un nuevo proyecto. Adapta los campos entre corchetes."
     )
 
+    add_info_box(
+        doc,
+        "Atajo recomendado - Skill /feature (Claude Code)\n\n"
+        "Si usas Claude Code con la skill /feature configurada, no tenes que copiar "
+        "los prompts de abajo manualmente. Basta con invocar /feature en una nueva conversacion: "
+        "la skill lee el CLAUDE.md, determina automaticamente el modo (Nuevo Proyecto o Change Request), "
+        "crea los documentos, abre la branch, implementa, hace revision de seguridad, "
+        "valida el build y realiza el commit/merge, todo sin intervencion manual.\n\n"
+        "Los prompts a continuacion son utiles para entender el proceso en detalle o para ambientes "
+        "donde la skill no esta configurada.",
+        "E8DAEF"
+    )
     add_spacer(doc)
     add_heading(doc, "Prompt de Setup Inicial", 3, COR_SUBTIT)
 
@@ -1001,6 +1013,14 @@ Necesito implementar un nuevo cambio en el proyecto [NOMBRE DEL PROYECTO].
         COR_DESTAQUE
     )
     add_spacer(doc)
+    add_info_box(
+        doc,
+        "Alternativa con skill: En Claude Code, usa /feature en lugar de este prompt. "
+        "La skill ejecuta el flujo de CR completo de forma automatizada: creacion del documento CR, "
+        "branch, implementacion, revision de seguridad, build y commit.",
+        "E8DAEF"
+    )
+    add_spacer(doc)
 
 
 # ─────────────────────────────────────────────
@@ -1074,6 +1094,7 @@ def add_referencia_rapida(doc):
         ("Voy a implementar una nueva feature",    "Spec + Plan (o CR si ya existe)",     "03-template-spec.md",           COR_SPEC),
         ("Voy a iniciar un nuevo proyecto",        "CLAUDE.md + todos los documentos",    "CLAUDE-template.md + 01-04",    "5D3FD3"),
         ("Voy a hacer deploy",                     "Deploy Guide",                        "05-DEPLOY-GUIDE.md",            "1A5276"),
+        ("Quiero automatizar el pipeline SDD",     "Skill /feature (Claude Code)",        ".claude/skills/feature/",       "6C3483"),
     ]
 
     t = doc.add_table(rows=1 + len(situacoes), cols=3)
@@ -1126,14 +1147,14 @@ def add_referencia_rapida(doc):
     add_heading(doc, "Flujo CR en 8 Pasos", 3, COR_SUBTIT)
 
     passos_cr = [
-        "Crear el CR en docs/changes/CR-[XXX]-[slug].md usando el template",
+        "Crear el CR + branch: git checkout -b feat/CR-[XXX]-[slug]",
         "Completar todas las secciones: resumen, AS-IS/TO-BE, impacto, tareas, criterios de aceptacion",
         "Evaluar el impacto en los documentos: que secciones de PRD, Spec, Arquitectura, Plan son afectadas",
         "Actualizar los documentos afectados ANTES de implementar",
         "Implementar las tareas del CR de a una por vez",
         "Validar los criterios de aceptacion del CR + checklist Done When Universal",
         "Verificar el build: npx tsc --noEmit (frontend) + tests pasando (backend)",
-        "Commit y push referenciando el CR: feat: CR-XXX - descripcion",
+        "Merge y push: git merge feat/CR-XXX --no-ff + git push origin master",
     ]
 
     t3 = doc.add_table(rows=len(passos_cr), cols=2)

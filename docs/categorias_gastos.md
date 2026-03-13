@@ -23,6 +23,7 @@
 -   Manutenção do veículo
 -   Seguro do veículo
 -   Multas
+-   IPVA
 
 ## 3. Moradia
 
@@ -36,6 +37,7 @@
 -   Faxina
 -   Móveis
 -   Decoração
+-   IPTU
 
 ## 4. Compras Pessoais
 
@@ -99,6 +101,8 @@
 -   Taxas
 -   Anuidade de cartão
 -   Parcelas
+-   Impostos
+-   Empréstimo
 
 ## 11. Presentes e Doações
 

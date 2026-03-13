@@ -15,7 +15,7 @@
 |------|-------|
 | Hosting | Railway (container Docker) |
 | Banco de dados | PostgreSQL (Railway add-on) |
-| Build trigger | Push para branch `master` (auto-deploy) |
+| Build trigger | Merge de branch CR em `master` + push (auto-deploy) |
 | Container base | `python:3.12-slim` (backend) + `node:20-alpine` (frontend build) |
 | Porta | 8000 |
 
@@ -23,19 +23,21 @@
 
 ```mermaid
 graph LR
-    A[git push master] --> B[Railway detecta push]
-    B --> C[Docker build multi-stage]
-    C --> D[Stage 1: npm ci + npm run build]
-    D --> E[Stage 2: pip install + copy static]
-    E --> F[Container start]
-    F --> G[alembic upgrade head]
-    G --> H[uvicorn app.main:app]
-    H --> I[App online :8000]
+    A[feat/CR-XXX branch] --> B[git merge master --no-ff]
+    B --> C[git push origin master]
+    C --> D[Railway detecta push]
+    D --> E[Docker build multi-stage]
+    E --> F[Stage 1: npm ci + npm run build]
+    F --> G[Stage 2: pip install + copy static]
+    G --> H[Container start]
+    H --> I[alembic upgrade head]
+    I --> J[uvicorn app.main:app]
+    J --> K[App online :8000]
 ```
 
 **Detalhamento:**
 
-1. Push para `master` aciona build automatico no Railway
+1. Merge da branch do CR em `master` + push aciona build automatico no Railway
 2. **Stage 1 (frontend):** Node 20 Alpine instala dependencias (`npm ci`) e compila React (`npm run build`), gerando `/app/frontend/dist`
 3. **Stage 2 (backend):** Python 3.12 slim instala `requirements.txt`, copia codigo backend e frontend compilado para `/static`
 4. **Container start:** Executa `alembic upgrade head` (migrations pendentes) seguido de `uvicorn` (servidor)
@@ -118,7 +120,7 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 
 ### 3.1 Para qualquer deploy
 
-- [ ] Codigo commitado e push feito para `master`
+- [ ] Branch do CR mergeada em `master` e push feito (`git push origin master`)
 - [ ] App roda localmente sem erros (`uvicorn app.main:app --reload`)
 - [ ] Frontend compila sem erros (`npm run build`)
 - [ ] Testes backend passando (`pytest`)
