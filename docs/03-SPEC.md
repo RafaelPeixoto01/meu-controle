@@ -4086,7 +4086,7 @@ Requer autenticacao JWT. Dados filtrados por `user_id`.
 ### Regras de Negocio
 
 - RN-D01: Despesas planejadas e gastos diarios sao separados nos graficos (donut charts distintos)
-- RN-D02: KPIs combinam ambos os tipos para saldo livre e percentual de comprometimento
+- RN-D02: KPIs: Saldo Livre, % Comprometimento, Gastos Planejados, Gastos Diarios
 - RN-D03: Evolucao mensal mostra 6 meses (atual + 5 anteriores) com 3 series separadas
 - RN-D04: Meses historicos usam queries agregadas (SUM) sem triggering de auto-generate (RF-06)
 - RN-D05: Despesas sem categoria (pre-CR-016) sao agrupadas como "Outros"

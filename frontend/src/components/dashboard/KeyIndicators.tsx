@@ -1,17 +1,17 @@
-import { Wallet, TrendingDown, CreditCard, ShoppingCart } from "lucide-react";
+import { Wallet, TrendingDown, ClipboardList, ShoppingCart } from "lucide-react";
 import { formatBRL } from "../../utils/format";
 
 interface KeyIndicatorsProps {
   saldoLivre: number;
   percentualComprometimento: number;
-  totalParcelasFuturas: number;
+  totalDespesasPlanejadas: number;
   totalGastosDiarios: number;
 }
 
 export default function KeyIndicators({
   saldoLivre,
   percentualComprometimento,
-  totalParcelasFuturas,
+  totalDespesasPlanejadas,
   totalGastosDiarios,
 }: KeyIndicatorsProps) {
   const isPositive = saldoLivre >= 0;
@@ -52,16 +52,16 @@ export default function KeyIndicators({
         </div>
       </div>
 
-      {/* Parcelas Futuras */}
+      {/* Gastos Planejados */}
       <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <div className="p-2 rounded-xl bg-accent-light">
-            <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
+            <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
           </div>
-          <span className="text-xs sm:text-sm font-medium text-text-muted">Parcelas Futuras</span>
+          <span className="text-xs sm:text-sm font-medium text-text-muted">Gastos Planejados</span>
         </div>
         <div className="text-lg sm:text-2xl font-extrabold tabular-nums text-accent">
-          {formatBRL(totalParcelasFuturas)}
+          {formatBRL(totalDespesasPlanejadas)}
         </div>
       </div>
 
