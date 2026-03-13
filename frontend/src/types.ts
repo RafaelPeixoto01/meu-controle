@@ -146,6 +146,40 @@ export interface CategoriesData {
   metodos_pagamento: string[];
 }
 
+// ========== Dashboard Types (CR-019) ==========
+
+export interface CategoryBreakdown {
+  categoria: string;
+  total: number;
+  percentual: number;
+  count: number;
+}
+
+export interface MonthEvolutionPoint {
+  mes_referencia: string;
+  total_despesas: number;
+  total_receitas: number;
+  total_gastos_diarios: number;
+  saldo_livre: number;
+}
+
+export interface DashboardData {
+  mes_referencia: string;
+  total_receitas: number;
+  total_despesas_planejadas: number;
+  total_gastos_diarios: number;
+  total_despesas_geral: number;
+  saldo_livre: number;
+  percentual_comprometimento: number;
+  total_parcelas_futuras: number;
+  total_pago: number;
+  total_pendente: number;
+  total_atrasado: number;
+  categorias_planejadas: CategoryBreakdown[];
+  categorias_diarios: CategoryBreakdown[];
+  evolucao: MonthEvolutionPoint[];
+}
+
 // ========== Auth Types (CR-002) ==========
 
 export interface User {

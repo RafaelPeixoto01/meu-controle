@@ -255,3 +255,44 @@ class InstallmentsResponse(BaseModel):
     total_pago: float
     total_pendente: float
     total_atrasado: float
+
+
+# ========== Dashboard Schemas (CR-019) ==========
+
+class CategoryBreakdown(BaseModel):
+    """Breakdown de despesas por categoria para graficos donut."""
+    categoria: str
+    total: float
+    percentual: float
+    count: int
+
+
+class MonthEvolutionPoint(BaseModel):
+    """Ponto de dados para grafico de evolucao mensal (6 meses)."""
+    mes_referencia: date
+    total_despesas: float
+    total_receitas: float
+    total_gastos_diarios: float
+    saldo_livre: float
+
+
+class DashboardResponse(BaseModel):
+    """Resposta completa do dashboard para um mes."""
+    mes_referencia: date
+    # Indicadores-chave
+    total_receitas: float
+    total_despesas_planejadas: float
+    total_gastos_diarios: float
+    total_despesas_geral: float
+    saldo_livre: float
+    percentual_comprometimento: float
+    total_parcelas_futuras: float
+    # Status breakdown (apenas planejadas)
+    total_pago: float
+    total_pendente: float
+    total_atrasado: float
+    # Composicao por categoria — separados
+    categorias_planejadas: list[CategoryBreakdown]
+    categorias_diarios: list[CategoryBreakdown]
+    # Evolucao 6 meses
+    evolucao: list[MonthEvolutionPoint]

@@ -12,6 +12,7 @@ import type {
   DailyExpense,
   CategoriesData,
   InstallmentsResponse,
+  DashboardData,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -78,6 +79,15 @@ export function fetchMonthlySummary(
   month: number
 ): Promise<MonthlySummary> {
   return request<MonthlySummary>(`/months/${year}/${month}`);
+}
+
+// ========== Dashboard (CR-019) ==========
+
+export function fetchDashboard(
+  year: number,
+  month: number
+): Promise<DashboardData> {
+  return request<DashboardData>(`/dashboard/${year}/${month}`);
 }
 
 // ========== Expenses ==========
