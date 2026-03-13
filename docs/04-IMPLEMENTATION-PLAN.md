@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.5
-**Data:** 2026-03-12
+**Versao:** 2.6
+**Data:** 2026-03-13
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.6
 **Spec Ref:** 03-SPEC v2.5
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual)
 
 ---
 
@@ -31,6 +31,7 @@
 | CR-011 | Calculadora de Selecao de Despesas                         | CR11-T-01 a CR11-T-07 | Concluido |
 | CR-012 | Melhorias de Responsividade no Frontend                    | CR12-T-01 a CR12-T-07 | Concluido |
 | CR-016 | Categorizacao de Despesas Planejadas (F01)                  | CR16-T-01 a CR16-T-11 | Concluido |
+| CR-019 | Dashboard Visual com Graficos (F02)                            | CR19-T-01 a CR19-T-08 | Concluido |
 
 ---
 
@@ -571,4 +572,19 @@ graph TD
 | CR10-T-05 | SecurityHeadersMiddleware                                       | `backend/app/main.py`                                                                      | CR10-T-04          | X-Content-Type-Options, X-Frame-Options, Referrer-Policy presentes |
 | CR10-T-06 | Startup warnings para env vars opcionais                       | `backend/app/main.py`                                                                      | —                  | Log mostra WARNING se GOOGLE_CLIENT_ID ou SENDGRID_API_KEY ausentes |
 | CR10-T-07 | Atualizar documentos: CR-010, Architecture, Spec, Plano, Deploy | `docs/changes/CR-010-*.md`, `docs/02-ARCHITECTURE.md`, `docs/03-SPEC.md`, `docs/04-IMPLEMENTATION-PLAN.md`, `docs/05-DEPLOY-GUIDE.md`, `CLAUDE.md` | CR10-T-01..06 | Todos os docs refletem as mudancas; versoes incrementadas |
+
+---
+
+## CR-019: Dashboard Visual com Graficos (F02)
+
+| ID         | Tarefa                                                    | Arquivos | Ref | Depende de | Done When |
+|------------|-----------------------------------------------------------|----------|-----|------------|-----------|
+| CR19-T-01  | Backend: schemas, crud (queries agregadas), service, router | schemas.py, crud.py, services.py, routers/dashboard.py, main.py | CR-019 | — | Endpoint retorna DashboardResponse completo |
+| CR19-T-02  | Backend: testes do endpoint dashboard                     | tests/ | CR-019 | CR19-T-01 | Testes passam |
+| CR19-T-03  | Instalar recharts                                         | package.json | CR-019 | — | npm install ok |
+| CR19-T-04  | Frontend: types, API function, hook useDashboard          | types.ts, api.ts, useDashboard.ts | CR-019 | CR19-T-01 | Hook retorna dados tipados |
+| CR19-T-05  | Frontend: componentes visuais                             | dashboard/*.tsx | CR-019 | CR19-T-03, CR19-T-04 | Componentes renderizam |
+| CR19-T-06  | Frontend: DashboardView page                              | DashboardView.tsx | CR-019 | CR19-T-05 | Pagina monta todos os componentes |
+| CR19-T-07  | Frontend: rota e ViewSelector                             | App.tsx, ViewSelector.tsx | CR-019 | CR19-T-06 | Navegacao funciona |
+| CR19-T-08  | Atualizacao de documentacao                               | docs/ | CR-019 | CR19-T-01~07 | Docs refletem mudancas |
 

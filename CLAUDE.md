@@ -219,9 +219,9 @@ Personal Finance/
 │       ├── main.py           # Entry point FastAPI + lifespan
 │       ├── database.py       # Engine SQLAlchemy + SessionLocal
 │       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense
-│       ├── schemas.py        # Pydantic: request/response + auth + daily expense schemas
-│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD
-│       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary
+│       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard schemas
+│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates
+│       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary, dashboard data
 │       ├── categories.py     # EXPENSE_CATEGORIES compartilhadas (CR-005, CR-016) + metodos de pagamento
 │       ├── auth.py           # CR-002: JWT + bcrypt auth module
 │       ├── email_service.py  # CR-002: SendGrid email (password reset)
@@ -231,7 +231,8 @@ Personal Finance/
 │           ├── expenses.py   # CRUD + duplicate (auth required)
 │           ├── incomes.py    # CRUD (auth required)
 │           ├── months.py     # GET visao mensal (auth required)
-│           └── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
+│           ├── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
+│           └── dashboard.py      # CR-019: GET /api/dashboard/{year}/{month} (auth required)
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts        # Proxy /api -> :8000
@@ -241,16 +242,16 @@ Personal Finance/
 │       ├── App.tsx           # Shell com AuthProvider + Routes
 │       ├── index.css         # Tailwind v4 (@import + @theme)
 │       ├── vite-env.d.ts     # Vite client types
-│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005)
+│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019)
 │       ├── utils/            # format.ts (formatBRL, formatDateFull), date.ts
 │       ├── services/
-│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses API
+│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses + dashboard API
 │       │   └── authApi.ts    # CR-002: auth API functions
 │       ├── contexts/
 │       │   └── AuthContext.tsx  # CR-002: auth state management
-│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses
-│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector
-│       └── pages/            # MonthlyView, DailyExpensesView, Login, Register, ForgotPassword, ResetPassword, Profile
+│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard
+│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector, dashboard/
+│       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, Login, Register, ForgotPassword, ResetPassword, Profile
 ├── CLAUDE.md
 └── .gitignore
 ```
@@ -287,6 +288,7 @@ Personal Finance/
 | State/Fetch    | TanStack Query              | 5.62+     |
 | Routing        | react-router-dom            | 7.x       |
 | Auth (FE)      | jwt-decode                  | 4.x       |
+| Graficos       | recharts                    | 2.x       |
 | HTTP Client    | fetch nativo                | —         |
 | Backend        | Python + FastAPI            | 0.115     |
 | Auth (BE)      | python-jose + passlib/bcrypt| 3.3/1.7   |
@@ -331,9 +333,10 @@ Personal Finance/
 - CR-016: Categorizacao de Despesas Planejadas (F01) — campos categoria/subcategoria no modelo Expense, selects cascading no form, coluna na tabela (concluido)
 - CR-017: Remover opcao Duplicar dos gastos planejados — botao Duplicar removido da tabela de despesas, codigo morto limpo (concluido)
 - CR-018: Sincronizar categories.py com categorias_gastos.md — adicionar IPVA, IPTU, Impostos e Emprestimo (concluido)
+- CR-019: Dashboard Visual com Graficos (F02) — endpoint /api/dashboard, KPI cards, donut charts por categoria (planejadas e diarios separados), bar chart evolucao 6 meses, status breakdown, recharts (concluido)
 
 ### Última Tarefa Implementada
-- CR-018: Sincronizar categories.py com categorias_gastos.md — IPVA (Transporte), IPTU (Moradia), Impostos e Emprestimo (Financeiro) adicionados (concluido)
+- CR-019: Dashboard Visual com Graficos (F02) — endpoint dedicado com agregacao server-side, 4 KPI cards, 2 donut charts separados, bar chart 3 series, status breakdown, ViewSelector com tab Dashboard (concluido)
 
 ---
 
