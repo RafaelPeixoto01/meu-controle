@@ -101,6 +101,32 @@ def pending_installment(db, test_user):
     return p
 
 
+@pytest.fixture
+def installments_without_parcela_atual(db, test_user):
+    """
+    CR-022: Parcelas sem parcela_atual preenchido (NULL).
+    Simula dados reais onde usuario nao informou numero da parcela.
+    - Emprestimo: 10x, 4 pagas (status PAGO), 6 pendentes
+    """
+    parcelas = []
+    for i in range(1, 11):
+        parcelas.append(Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Emprestimo",
+            valor=500.00,
+            vencimento=date(2026, 3, 15),
+            parcela_atual=None,  # Campo nao preenchido
+            parcela_total=10,
+            recorrente=False,
+            status=ExpenseStatus.PAGO.value if i <= 4 else ExpenseStatus.PENDENTE.value,
+        ))
+    for p in parcelas:
+        db.add(p)
+    db.commit()
+    return parcelas
+
+
 @patch("app.services.date")
 class TestInstallmentProjection:
     """Testes do servico get_installment_projection."""
@@ -237,3 +263,54 @@ class TestInstallmentProjection:
         projecao = result["projecao_mensal"]
         expected = sum(projecao[i]["valor_liberado"] for i in range(1, 4))
         assert result["liberacao_proximos_3_meses"] == expected
+
+    def test_parcela_atual_none_fallback_to_paid_count(
+        self, mock_date, db, test_user, income_march, installments_without_parcela_atual
+    ):
+        """CR-022: Quando parcela_atual e NULL, inferir progresso por parcelas PAGO."""
+        self._mock_today(mock_date)
+        result = get_installment_projection(db, test_user.id)
+
+        # 4 parcelas pagas de 10 → 6 restantes, grupo deve estar ativo
+        assert result["qtd_parcelas_ativas"] == 1
+        assert result["total_comprometido_mes_atual"] == 500.0
+        assert result["total_restante_todas_parcelas"] == 3000.0  # 6 * 500
+
+        # Deve ter badge Ativa (6 restantes > 2)
+        assert len(result["parcelas"]) == 1
+        assert result["parcelas"][0]["status_badge"] == "Ativa"
+        assert result["parcelas"][0]["parcela_atual"] == 4  # inferido das pagas
+
+        # Percentual renda = 500 / 10000 * 100 = 5%
+        assert result["percentual_renda_comprometida"] == 5.0
+
+    def test_parcela_atual_none_all_unpaid_stays_pendente(
+        self, mock_date, db, test_user
+    ):
+        """CR-022: Parcelas com parcela_atual=None e NENHUMA paga = Pendente."""
+        self._mock_today(mock_date)
+        # Criar parcelas sem nenhuma paga
+        parcelas = []
+        for _ in range(5):
+            parcelas.append(Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 3, 1),
+                nome="Futuro",
+                valor=200.00,
+                vencimento=date(2026, 3, 15),
+                parcela_atual=None,
+                parcela_total=5,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            ))
+        for p in parcelas:
+            db.add(p)
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        # Nenhuma paga → continua Pendente → KPIs zerados
+        assert result["qtd_parcelas_ativas"] == 0
+        assert result["total_comprometido_mes_atual"] == 0.0
+        assert len(result["parcelas"]) == 1
+        assert result["parcelas"][0]["status_badge"] == "Pendente"
