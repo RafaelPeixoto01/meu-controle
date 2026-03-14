@@ -1,10 +1,10 @@
-# Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios + Dashboard)
+# Especificacao Tecnica — Meu Controle (Fase 1 + 3 + Gastos Diarios + Dashboard + Projecao de Parcelas)
 
-**Versao:** 2.6
-**Data:** 2026-03-13
+**Versao:** 2.7
+**Data:** 2026-03-14
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.6
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-007 (Consulta Parcelas), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-021 (Visao Consolidada de Parcelas Futuras)
 
 ---
 
@@ -4100,3 +4100,77 @@ Requer autenticacao JWT. Dados filtrados por `user_id`.
 - Componentes: KeyIndicators, CategoryDonutChart (reutilizavel), EvolutionBarChart, StatusBreakdown
 - Biblioteca de graficos: recharts (SVG, React nativo)
 - Layout responsivo: 2 colunas desktop, empilhado mobile
+
+---
+
+## Projecao de Parcelas — Visao Consolidada (CR-021, F03)
+
+### Endpoint
+
+**GET /api/expenses/installments/projection?months=12** — Retorna projecao de parcelas futuras com KPIs e dados mensais.
+
+Requer autenticacao JWT. Dados filtrados por `user_id`. Parametro `months` define horizonte de projecao (default: 12, max: 24).
+
+### Response Schema — InstallmentProjectionResponse
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| resumo | ProjectionSummary | KPIs consolidados |
+| projecao_mensal | list[MonthlyProjection] | Projecao mes a mes |
+| parcelas | list[InstallmentDetail] | Lista de parcelas com detalhes |
+
+**ProjectionSummary:**
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| total_comprometido_mes_atual | float | Soma das parcelas ativas no mes atual |
+| total_restante_todas_parcelas | float | Valor restante total de todas as parcelas |
+| quantidade_parcelas_ativas | int | Numero de parcelas em andamento |
+| proxima_a_encerrar | object | `{ descricao: str, termina_em: str }` ou null |
+| liberacao_proximos_3_meses | float | Valor mensal liberado nos proximos 3 meses |
+| percentual_comprometimento | float | % da renda comprometida com parcelas |
+
+**MonthlyProjection:**
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| mes | str | Formato "YYYY-MM" |
+| total_comprometido | float | Soma das parcelas ativas naquele mes |
+| parcelas_ativas | int | Quantidade de parcelas ativas |
+| parcelas_encerrando | list[str] | Nomes das parcelas que encerram naquele mes |
+| valor_liberado | float | Diferenca vs mes anterior |
+| percentual_comprometimento | float | % da renda comprometida |
+
+**InstallmentDetail:**
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| descricao | str | Nome da parcela |
+| valor_mensal | float | Valor da parcela mensal |
+| parcela_atual | int | Parcela atual (0 = pendente) |
+| parcela_total | int | Total de parcelas |
+| valor_restante | float | Valor restante |
+| termina_em | str ou null | Mes/ano de encerramento (null se pendente) |
+| status | str | "encerrando", "ativa" ou "pendente" |
+
+### Regras de Negocio
+
+- RN-P01: Projecao calculada em runtime, sem migration ou dados persistidos
+- RN-P02: Parcelas pendentes (parcela_atual = 0) aparecem com badge "Pendente" e estilo diferenciado
+- RN-P03: Parcelas nas ultimas 2 prestacoes recebem badge "Encerrando"
+- RN-P04: Renda de referencia e a soma das receitas do mes atual do usuario
+- RN-P05: Tabela ordenada por data de encerramento ascendente (quem termina primeiro no topo)
+- RN-P06: Grafico de barras empilhadas mostra cada parcela como segmento colorido
+- RN-P07: Timeline Gantt mostra inicio e fim de cada parcela, com estilo tracejado para pendentes
+- RN-P08: Toggle alterna entre visualizacao de barras empilhadas e Gantt
+
+### Frontend
+
+- Integrado na aba Parcelas (InstallmentsView), reorganizada em 3 secoes
+- Secao 1 (topo): ProjectionSummaryCards — 6 KPI cards (total mensal, total restante, qtd parcelas, proxima a encerrar, liberacao 3 meses, % comprometimento com cor semaforica)
+- Secao 2 (centro): ProjectionStackedChart (barras empilhadas 12 meses) + ProjectionGantt (timeline horizontal), alternados via ProjectionChartToggle
+- Secao 3 (inferior): Tabela de parcelas aprimorada com coluna "Termina em", badges de status e ordenacao por encerramento
+- Hook: useInstallmentProjection (TanStack Query, staleTime 5min)
+- Componentes em `frontend/src/components/installments/`
+- Biblioteca de graficos: recharts (reutiliza dependencia do CR-019)
+- Layout responsivo: empilhado em mobile

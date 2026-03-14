@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.6
-**Data:** 2026-03-13
+**Versao:** 2.7
+**Data:** 2026-03-14
 **PRD Ref:** 01-PRD v2.2
 **Arquitetura Ref:** 02-ARCHITECTURE v2.6
-**Spec Ref:** 03-SPEC v2.5
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados)
+**Spec Ref:** 03-SPEC v2.6
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras)
 
 ---
 
@@ -33,6 +33,7 @@
 | CR-016 | Categorizacao de Despesas Planejadas (F01)                  | CR16-T-01 a CR16-T-11 | Concluido |
 | CR-019 | Dashboard Visual com Graficos (F02)                            | CR19-T-01 a CR19-T-08 | Concluido |
 | CR-020 | Card Gastos Planejados no Dashboard                            | CR20-T-01 a CR20-T-04 | Concluido |
+| CR-021 | Visao Consolidada de Parcelas Futuras (F03)                        | CR21-T-01 a CR21-T-08 | Concluido |
 
 ---
 
@@ -588,4 +589,24 @@ graph TD
 | CR19-T-06  | Frontend: DashboardView page                              | DashboardView.tsx | CR-019 | CR19-T-05 | Pagina monta todos os componentes |
 | CR19-T-07  | Frontend: rota e ViewSelector                             | App.tsx, ViewSelector.tsx | CR-019 | CR19-T-06 | Navegacao funciona |
 | CR19-T-08  | Atualizacao de documentacao                               | docs/ | CR-019 | CR19-T-01~07 | Docs refletem mudancas |
+
+---
+
+## CR-021: Visao Consolidada de Parcelas Futuras (F03)
+
+> Ref: `/docs/changes/CR-021-visao-consolidada-parcelas-futuras.md`
+>
+> Evolucao da aba Parcelas com projecao inteligente: 6 KPI cards, grafico de barras empilhadas 12 meses,
+> timeline Gantt, tabela aprimorada com badges e data de encerramento. Sem migration (dados calculados em runtime).
+
+| ID         | Tarefa                                                    | Arquivos | Ref | Depende de | Done When |
+|------------|-----------------------------------------------------------|----------|-----|------------|-----------|
+| CR21-T-01  | Backend: servico de projecao em services.py               | services.py | CR-021 | — | Funcao calcula projecao mensal com KPIs |
+| CR21-T-02  | Backend: schemas Pydantic para projecao                   | schemas.py | CR-021 | CR21-T-01 | InstallmentProjectionResponse tipado |
+| CR21-T-03  | Backend: endpoint GET /api/expenses/installments/projection | routers/expenses.py | CR-021 | CR21-T-01, CR21-T-02 | Endpoint retorna JSON da projecao |
+| CR21-T-04  | Backend: testes do servico de projecao                    | tests/test_installment_projection.py | CR-021 | CR21-T-01 | Cenarios cobertos: parcelas terminando, pendentes, edge cases |
+| CR21-T-05  | Frontend: types, API function, hook useInstallmentProjection | types.ts, api.ts, useInstallmentProjection.ts | CR-021 | CR21-T-03 | Hook retorna dados tipados |
+| CR21-T-06  | Frontend: componentes visuais (cards, chart, gantt, toggle) | components/installments/*.tsx | CR-021 | CR21-T-05 | ProjectionSummaryCards, ProjectionStackedChart, ProjectionGantt, ProjectionChartToggle renderizam |
+| CR21-T-07  | Frontend: reorganizar InstallmentsView (3 secoes)         | pages/InstallmentsView.tsx | CR-021 | CR21-T-06 | Cards + grafico (com toggle Gantt) + tabela aprimorada |
+| CR21-T-08  | Atualizacao de documentacao                               | docs/, CLAUDE.md | CR-021 | CR21-T-01~07 | Docs refletem mudancas |
 
