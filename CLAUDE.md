@@ -339,10 +339,10 @@ Personal Finance/
 - CR-019: Dashboard Visual com Graficos (F02) — endpoint /api/dashboard, KPI cards, donut charts por categoria (planejadas e diarios separados), bar chart evolucao 6 meses, status breakdown, recharts (concluido)
 - CR-020: Trocar card "Parcelas Futuras" por "Gastos Planejados" no Dashboard — KPI card exibe total_despesas_planejadas ao inves de total_parcelas_futuras (concluido)
 - CR-021: Visão Consolidada de Parcelas Futuras (F03) — projeção de parcelas, 6 KPI cards, gráfico de barras empilhadas 12 meses, timeline Gantt, tabela aprimorada com badges e data de encerramento (concluido)
-- CR-022: Fix KPI cards zerados quando parcela_atual é NULL — fallback para contagem de parcelas PAGO (concluido)
+- CR-022: Fix KPI cards zerados na página Compras Parceladas — progresso calculado por contagem de parcelas PAGO em vez de max(parcela_atual) (concluido)
 
 ### Última Tarefa Implementada
-- CR-022: Fix KPI cards zerados quando parcela_atual é NULL (concluido)
+- CR-022: Fix KPI cards zerados na página Compras Parceladas (concluido)
 
 ---
 

@@ -28,53 +28,55 @@ def income_march(db, test_user):
 @pytest.fixture
 def multiple_installments(db, test_user):
     """
-    Cenario com 3 parcelas ativas em estagios diferentes:
-    - Notebook: parcela 8 de 10 (faltam 2 → Encerrando)
-    - Celular: parcela 3 de 12 (faltam 9 → Ativa)
-    - Sofa: parcela 1 de 6 (faltam 5 → Ativa)
+    Cenario com 3 parcelas ativas em estagios diferentes.
+    Todas as parcelas criadas upfront (como a API real faz).
+    - Notebook: 10x, 8 pagas, 2 restantes → Encerrando
+    - Celular: 12x, 3 pagas, 9 restantes → Ativa
+    - Sofa: 6x, 1 paga, 5 restantes → Ativa
     """
     parcelas = []
 
-    # Notebook: 10x, atualmente em 8/10 (mes marco 2026)
-    for i in range(1, 9):
+    # Notebook: 10x, 8 pagas + 2 pendentes
+    for i in range(1, 11):
         parcelas.append(Expense(
             user_id=test_user.id,
-            mes_referencia=date(2026, 3 - 8 + i, 1) if (3 - 8 + i) > 0 else date(2025, 12 + (3 - 8 + i), 1),
+            mes_referencia=date(2026, 3, 1),
             nome="Notebook",
             valor=500.00,
             vencimento=date(2026, 3, 15),
             parcela_atual=i,
             parcela_total=10,
             recorrente=False,
-            status=ExpenseStatus.PAGO.value if i < 8 else ExpenseStatus.PENDENTE.value,
+            status=ExpenseStatus.PAGO.value if i <= 8 else ExpenseStatus.PENDENTE.value,
         ))
 
-    # Celular: 12x, atualmente em 3/12 (mes marco 2026)
-    for i in range(1, 4):
+    # Celular: 12x, 3 pagas + 9 pendentes
+    for i in range(1, 13):
         parcelas.append(Expense(
             user_id=test_user.id,
-            mes_referencia=date(2026, i, 1),
+            mes_referencia=date(2026, 3, 1),
             nome="Celular",
             valor=300.00,
             vencimento=date(2026, 3, 10),
             parcela_atual=i,
             parcela_total=12,
             recorrente=False,
-            status=ExpenseStatus.PAGO.value if i < 3 else ExpenseStatus.PENDENTE.value,
+            status=ExpenseStatus.PAGO.value if i <= 3 else ExpenseStatus.PENDENTE.value,
         ))
 
-    # Sofa: 6x, atualmente em 1/6 (mes marco 2026)
-    parcelas.append(Expense(
-        user_id=test_user.id,
-        mes_referencia=date(2026, 3, 1),
-        nome="Sofa",
-        valor=400.00,
-        vencimento=date(2026, 3, 20),
-        parcela_atual=1,
-        parcela_total=6,
-        recorrente=False,
-        status=ExpenseStatus.PENDENTE.value,
-    ))
+    # Sofa: 6x, 1 paga + 5 pendentes
+    for i in range(1, 7):
+        parcelas.append(Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Sofa",
+            valor=400.00,
+            vencimento=date(2026, 3, 20),
+            parcela_atual=i,
+            parcela_total=6,
+            recorrente=False,
+            status=ExpenseStatus.PAGO.value if i <= 1 else ExpenseStatus.PENDENTE.value,
+        ))
 
     for p in parcelas:
         db.add(p)
@@ -84,29 +86,31 @@ def multiple_installments(db, test_user):
 
 @pytest.fixture
 def pending_installment(db, test_user):
-    """Parcela pendente (0 de Y) — nao iniciada."""
-    p = Expense(
-        user_id=test_user.id,
-        mes_referencia=date(2026, 3, 1),
-        nome="Emprestimo Itau",
-        valor=2700.00,
-        vencimento=date(2026, 3, 15),
-        parcela_atual=0,
-        parcela_total=60,
-        recorrente=False,
-        status=ExpenseStatus.PENDENTE.value,
-    )
-    db.add(p)
+    """Parcelas pendentes (nenhuma paga) — nao iniciada."""
+    parcelas = []
+    for i in range(1, 4):
+        parcelas.append(Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Emprestimo Itau",
+            valor=2700.00,
+            vencimento=date(2026, 3, 15),
+            parcela_atual=i,
+            parcela_total=3,
+            recorrente=False,
+            status=ExpenseStatus.PENDENTE.value,
+        ))
+    for p in parcelas:
+        db.add(p)
     db.commit()
-    return p
+    return parcelas
 
 
 @pytest.fixture
-def installments_without_parcela_atual(db, test_user):
+def installments_all_upfront(db, test_user):
     """
-    CR-022: Parcelas sem parcela_atual preenchido (NULL).
-    Simula dados reais onde usuario nao informou numero da parcela.
-    - Emprestimo: 10x, 4 pagas (status PAGO), 6 pendentes
+    CR-022: Parcelas criadas upfront (todas de uma vez, como a API real faz).
+    - Emprestimo: 10x, 4 pagas (PAGO), 6 pendentes
     """
     parcelas = []
     for i in range(1, 11):
@@ -116,7 +120,7 @@ def installments_without_parcela_atual(db, test_user):
             nome="Emprestimo",
             valor=500.00,
             vencimento=date(2026, 3, 15),
-            parcela_atual=None,  # Campo nao preenchido
+            parcela_atual=i,
             parcela_total=10,
             recorrente=False,
             status=ExpenseStatus.PAGO.value if i <= 4 else ExpenseStatus.PENDENTE.value,
@@ -196,11 +200,10 @@ class TestInstallmentProjection:
         assert projecao[0]["total_comprometido"] == 1200.0
         assert projecao[0]["parcelas_ativas"] == 3
 
-        # Mes 2 (maio): Notebook encerra neste mes (parcela 10/10)
-        # Notebook tem 2 restantes, entao no offset 1 ela esta ativa, no offset 2 ela encerrara
+        # Notebook tem 2 restantes, encerrando no offset 1
         assert "Notebook" in projecao[1]["parcelas_encerrando"]
 
-        # Apos Notebook encerrar, total deve ser 700 (300 + 400)
+        # Apos Notebook encerrar (offset 2), total = 300 + 400 = 700
         assert projecao[2]["total_comprometido"] == 700.0
 
     def test_valor_liberado(self, mock_date, db, test_user, income_march, multiple_installments):
@@ -264,10 +267,10 @@ class TestInstallmentProjection:
         expected = sum(projecao[i]["valor_liberado"] for i in range(1, 4))
         assert result["liberacao_proximos_3_meses"] == expected
 
-    def test_parcela_atual_none_fallback_to_paid_count(
-        self, mock_date, db, test_user, income_march, installments_without_parcela_atual
+    def test_upfront_installments_kpis(
+        self, mock_date, db, test_user, income_march, installments_all_upfront
     ):
-        """CR-022: Quando parcela_atual e NULL, inferir progresso por parcelas PAGO."""
+        """CR-022: Parcelas criadas upfront devem ter KPIs corretos via contagem PAGO."""
         self._mock_today(mock_date)
         result = get_installment_projection(db, test_user.id)
 

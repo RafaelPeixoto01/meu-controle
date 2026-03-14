@@ -376,36 +376,30 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         if not installments:
             continue
 
-        # Encontrar maior parcela_atual no grupo
-        max_parcela_atual = max(
-            (inst.parcela_atual or 0) for inst in installments
-        )
         parcela_total = group["parcela_total"]
 
         # Valor mensal = valor da primeira parcela (todas tem mesmo valor)
         valor_mensal = float(installments[0].valor)
 
-        # CR-022: Fallback quando parcela_atual nao esta preenchido —
-        # inferir progresso contando parcelas com status PAGO
-        if max_parcela_atual == 0:
-            from app.models import ExpenseStatus
-            num_paid = sum(
-                1 for inst in installments
-                if inst.status == ExpenseStatus.PAGO.value
-            )
-            max_parcela_atual = num_paid
+        # CR-022: Determinar progresso pela contagem de parcelas PAGO,
+        # nao por max(parcela_atual). A API cria todas as N parcelas
+        # de uma vez, entao max(parcela_atual) == parcela_total sempre.
+        from app.models import ExpenseStatus
+        num_paid = sum(
+            1 for inst in installments
+            if inst.status == ExpenseStatus.PAGO.value
+        )
+        parcelas_restantes = parcela_total - num_paid
 
-        # Calcular parcelas restantes e mes de termino
-        if max_parcela_atual == 0:
-            # Pendente (nao iniciada, nenhuma parcela paga)
-            parcelas_restantes = parcela_total
+        if parcelas_restantes <= 0:
+            continue  # Realmente concluida (todas pagas)
+
+        if num_paid == 0:
+            # Nenhuma parcela paga → Pendente
             mes_termino = None
             status_badge = "Pendente"
         else:
-            parcelas_restantes = parcela_total - max_parcela_atual
-            if parcelas_restantes <= 0:
-                continue  # Ja concluida
-            # Calcular mes de termino
+            # Calcular mes de termino baseado em parcelas restantes
             mes_termino = mes_atual
             for _ in range(parcelas_restantes):
                 mes_termino = get_next_month(mes_termino)
@@ -414,7 +408,7 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         parcelas_info.append({
             "nome": group["nome"],
             "valor_mensal": valor_mensal,
-            "parcela_atual": max_parcela_atual,
+            "parcela_atual": num_paid,
             "parcela_total": parcela_total,
             "parcelas_restantes": parcelas_restantes,
             "mes_termino": mes_termino,

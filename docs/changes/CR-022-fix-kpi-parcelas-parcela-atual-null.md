@@ -1,6 +1,6 @@
-# Change Request — CR-022: Fix KPI cards zerados quando parcela_atual é NULL
+# Change Request — CR-022: Fix KPI cards zerados na página Compras Parceladas
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-03-14
 **Status:** Concluído
 **Autor:** Rafael
@@ -10,7 +10,7 @@
 
 ## 1. Resumo da Mudança
 
-Os 6 KPI cards da página "Compras Parceladas" (CR-021) exibem todos os valores zerados (R$ 0,00, 0 parcelas ativas, etc.) mesmo quando existem parcelas "Em andamento" com valores pagos e restantes. A causa é que a lógica de projeção depende exclusivamente do campo `parcela_atual` para determinar progresso, mas esse campo é nullable e não é preenchido em despesas criadas sem informar o número da parcela.
+Os 6 KPI cards da página "Compras Parceladas" (CR-021) exibem todos os valores zerados (R$ 0,00, 0 parcelas ativas, etc.) mesmo quando existem parcelas "Em andamento" com valores pagos e restantes. A causa raiz é que a lógica de projeção usa `max(parcela_atual)` para determinar progresso, mas a API cria TODAS as N parcelas de uma vez (ex: 48 rows para 48x). Como `max(parcela_atual) == parcela_total`, o cálculo resulta em `parcelas_restantes = 0` e o grupo é ignorado.
 
 ---
 
@@ -33,19 +33,20 @@ Em `services.get_installment_projection()`, o progresso de cada grupo de parcela
 
 ```python
 max_parcela_atual = max((inst.parcela_atual or 0) for inst in installments)
-if max_parcela_atual == 0:
-    status_badge = "Pendente"
+parcelas_restantes = parcela_total - max_parcela_atual
+if parcelas_restantes <= 0:
+    continue  # Grupo ignorado
 ```
 
-Quando `parcela_atual` é `None` para todas as parcelas do grupo, `max_parcela_atual = 0` e o grupo recebe `status_badge = "Pendente"`. Todos os KPIs filtram itens "Pendente", resultando em valores zerados.
+A API (`routers/expenses.py`) cria TODAS as N parcelas de uma vez ao criar despesas parceladas. Portanto, `max(parcela_atual) = N = parcela_total`, resultando em `parcelas_restantes = 0` e o grupo sendo ignorado. Todos os KPIs ficam zerados.
 
 ### Problema ou Necessidade
 
-Despesas parceladas criadas sem preencher `parcela_atual` (campo nullable) são tratadas como "não iniciadas" pela projeção, mesmo quando possuem parcelas com status `PAGO`. Isso faz os KPI cards exibirem zeros enquanto a lista de parcelas (que usa `valor_pago/valor_restante`) mostra dados corretos.
+A lógica assume que parcelas são criadas incrementalmente (uma por mês), mas a implementação real cria todas de uma vez. O progresso deve ser determinado pelo status de pagamento (PAGO vs PENDENTE), não pelo número da parcela.
 
 ### Situação Desejada (TO-BE)
 
-Quando `parcela_atual` não está preenchido, o sistema deve inferir o progresso contando parcelas com status `PAGO`. Os KPI cards devem refletir corretamente os valores comprometidos, parcelas ativas e demais métricas.
+O progresso deve ser calculado contando parcelas com status `PAGO`. Os KPI cards devem refletir corretamente os valores comprometidos, parcelas ativas e demais métricas.
 
 ---
 
@@ -55,14 +56,14 @@ Quando `parcela_atual` não está preenchido, o sistema deve inferir o progresso
 
 | #  | Item                           | Antes (AS-IS)                                    | Depois (TO-BE)                                                    |
 |----|--------------------------------|--------------------------------------------------|-------------------------------------------------------------------|
-| 1  | Determinação de progresso      | Usa apenas `parcela_atual`                       | Usa `parcela_atual`; se todos None/0, conta parcelas com PAGO     |
-| 2  | Status badge com parcela_atual=None | Sempre "Pendente"                            | "Ativa" ou "Encerrando" se houver parcelas pagas                  |
+| 1  | Determinação de progresso      | `max(parcela_atual)` — sempre = parcela_total    | Contagem de parcelas com status `PAGO`                            |
+| 2  | Cálculo de restantes           | `parcela_total - max(parcela_atual)` = 0 → skip  | `parcela_total - num_paid` = valor correto                        |
+| 3  | Status badge                   | Grupo ignorado (continue)                        | "Ativa", "Encerrando" ou "Pendente" conforme pagamento            |
 
 ### 4.2 O que NÃO muda
 
 - A lista de parcelas (parte inferior da página) — já funciona corretamente
 - O endpoint `/api/expenses/installments/projection` — mesmo contrato
-- A lógica quando `parcela_atual` está preenchido — comportamento mantido
 - Os gráficos de projeção mensal — usam os mesmos dados corrigidos
 
 ---
@@ -86,8 +87,8 @@ Quando `parcela_atual` não está preenchido, o sistema deve inferir o progresso
 
 | Ação      | Caminho do Arquivo                              | Descrição da Mudança                              |
 |-----------|------------------------------------------------|---------------------------------------------------|
-| Modificar | `backend/app/services.py`                       | Adicionar fallback: contar parcelas PAGO quando parcela_atual é None/0 |
-| Modificar | `backend/tests/test_installment_projection.py`  | Adicionar teste para cenário parcela_atual=None    |
+| Modificar | `backend/app/services.py`                       | Substituir `max(parcela_atual)` por contagem de parcelas PAGO |
+| Modificar | `backend/tests/test_installment_projection.py`  | Atualizar fixtures para cenário upfront + novos testes |
 
 ### 6.2 Banco de Dados
 
