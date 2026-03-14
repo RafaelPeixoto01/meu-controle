@@ -385,9 +385,19 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         # Valor mensal = valor da primeira parcela (todas tem mesmo valor)
         valor_mensal = float(installments[0].valor)
 
+        # CR-022: Fallback quando parcela_atual nao esta preenchido —
+        # inferir progresso contando parcelas com status PAGO
+        if max_parcela_atual == 0:
+            from app.models import ExpenseStatus
+            num_paid = sum(
+                1 for inst in installments
+                if inst.status == ExpenseStatus.PAGO.value
+            )
+            max_parcela_atual = num_paid
+
         # Calcular parcelas restantes e mes de termino
         if max_parcela_atual == 0:
-            # Pendente (nao iniciada)
+            # Pendente (nao iniciada, nenhuma parcela paga)
             parcelas_restantes = parcela_total
             mes_termino = None
             status_badge = "Pendente"
