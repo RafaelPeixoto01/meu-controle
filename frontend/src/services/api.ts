@@ -12,6 +12,7 @@ import type {
   DailyExpense,
   CategoriesData,
   InstallmentsResponse,
+  InstallmentProjectionResponse,
   DashboardData,
 } from "../types";
 
@@ -120,6 +121,10 @@ export function deleteExpense(id: string, deleteAll: boolean = false): Promise<v
 
 export function fetchInstallments(): Promise<InstallmentsResponse> {
   return request<InstallmentsResponse>("/expenses/installments");
+}
+
+export function fetchInstallmentProjection(months = 12): Promise<InstallmentProjectionResponse> {
+  return request<InstallmentProjectionResponse>(`/expenses/installments/projection?months=${months}`);
 }
 
 // CR-016: Expense categories

@@ -348,6 +348,156 @@ def get_dashboard_data(db: Session, mes_referencia: date, user_id: str) -> dict:
     }
 
 
+def get_installment_projection(db: Session, user_id: str, months: int = 12) -> dict:
+    """
+    CR-021: Calcula projecao de parcelas futuras para os proximos N meses.
+    Retorna resumo com KPIs, projecao mensal e lista de parcelas ativas.
+
+    Reutiliza crud.get_installment_expenses_grouped() para dados de parcelas
+    e crud.get_income_total_by_month() para renda do mes atual.
+    """
+    today = date.today()
+    mes_atual = date(today.year, today.month, 1)
+
+    # 1. Buscar grupos de parcelas
+    installments_data = crud.get_installment_expenses_grouped(db, user_id)
+    groups = installments_data["groups"]
+
+    # 2. Buscar renda do mes atual
+    renda_atual = crud.get_income_total_by_month(db, mes_atual, user_id)
+
+    # 3. Extrair info de cada grupo ativo para projecao
+    parcelas_info = []
+    for group in groups:
+        if group["status_geral"] != "Em andamento":
+            continue
+
+        installments = group["installments"]
+        if not installments:
+            continue
+
+        # Encontrar maior parcela_atual no grupo
+        max_parcela_atual = max(
+            (inst.parcela_atual or 0) for inst in installments
+        )
+        parcela_total = group["parcela_total"]
+
+        # Valor mensal = valor da primeira parcela (todas tem mesmo valor)
+        valor_mensal = float(installments[0].valor)
+
+        # Calcular parcelas restantes e mes de termino
+        if max_parcela_atual == 0:
+            # Pendente (nao iniciada)
+            parcelas_restantes = parcela_total
+            mes_termino = None
+            status_badge = "Pendente"
+        else:
+            parcelas_restantes = parcela_total - max_parcela_atual
+            if parcelas_restantes <= 0:
+                continue  # Ja concluida
+            # Calcular mes de termino
+            mes_termino = mes_atual
+            for _ in range(parcelas_restantes):
+                mes_termino = get_next_month(mes_termino)
+            status_badge = "Encerrando" if parcelas_restantes <= 2 else "Ativa"
+
+        parcelas_info.append({
+            "nome": group["nome"],
+            "valor_mensal": valor_mensal,
+            "parcela_atual": max_parcela_atual,
+            "parcela_total": parcela_total,
+            "parcelas_restantes": parcelas_restantes,
+            "mes_termino": mes_termino,
+            "status_badge": status_badge,
+        })
+
+    # 4. Construir projecao mensal
+    projecao_mensal = []
+    prev_total = None
+
+    for offset in range(months):
+        mes_projecao = mes_atual
+        for _ in range(offset):
+            mes_projecao = get_next_month(mes_projecao)
+
+        # Parcelas ativas neste mes (excluir pendentes e ja encerradas)
+        ativas_nomes = []
+        total_comprometido = 0.0
+        encerrando_nomes = []
+
+        for p in parcelas_info:
+            if p["status_badge"] == "Pendente":
+                continue  # Pendentes nao contam no comprometido
+
+            # A parcela esta ativa se ainda tem parcelas restantes > offset
+            if p["parcelas_restantes"] > offset:
+                ativas_nomes.append(p["nome"])
+                total_comprometido += p["valor_mensal"]
+
+                # Encerrando neste mes especifico?
+                if p["parcelas_restantes"] == offset + 1:
+                    encerrando_nomes.append(p["nome"])
+
+        total_comprometido = round(total_comprometido, 2)
+        valor_liberado = round(prev_total - total_comprometido, 2) if prev_total is not None else 0.0
+        pct = round((total_comprometido / renda_atual * 100) if renda_atual > 0 else 0, 1)
+
+        projecao_mensal.append({
+            "mes": mes_projecao,
+            "total_comprometido": total_comprometido,
+            "parcelas_ativas": len(ativas_nomes),
+            "parcelas_encerrando": encerrando_nomes,
+            "valor_liberado": valor_liberado,
+            "percentual_comprometimento": pct,
+        })
+        prev_total = total_comprometido
+
+    # 5. Calcular KPIs de resumo
+    total_comprometido_mes_atual = projecao_mensal[0]["total_comprometido"] if projecao_mensal else 0.0
+    qtd_ativas = len([p for p in parcelas_info if p["status_badge"] != "Pendente"])
+
+    # Total restante = soma de (parcelas_restantes * valor_mensal) para todas as parcelas nao-pendentes
+    total_restante = round(
+        sum(p["parcelas_restantes"] * p["valor_mensal"] for p in parcelas_info if p["status_badge"] != "Pendente"),
+        2
+    )
+
+    # Proxima a encerrar (menor mes_termino entre as nao-pendentes)
+    nao_pendentes_com_termino = [
+        p for p in parcelas_info
+        if p["status_badge"] != "Pendente" and p["mes_termino"] is not None
+    ]
+    proxima_a_encerrar = None
+    if nao_pendentes_com_termino:
+        mais_proxima = min(nao_pendentes_com_termino, key=lambda p: p["mes_termino"])
+        proxima_a_encerrar = {
+            "nome": mais_proxima["nome"],
+            "mes_termino": mais_proxima["mes_termino"],
+        }
+
+    # Liberacao proximos 3 meses = soma de valor_liberado nos meses 1, 2, 3
+    liberacao_3m = round(
+        sum(projecao_mensal[i]["valor_liberado"] for i in range(1, min(4, len(projecao_mensal)))),
+        2
+    )
+
+    pct_renda = round(
+        (total_comprometido_mes_atual / renda_atual * 100) if renda_atual > 0 else 0, 1
+    )
+
+    return {
+        "total_comprometido_mes_atual": total_comprometido_mes_atual,
+        "total_restante_todas_parcelas": total_restante,
+        "qtd_parcelas_ativas": qtd_ativas,
+        "proxima_a_encerrar": proxima_a_encerrar,
+        "liberacao_proximos_3_meses": liberacao_3m,
+        "percentual_renda_comprometida": pct_renda,
+        "renda_atual": renda_atual,
+        "projecao_mensal": projecao_mensal,
+        "parcelas": parcelas_info,
+    }
+
+
 def get_daily_expenses_monthly_summary(db: Session, mes_referencia: date, user_id: str) -> dict:
     """
     CR-005: Constroi a visao mensal de gastos diarios, agrupados por dia.

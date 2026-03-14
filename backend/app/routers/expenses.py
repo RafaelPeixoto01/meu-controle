@@ -5,9 +5,9 @@ from datetime import date
 from app.database import get_db
 from app.auth import get_current_user  # CR-002
 from app.models import Expense, ExpenseStatus, User  # CR-002: User
-from app.schemas import ExpenseCreate, ExpenseUpdate, ExpenseResponse, InstallmentsResponse
+from app.schemas import ExpenseCreate, ExpenseUpdate, ExpenseResponse, InstallmentsResponse, InstallmentProjectionResponse
 from app.categories import EXPENSE_CATEGORIES, get_category_for_subcategory, is_valid_subcategory  # CR-016
-from app import crud
+from app import crud, services
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
 
@@ -27,6 +27,19 @@ def get_installments(
     Retorna todas as despesas parceladas agrupadas por compra.
     """
     return crud.get_installment_expenses_grouped(db, current_user.id)
+
+
+@router.get("/installments/projection", response_model=InstallmentProjectionResponse)
+def get_installment_projection(
+    months: int = 12,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    CR-021: Retorna projecao de parcelas futuras para os proximos N meses.
+    Inclui KPIs de resumo, projecao mensal e lista de parcelas ativas.
+    """
+    return services.get_installment_projection(db, current_user.id, months)
 
 
 # NOTE: duplicate route MUST be before create route to avoid

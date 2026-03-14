@@ -257,6 +257,51 @@ class InstallmentsResponse(BaseModel):
     total_atrasado: float
 
 
+# ========== Installment Projection Schemas (CR-021) ==========
+
+class InstallmentProjectionItem(BaseModel):
+    """Info de uma parcela ativa/pendente para projecao e tabela aprimorada."""
+    nome: str
+    valor_mensal: float
+    parcela_atual: int
+    parcela_total: int
+    parcelas_restantes: int
+    mes_termino: Optional[date] = None  # None para pendentes (0 de Y)
+    status_badge: str  # "Encerrando" | "Ativa" | "Pendente"
+
+
+class MonthProjectionPoint(BaseModel):
+    """Ponto de projecao mensal para grafico de barras empilhadas."""
+    mes: date
+    total_comprometido: float
+    parcelas_ativas: int
+    parcelas_encerrando: list[str]
+    valor_liberado: float
+    percentual_comprometimento: float
+
+
+class ProximaEncerrar(BaseModel):
+    """Info da proxima parcela a encerrar."""
+    nome: str
+    mes_termino: date
+
+
+class InstallmentProjectionResponse(BaseModel):
+    """Resposta completa da projecao de parcelas (CR-021)."""
+    # Summary KPIs (6 cards)
+    total_comprometido_mes_atual: float
+    total_restante_todas_parcelas: float
+    qtd_parcelas_ativas: int
+    proxima_a_encerrar: Optional[ProximaEncerrar] = None
+    liberacao_proximos_3_meses: float
+    percentual_renda_comprometida: float
+    renda_atual: float
+    # Projecao mensal (12 meses)
+    projecao_mensal: list[MonthProjectionPoint]
+    # Parcelas para tabela e gantt
+    parcelas: list[InstallmentProjectionItem]
+
+
 # ========== Dashboard Schemas (CR-019) ==========
 
 class CategoryBreakdown(BaseModel):

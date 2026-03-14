@@ -146,6 +146,44 @@ export interface CategoriesData {
   metodos_pagamento: string[];
 }
 
+// ========== Installment Projection Types (CR-021) ==========
+
+export interface InstallmentProjectionItem {
+  nome: string;
+  valor_mensal: number;
+  parcela_atual: number;
+  parcela_total: number;
+  parcelas_restantes: number;
+  mes_termino: string | null;
+  status_badge: "Encerrando" | "Ativa" | "Pendente";
+}
+
+export interface MonthProjectionPoint {
+  mes: string;
+  total_comprometido: number;
+  parcelas_ativas: number;
+  parcelas_encerrando: string[];
+  valor_liberado: number;
+  percentual_comprometimento: number;
+}
+
+export interface ProximaEncerrar {
+  nome: string;
+  mes_termino: string;
+}
+
+export interface InstallmentProjectionResponse {
+  total_comprometido_mes_atual: number;
+  total_restante_todas_parcelas: number;
+  qtd_parcelas_ativas: number;
+  proxima_a_encerrar: ProximaEncerrar | null;
+  liberacao_proximos_3_meses: number;
+  percentual_renda_comprometida: number;
+  renda_atual: number;
+  projecao_mensal: MonthProjectionPoint[];
+  parcelas: InstallmentProjectionItem[];
+}
+
 // ========== Dashboard Types (CR-019) ==========
 
 export interface CategoryBreakdown {
