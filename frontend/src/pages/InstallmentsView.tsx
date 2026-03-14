@@ -4,18 +4,18 @@ import {
     ChevronDown,
     ChevronRight,
     CreditCard,
-    DollarSign,
     Calendar,
-    CheckCircle2,
-    AlertCircle,
-    Clock,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { fetchInstallments } from "../services/api";
 import type { InstallmentGroup } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import ViewSelector from "../components/ViewSelector";
+import ProjectionSummaryCards from "../components/installments/ProjectionSummaryCards";
+import ProjectionChartToggle from "../components/installments/ProjectionChartToggle";
 import { useAuth } from "../hooks/useAuth";
+import { useInstallmentProjection } from "../hooks/useInstallmentProjection";
+import { getMonthName } from "../utils/date";
 
 // Helper para formatar moeda
 const formatMoney = (val: number) =>
@@ -32,6 +32,8 @@ export function InstallmentsView() {
         enabled: !!user,
     });
 
+    const projection = useInstallmentProjection();
+
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
         {}
     );
@@ -43,13 +45,29 @@ export function InstallmentsView() {
         }));
     };
 
+    // Separate and sort groups
     const { emAndamento, concluidos } = useMemo(() => {
         if (!data) return { emAndamento: [], concluidos: [] };
-        return {
-            emAndamento: data.groups.filter((g) => g.status_geral === "Em andamento"),
-            concluidos: data.groups.filter((g) => g.status_geral === "Concluído"),
-        };
-    }, [data]);
+
+        const active = data.groups.filter((g) => g.status_geral === "Em andamento");
+        const done = data.groups.filter((g) => g.status_geral === "Concluído");
+
+        // Sort active groups by termination date (soonest first)
+        if (projection.data) {
+            const projMap = new Map(
+                projection.data.parcelas.map((p) => [p.nome, p])
+            );
+            active.sort((a, b) => {
+                const pa = projMap.get(a.nome);
+                const pb = projMap.get(b.nome);
+                const ra = pa?.parcelas_restantes ?? Infinity;
+                const rb = pb?.parcelas_restantes ?? Infinity;
+                return ra - rb;
+            });
+        }
+
+        return { emAndamento: active, concluidos: done };
+    }, [data, projection.data]);
 
     if (isLoading) {
         return (
@@ -88,42 +106,23 @@ export function InstallmentsView() {
                 </p>
             </header>
 
-            {/* Cards de Resumo */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <SummaryCard
-                    title="Total Parcelado"
-                    value={data.total_gasto}
-                    icon={DollarSign}
-                    color="text-blue-600"
-                    bgColor="bg-blue-50 dark:bg-blue-900/20"
-                />
-                <SummaryCard
-                    title="Já Pago"
-                    value={data.total_pago}
-                    icon={CheckCircle2}
-                    color="text-green-600"
-                    bgColor="bg-green-50 dark:bg-green-900/20"
-                />
-                <SummaryCard
-                    title="Pendente"
-                    value={data.total_pendente}
-                    icon={Clock}
-                    color="text-orange-600"
-                    bgColor="bg-orange-50 dark:bg-orange-900/20"
-                />
-                <SummaryCard
-                    title="Em Atraso"
-                    value={data.total_atrasado}
-                    icon={AlertCircle}
-                    color="text-red-600"
-                    bgColor="bg-red-50 dark:bg-red-900/20"
-                />
-            </div>
+            {/* Seção 1: Cards de Resumo (CR-021) */}
+            {projection.data && (
+                <ProjectionSummaryCards data={projection.data} />
+            )}
 
-            {/* Lista de Grupos por Status */}
+            {/* Seção 2: Projeção Visual (CR-021) */}
+            {projection.data && projection.data.parcelas.length > 0 && (
+                <ProjectionChartToggle data={projection.data} />
+            )}
+
+            {/* Seção 3: Lista de Grupos por Status */}
             {data.groups.length === 0 ? (
                 <div className="p-8 text-center bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
                     <p className="text-gray-500">Nenhuma compra parcelada encontrada.</p>
+                    <p className="text-gray-400 text-sm mt-2">
+                        Adicione uma despesa parcelada na aba Gastos Planejados para vê-la aqui.
+                    </p>
                 </div>
             ) : (
                 <div className="space-y-8">
@@ -134,6 +133,7 @@ export function InstallmentsView() {
                             groups={emAndamento}
                             expandedGroups={expandedGroups}
                             toggleGroup={toggleGroup}
+                            projectionData={projection.data?.parcelas}
                         />
                     )}
 
@@ -152,6 +152,25 @@ export function InstallmentsView() {
     );
 }
 
+// Helper to get badge style
+function getInstallmentBadge(statusBadge: string) {
+    switch (statusBadge) {
+        case "Encerrando":
+            return { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400" };
+        case "Pendente":
+            return { bg: "bg-slate-100 dark:bg-slate-700", text: "text-slate-600 dark:text-slate-300" };
+        default:
+            return { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400" };
+    }
+}
+
+function formatTerminaEm(mesTermino: string | null | undefined): string {
+    if (!mesTermino) return "—";
+    const [yearStr, monthStr] = mesTermino.split("-");
+    const month = parseInt(monthStr, 10);
+    return `${getMonthName(month).slice(0, 3)}/${yearStr}`;
+}
+
 // Componente de seção (Em Andamento / Concluídos)
 function GroupSection({
     title,
@@ -159,12 +178,14 @@ function GroupSection({
     groups,
     expandedGroups,
     toggleGroup,
+    projectionData,
 }: {
     title: string;
     count: number;
     groups: InstallmentGroup[];
     expandedGroups: Record<string, boolean>;
     toggleGroup: (name: string) => void;
+    projectionData?: Array<{ nome: string; parcelas_restantes: number; mes_termino: string | null; status_badge: string }>;
 }) {
     return (
         <div className="space-y-4">
@@ -175,14 +196,19 @@ function GroupSection({
                 </span>
             </h2>
 
-            {groups.map((group, idx) => (
-                <GroupCard
-                    key={`${group.nome}-${idx}`}
-                    group={group}
-                    isExpanded={!!expandedGroups[group.nome]}
-                    onToggle={() => toggleGroup(group.nome)}
-                />
-            ))}
+            {groups.map((group, idx) => {
+                const projInfo = projectionData?.find((p) => p.nome === group.nome);
+                return (
+                    <GroupCard
+                        key={`${group.nome}-${idx}`}
+                        group={group}
+                        isExpanded={!!expandedGroups[group.nome]}
+                        onToggle={() => toggleGroup(group.nome)}
+                        terminaEm={projInfo?.mes_termino}
+                        statusBadge={projInfo?.status_badge}
+                    />
+                );
+            })}
         </div>
     );
 }
@@ -192,11 +218,17 @@ function GroupCard({
     group,
     isExpanded,
     onToggle,
+    terminaEm,
+    statusBadge,
 }: {
     group: InstallmentGroup;
     isExpanded: boolean;
     onToggle: () => void;
+    terminaEm?: string | null;
+    statusBadge?: string;
 }) {
+    const badge = statusBadge ? getInstallmentBadge(statusBadge) : null;
+
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
             {/* Header do Grupo (Clicável) */}
@@ -219,8 +251,18 @@ function GroupCard({
                                 {group.parcela_total}x
                             </span>
                         </h3>
-                        <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                        <div className="text-sm text-gray-500 flex items-center gap-2 mt-1 flex-wrap">
                             <StatusBadge status={group.status_geral as any} />
+                            {badge && statusBadge && (
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badge.bg} ${badge.text}`}>
+                                    {statusBadge}
+                                </span>
+                            )}
+                            {terminaEm && (
+                                <span className="text-xs text-gray-400">
+                                    Termina em {formatTerminaEm(terminaEm)}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -292,43 +334,6 @@ function GroupCard({
                     </div>
                 </div>
             )}
-        </div>
-    );
-}
-
-// Componente auxiliar para Card de Resumo
-function SummaryCard({
-    title,
-    value,
-    icon: Icon,
-    color,
-    bgColor,
-}: {
-    title: string;
-    value: number
-    icon: any;
-    color: string;
-    bgColor: string;
-}) {
-    const formatMoney = (val: number) =>
-        new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: "BRL",
-        }).format(val);
-
-    return (
-        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between">
-            <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    {title}
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-                    {formatMoney(value)}
-                </p>
-            </div>
-            <div className={`p-3 rounded-lg ${bgColor}`}>
-                <Icon className={`w-6 h-6 ${color}`} />
-            </div>
         </div>
     );
 }

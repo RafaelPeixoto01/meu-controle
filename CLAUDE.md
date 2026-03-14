@@ -221,7 +221,7 @@ Personal Finance/
 │       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense
 │       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard schemas
 │       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates
-│       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary, dashboard data
+│       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary, dashboard data, installment projection (CR-021)
 │       ├── categories.py     # EXPENSE_CATEGORIES compartilhadas (CR-005, CR-016) + metodos de pagamento
 │       ├── auth.py           # CR-002: JWT + bcrypt auth module
 │       ├── email_service.py  # CR-002: SendGrid email (password reset)
@@ -233,6 +233,8 @@ Personal Finance/
 │           ├── months.py     # GET visao mensal (auth required)
 │           ├── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
 │           └── dashboard.py      # CR-019: GET /api/dashboard/{year}/{month} (auth required)
+│   └── tests/
+│       └── test_installment_projection.py  # CR-021
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts        # Proxy /api -> :8000
@@ -242,15 +244,16 @@ Personal Finance/
 │       ├── App.tsx           # Shell com AuthProvider + Routes
 │       ├── index.css         # Tailwind v4 (@import + @theme)
 │       ├── vite-env.d.ts     # Vite client types
-│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019)
+│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019) + InstallmentProjection types (CR-021)
 │       ├── utils/            # format.ts (formatBRL, formatDateFull), date.ts
 │       ├── services/
 │       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses + dashboard API
 │       │   └── authApi.ts    # CR-002: auth API functions
 │       ├── contexts/
 │       │   └── AuthContext.tsx  # CR-002: auth state management
-│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard
-│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector, dashboard/
+│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard, useInstallmentProjection
+│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector, dashboard/, installments/
+│       │   ├── installments/    # CR-021: ProjectionSummaryCards, ProjectionStackedChart, ProjectionGantt, ProjectionChartToggle
 │       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, Login, Register, ForgotPassword, ResetPassword, Profile
 ├── CLAUDE.md
 └── .gitignore
@@ -335,9 +338,10 @@ Personal Finance/
 - CR-018: Sincronizar categories.py com categorias_gastos.md — adicionar IPVA, IPTU, Impostos e Emprestimo (concluido)
 - CR-019: Dashboard Visual com Graficos (F02) — endpoint /api/dashboard, KPI cards, donut charts por categoria (planejadas e diarios separados), bar chart evolucao 6 meses, status breakdown, recharts (concluido)
 - CR-020: Trocar card "Parcelas Futuras" por "Gastos Planejados" no Dashboard — KPI card exibe total_despesas_planejadas ao inves de total_parcelas_futuras (concluido)
+- CR-021: Visão Consolidada de Parcelas Futuras (F03) — projeção de parcelas, 6 KPI cards, gráfico de barras empilhadas 12 meses, timeline Gantt, tabela aprimorada com badges e data de encerramento (concluido)
 
 ### Última Tarefa Implementada
-- CR-020: Trocar card "Parcelas Futuras" por "Gastos Planejados" no Dashboard — mudanca frontend-only no KeyIndicators (concluido)
+- CR-021: Visão Consolidada de Parcelas Futuras (F03) — projeção inteligente de parcelas com KPIs e gráficos (concluido)
 
 ---
 
