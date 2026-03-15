@@ -20,6 +20,17 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
     [projecao]
   );
 
+  // CR-024: Calculate offset (in months from first projecao month) for each parcela
+  const getMonthOffset = (mesIso: string | null): number => {
+    if (!mesIso || projecao.length === 0) return 0;
+    const baseMonth = projecao[0].mes.slice(0, 7);
+    const targetMonth = mesIso.slice(0, 7);
+    if (targetMonth <= baseMonth) return 0;
+    const [by, bm] = baseMonth.split("-").map(Number);
+    const [ty, tm] = targetMonth.split("-").map(Number);
+    return (ty - by) * 12 + (tm - bm);
+  };
+
   const sortedParcelas = useMemo(
     () =>
       [...parcelas].sort((a, b) => a.parcelas_restantes - b.parcelas_restantes),
@@ -60,8 +71,11 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
           {/* Rows */}
           {sortedParcelas.map((p) => {
             const isEnding = p.status_badge === "Encerrando";
-            const barSpan = Math.min(p.parcelas_restantes, totalMonths);
-            const barWidthPct = (barSpan / totalMonths) * 100;
+            const startOffset = getMonthOffset(p.mes_inicio);
+            const endOffset = getMonthOffset(p.mes_termino);
+            const barSpan = Math.min(endOffset - startOffset + 1, totalMonths - startOffset);
+            const barLeftPct = (startOffset / totalMonths) * 100;
+            const barWidthPct = (Math.max(barSpan, 1) / totalMonths) * 100;
 
             return (
               <div key={p.nome} className="flex items-center py-1 hover:bg-slate-50 rounded">
@@ -77,7 +91,7 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
                         : "bg-primary/70"
                     }`}
                     style={{
-                      left: "0%",
+                      left: `${barLeftPct}%`,
                       width: `${barWidthPct}%`,
                     }}
                   >

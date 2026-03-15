@@ -4147,11 +4147,12 @@ Requer autenticacao JWT. Dados filtrados por `user_id`. Parametro `months` defin
 |-------|------|-----------|
 | descricao | str | Nome da parcela |
 | valor_mensal | float | Valor da parcela mensal |
-| parcela_atual | int | Parcela atual (0 = pendente) |
+| parcela_atual | int | Parcela atual (progresso) |
 | parcela_total | int | Total de parcelas |
-| valor_restante | float | Valor restante |
-| termina_em | str ou null | Mes/ano de encerramento (null se pendente) |
-| status | str | "encerrando", "ativa" ou "pendente" |
+| parcelas_restantes | int | Parcelas restantes |
+| mes_inicio | date ou null | Mes do 1o vencimento nao pago (CR-024) |
+| termina_em | date ou null | Mes do ultimo vencimento |
+| status | str | "Encerrando" ou "Ativa" |
 
 ### Regras de Negocio
 
@@ -4163,6 +4164,9 @@ Requer autenticacao JWT. Dados filtrados por `user_id`. Parametro `months` defin
 - RN-P06: Grafico de barras empilhadas mostra cada parcela como segmento colorido
 - RN-P07: Timeline Gantt mostra inicio e fim de cada parcela com barra colorida
 - RN-P08: Toggle alterna entre visualizacao de barras empilhadas e Gantt
+- RN-P09: `mes_inicio` derivado do 1o vencimento nao pago; `mes_termino` derivado do ultimo vencimento no banco (CR-024)
+- RN-P10: Parcela contribui na projecao apenas nos meses entre `mes_inicio` e `mes_termino` (CR-024)
+- RN-P11: `parcelas_restantes` para upfront = contagem de parcelas nao pagas; para incremental = parcela_total - progresso (CR-024)
 
 ### Frontend
 

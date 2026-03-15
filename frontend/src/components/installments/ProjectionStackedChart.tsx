@@ -84,7 +84,16 @@ export default function ProjectionStackedChart({
       cMap[name] = COLORS[i % COLORS.length];
     });
 
-    const data: ChartDataPoint[] = projecao.map((point, offset) => {
+    // CR-024: Helper to check if parcela is active in a given month
+    const isActiveInMonth = (p: InstallmentProjectionItem, mes: string): boolean => {
+      if (!p.mes_inicio) return false;
+      const mesStart = p.mes_inicio.slice(0, 7); // "YYYY-MM"
+      const mesEnd = p.mes_termino ? p.mes_termino.slice(0, 7) : "9999-12";
+      const mesCurrent = mes.slice(0, 7);
+      return mesCurrent >= mesStart && mesCurrent <= mesEnd;
+    };
+
+    const data: ChartDataPoint[] = projecao.map((point) => {
       const parts = point.mes.split("-");
       const month = parseInt(parts[1], 10);
       const label = getMonthName(month).slice(0, 3);
@@ -92,12 +101,12 @@ export default function ProjectionStackedChart({
       const row: ChartDataPoint = { label };
 
       for (const p of topParcelas) {
-        row[p.nome] = p.parcelas_restantes > offset ? p.valor_mensal : 0;
+        row[p.nome] = isActiveInMonth(p, point.mes) ? p.valor_mensal : 0;
       }
 
       if (hasOutros) {
         row["Outros"] = outrosParcelas.reduce(
-          (sum, p) => sum + (p.parcelas_restantes > offset ? p.valor_mensal : 0),
+          (sum, p) => sum + (isActiveInMonth(p, point.mes) ? p.valor_mensal : 0),
           0
         );
       }

@@ -72,18 +72,18 @@ Funcionalidades que eliminam os gaps mais básicos em relação ao mercado. Sem 
 
 ---
 
-### F03: Visão consolidada de parcelas futuras
+### F03: Visão consolidada de parcelas futuras — CONCLUÍDA (CR-021, 2026-03-13)
 
-| Prioridade | Esforço | Impacto | Horizonte |
-|---|---|---|---|
-| P0 - Crítica | Médio | Alto | H1 |
+| Prioridade | Esforço | Impacto | Horizonte | Status |
+|---|---|---|---|---|
+| P0 - Crítica | Médio | Alto | H1 | Concluída |
 
 **Descrição:** Timeline visual de todas as parcelas ativas com projeção de fluxo de caixa futuro. Responde: "quanto estarei comprometido nos próximos 6/12 meses?" e "quando cada parcela termina?". Alerta quando comprometimento ultrapassa % da renda.
 
 **Gap identificado:** Nenhum app brasileiro oferece visão unificada de parcelas cross-cartão com projeção. Identificado como white space #3 no benchmark. Altamente relevante para o contexto brasileiro de parcelamento.
 
 **Referências de mercado:** Oportunidade identificada no benchmark sem referência direta de concorrente
-
+    
 ---
 
 ### F04: Score de saúde financeira
@@ -284,7 +284,7 @@ A ordem abaixo considera dependências técnicas, impacto no usuário e viabilid
 |---|---|---|---|---|
 | 1 | F01 | Categorização de despesas | Pré-requisito para dashboard, IA e relatórios | Concluída (CR-016) |
 | 2 | F02 | Dashboard visual | Depende de F01. Maior impacto visual imediato | Concluída (CR-019) |
-| 3 | F03 | Visão de parcelas futuras | Usa dados existentes. Diferenciador único | 2 semanas |
+| 3 | F03 | Visão de parcelas futuras | Usa dados existentes. Diferenciador único | Concluída (CR-021) |
 | 4 | F05 | Alertas inteligentes | Baixo esforço, alto impacto percebido | 1 semana |
 | 5 | F04 | Score de saúde financeira | Depende de F01. Prompt base já existe | 1 semana |
 | 6 | F07 | Gastos diários otimizados | UX de quick-add. Melhoria sobre o existente | 2 semanas |

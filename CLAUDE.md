@@ -341,9 +341,10 @@ Personal Finance/
 - CR-021: Visão Consolidada de Parcelas Futuras (F03) — projeção de parcelas, 6 KPI cards, gráfico de barras empilhadas 12 meses, timeline Gantt, tabela aprimorada com badges e data de encerramento (concluido)
 - CR-022: Fix KPI cards zerados na página Compras Parceladas — progresso calculado por contagem de parcelas PAGO em vez de max(parcela_atual) (concluido)
 - CR-023: Remover status "Pendente" da projeção de parcelas — parcelamentos com 0 pagas agora são incluídos na projeção como "Ativa" (concluido)
+- CR-024: Corrigir projeção para usar datas reais de vencimento — mes_inicio/mes_termino derivados dos vencimentos no banco, parcelas contribuem apenas nos meses corretos (concluido)
 
 ### Última Tarefa Implementada
-- CR-023: Remover status "Pendente" da projeção de parcelas (concluido)
+- CR-024: Corrigir projeção para usar datas reais de vencimento (concluido)
 
 ---
 
