@@ -381,21 +381,39 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         # Valor mensal = valor da primeira parcela (todas tem mesmo valor)
         valor_mensal = float(installments[0].valor)
 
-        # CR-022: Determinar progresso pela contagem de parcelas PAGO,
-        # nao por max(parcela_atual). A API cria todas as N parcelas
-        # de uma vez, entao max(parcela_atual) == parcela_total sempre.
+        # CR-022: Determinar progresso considerando dois cenarios:
+        # - Upfront: todas as N parcelas existem no banco (len == parcela_total)
+        #   → usar contagem de PAGO como progresso
+        # - Incremental: apenas parcelas recentes existem (len < parcela_total)
+        #   → usar max(parcela_atual) como progresso
         from app.models import ExpenseStatus
         num_paid = sum(
             1 for inst in installments
             if inst.status == ExpenseStatus.PAGO.value
         )
-        parcelas_restantes = parcela_total - num_paid
+        max_parcela_atual = max(
+            (inst.parcela_atual or 0) for inst in installments
+        )
+
+        if len(installments) >= parcela_total:
+            # Upfront: todas as parcelas existem, progresso = pagas
+            progresso = num_paid
+        else:
+            # Incremental: apenas parcelas recentes no banco.
+            # Usar maior parcela_atual entre as PAGAS como progresso real.
+            paid_parcela_nums = [
+                inst.parcela_atual or 0 for inst in installments
+                if inst.status == ExpenseStatus.PAGO.value
+            ]
+            progresso = max(paid_parcela_nums) if paid_parcela_nums else 0
+
+        parcelas_restantes = parcela_total - progresso
 
         if parcelas_restantes <= 0:
-            continue  # Realmente concluida (todas pagas)
+            continue  # Realmente concluida
 
-        if num_paid == 0:
-            # Nenhuma parcela paga → Pendente
+        if progresso == 0:
+            # Nenhum progresso → Pendente
             mes_termino = None
             status_badge = "Pendente"
         else:
@@ -408,7 +426,7 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         parcelas_info.append({
             "nome": group["nome"],
             "valor_mensal": valor_mensal,
-            "parcela_atual": num_paid,
+            "parcela_atual": progresso,
             "parcela_total": parcela_total,
             "parcelas_restantes": parcelas_restantes,
             "mes_termino": mes_termino,

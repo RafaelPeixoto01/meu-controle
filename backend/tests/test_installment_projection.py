@@ -287,21 +287,66 @@ class TestInstallmentProjection:
         # Percentual renda = 500 / 10000 * 100 = 5%
         assert result["percentual_renda_comprometida"] == 5.0
 
-    def test_parcela_atual_none_all_unpaid_stays_pendente(
+    def test_incremental_installments_kpis(
+        self, mock_date, db, test_user, income_march
+    ):
+        """CR-022: Parcelas incrementais (apenas recentes no banco) devem usar max(parcela_atual)."""
+        self._mock_today(mock_date)
+        # Empr. Sonia: 11x, apenas parcelas 10 e 11 no banco
+        # Parcela 10 paga, parcela 11 pendente → restantes = 1
+        parcelas = [
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 3, 1),
+                nome="Empr. Sonia",
+                valor=500.00,
+                vencimento=date(2026, 3, 14),
+                parcela_atual=10,
+                parcela_total=11,
+                recorrente=False,
+                status=ExpenseStatus.PAGO.value,
+            ),
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 4, 1),
+                nome="Empr. Sonia",
+                valor=500.00,
+                vencimento=date(2026, 4, 14),
+                parcela_atual=11,
+                parcela_total=11,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            ),
+        ]
+        for p in parcelas:
+            db.add(p)
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        # Incremental: max_parcela_atual=10, restantes=11-10=1
+        assert result["qtd_parcelas_ativas"] == 1
+        assert result["total_comprometido_mes_atual"] == 500.0
+        assert result["total_restante_todas_parcelas"] == 500.0  # 1 * 500
+
+        # Encerra em 1 mes → Encerrando
+        assert result["parcelas"][0]["status_badge"] == "Encerrando"
+        assert result["parcelas"][0]["parcela_atual"] == 10
+
+    def test_all_unpaid_stays_pendente(
         self, mock_date, db, test_user
     ):
-        """CR-022: Parcelas com parcela_atual=None e NENHUMA paga = Pendente."""
+        """CR-022: Parcelas sem nenhuma paga = Pendente."""
         self._mock_today(mock_date)
-        # Criar parcelas sem nenhuma paga
         parcelas = []
-        for _ in range(5):
+        for i in range(1, 6):
             parcelas.append(Expense(
                 user_id=test_user.id,
                 mes_referencia=date(2026, 3, 1),
                 nome="Futuro",
                 valor=200.00,
                 vencimento=date(2026, 3, 15),
-                parcela_atual=None,
+                parcela_atual=i,
                 parcela_total=5,
                 recorrente=False,
                 status=ExpenseStatus.PENDENTE.value,
