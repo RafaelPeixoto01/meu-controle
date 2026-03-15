@@ -391,9 +391,6 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
             1 for inst in installments
             if inst.status == ExpenseStatus.PAGO.value
         )
-        max_parcela_atual = max(
-            (inst.parcela_atual or 0) for inst in installments
-        )
 
         if len(installments) >= parcela_total:
             # Upfront: todas as parcelas existem, progresso = pagas
@@ -412,10 +409,46 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         if parcelas_restantes <= 0:
             continue  # Realmente concluida
 
-        # Calcular mes de termino baseado em parcelas restantes
-        mes_termino = mes_atual
-        for _ in range(parcelas_restantes):
-            mes_termino = get_next_month(mes_termino)
+        # CR-024: Usar datas reais de vencimento para calcular mes_inicio e mes_termino
+        # Separar parcelas não pagas (PENDENTE ou ATRASADO)
+        unpaid_installments = [
+            inst for inst in installments
+            if inst.status != ExpenseStatus.PAGO.value
+        ]
+
+        if unpaid_installments:
+            # mes_inicio = mês do primeiro vencimento não pago
+            first_unpaid_venc = min(inst.vencimento for inst in unpaid_installments)
+            mes_inicio = date(first_unpaid_venc.year, first_unpaid_venc.month, 1)
+
+            # mes_termino = mês do último vencimento no banco
+            last_venc = max(inst.vencimento for inst in installments)
+            mes_termino_from_db = date(last_venc.year, last_venc.month, 1)
+
+            if len(installments) >= parcela_total:
+                # Upfront: todas as parcelas existem, usar último vencimento do banco
+                mes_termino = mes_termino_from_db
+            else:
+                # Incremental: parcelas futuras podem não estar no banco ainda
+                # Estimar mes_termino = mes_inicio + parcelas_restantes - 1 meses
+                mes_termino = mes_inicio
+                for _ in range(parcelas_restantes - 1):
+                    mes_termino = get_next_month(mes_termino)
+                # Se o banco tem dados mais distantes, usar esses
+                if mes_termino_from_db > mes_termino:
+                    mes_termino = mes_termino_from_db
+        else:
+            # Fallback: sem parcelas não pagas (não deveria ocorrer aqui)
+            mes_inicio = mes_atual
+            mes_termino = mes_atual
+            for _ in range(parcelas_restantes):
+                mes_termino = get_next_month(mes_termino)
+
+        # Recalcular parcelas_restantes para upfront baseado em contagem real
+        # Para incremental, manter parcela_total - progresso
+        if len(installments) >= parcela_total:
+            parcelas_restantes = len(unpaid_installments)
+
         status_badge = "Encerrando" if parcelas_restantes <= 2 else "Ativa"
 
         parcelas_info.append({
@@ -424,6 +457,7 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
             "parcela_atual": progresso,
             "parcela_total": parcela_total,
             "parcelas_restantes": parcelas_restantes,
+            "mes_inicio": mes_inicio,
             "mes_termino": mes_termino,
             "status_badge": status_badge,
         })
@@ -437,19 +471,19 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         for _ in range(offset):
             mes_projecao = get_next_month(mes_projecao)
 
-        # Parcelas ativas neste mes (excluir pendentes e ja encerradas)
+        # CR-024: Parcelas ativas neste mes (entre mes_inicio e mes_termino)
         ativas_nomes = []
         total_comprometido = 0.0
         encerrando_nomes = []
 
         for p in parcelas_info:
-            # A parcela esta ativa se ainda tem parcelas restantes > offset
-            if p["parcelas_restantes"] > offset:
+            # CR-024: A parcela esta ativa se mes_inicio <= mes_projecao <= mes_termino
+            if p["mes_inicio"] <= mes_projecao <= p["mes_termino"]:
                 ativas_nomes.append(p["nome"])
                 total_comprometido += p["valor_mensal"]
 
                 # Encerrando neste mes especifico?
-                if p["parcelas_restantes"] == offset + 1:
+                if p["mes_termino"] == mes_projecao:
                     encerrando_nomes.append(p["nome"])
 
         total_comprometido = round(total_comprometido, 2)

@@ -154,6 +154,7 @@ export interface InstallmentProjectionItem {
   parcela_atual: number;
   parcela_total: number;
   parcelas_restantes: number;
+  mes_inicio: string | null;
   mes_termino: string | null;
   status_badge: "Encerrando" | "Ativa";
 }

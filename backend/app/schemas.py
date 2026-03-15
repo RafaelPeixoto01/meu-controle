@@ -266,6 +266,7 @@ class InstallmentProjectionItem(BaseModel):
     parcela_atual: int
     parcela_total: int
     parcelas_restantes: int
+    mes_inicio: Optional[date] = None
     mes_termino: Optional[date] = None
     status_badge: str  # "Encerrando" | "Ativa"
 
