@@ -410,16 +410,20 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
             continue  # Realmente concluida
 
         # CR-024: Usar datas reais de vencimento para calcular mes_inicio e mes_termino
-        # Separar parcelas não pagas (PENDENTE ou ATRASADO)
+        # mes_inicio = primeiro vencimento >= mes_atual (independente de status de pagamento)
+        # Isso garante que parcelas com vencimento no mês atual (mesmo PAGO) apareçam na projeção
+        future_installments = [
+            inst for inst in installments
+            if date(inst.vencimento.year, inst.vencimento.month, 1) >= mes_atual
+        ]
         unpaid_installments = [
             inst for inst in installments
             if inst.status != ExpenseStatus.PAGO.value
         ]
 
-        if unpaid_installments:
-            # mes_inicio = mês do primeiro vencimento não pago
-            first_unpaid_venc = min(inst.vencimento for inst in unpaid_installments)
-            mes_inicio = date(first_unpaid_venc.year, first_unpaid_venc.month, 1)
+        if future_installments:
+            first_future_venc = min(inst.vencimento for inst in future_installments)
+            mes_inicio = date(first_future_venc.year, first_future_venc.month, 1)
 
             # mes_termino = mês do último vencimento no banco
             last_venc = max(inst.vencimento for inst in installments)
@@ -437,12 +441,16 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
                 # Se o banco tem dados mais distantes, usar esses
                 if mes_termino_from_db > mes_termino:
                     mes_termino = mes_termino_from_db
-        else:
-            # Fallback: sem parcelas não pagas (não deveria ocorrer aqui)
+        elif unpaid_installments:
+            # Todos os vencimentos no passado mas tem pendências (atrasados)
             mes_inicio = mes_atual
             mes_termino = mes_atual
-            for _ in range(parcelas_restantes):
+            for _ in range(parcelas_restantes - 1):
                 mes_termino = get_next_month(mes_termino)
+        else:
+            # Fallback: sem parcelas futuras nem pendentes
+            mes_inicio = mes_atual
+            mes_termino = mes_atual
 
         # Recalcular parcelas_restantes para upfront baseado em contagem real
         # Para incremental, manter parcela_total - progresso
