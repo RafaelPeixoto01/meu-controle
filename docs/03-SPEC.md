@@ -4156,12 +4156,12 @@ Requer autenticacao JWT. Dados filtrados por `user_id`. Parametro `months` defin
 ### Regras de Negocio
 
 - RN-P01: Projecao calculada em runtime, sem migration ou dados persistidos
-- RN-P02: Parcelas pendentes (parcela_atual = 0) aparecem com badge "Pendente" e estilo diferenciado
+- RN-P02: Todas as parcelas com restantes > 0 sao "Ativa" ou "Encerrando" (CR-023: removido status "Pendente")
 - RN-P03: Parcelas nas ultimas 2 prestacoes recebem badge "Encerrando"
 - RN-P04: Renda de referencia e a soma das receitas do mes atual do usuario
 - RN-P05: Tabela ordenada por data de encerramento ascendente (quem termina primeiro no topo)
 - RN-P06: Grafico de barras empilhadas mostra cada parcela como segmento colorido
-- RN-P07: Timeline Gantt mostra inicio e fim de cada parcela, com estilo tracejado para pendentes
+- RN-P07: Timeline Gantt mostra inicio e fim de cada parcela com barra colorida
 - RN-P08: Toggle alterna entre visualizacao de barras empilhadas e Gantt
 
 ### Frontend

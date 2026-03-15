@@ -157,8 +157,6 @@ function getInstallmentBadge(statusBadge: string) {
     switch (statusBadge) {
         case "Encerrando":
             return { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400" };
-        case "Pendente":
-            return { bg: "bg-slate-100 dark:bg-slate-700", text: "text-slate-600 dark:text-slate-300" };
         default:
             return { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400" };
     }
