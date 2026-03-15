@@ -22,12 +22,7 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
 
   const sortedParcelas = useMemo(
     () =>
-      [...parcelas].sort((a, b) => {
-        // Pendentes no final
-        if (a.status_badge === "Pendente" && b.status_badge !== "Pendente") return 1;
-        if (b.status_badge === "Pendente" && a.status_badge !== "Pendente") return -1;
-        return a.parcelas_restantes - b.parcelas_restantes;
-      }),
+      [...parcelas].sort((a, b) => a.parcelas_restantes - b.parcelas_restantes),
     [parcelas]
   );
 
@@ -64,10 +59,8 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
 
           {/* Rows */}
           {sortedParcelas.map((p) => {
-            const isPending = p.status_badge === "Pendente";
             const isEnding = p.status_badge === "Encerrando";
-            const barSpan = isPending ? totalMonths : Math.min(p.parcelas_restantes, totalMonths);
-            const barStartPct = 0;
+            const barSpan = Math.min(p.parcelas_restantes, totalMonths);
             const barWidthPct = (barSpan / totalMonths) * 100;
 
             return (
@@ -79,21 +72,17 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
                 <div className="flex-1 relative h-7">
                   <div
                     className={`absolute top-0.5 h-6 rounded transition-all ${
-                      isPending
-                        ? "bg-slate-200 border-2 border-dashed border-slate-400"
-                        : isEnding
+                      isEnding
                         ? "bg-amber-400/80"
                         : "bg-primary/70"
                     }`}
                     style={{
-                      left: `${barStartPct}%`,
+                      left: "0%",
                       width: `${barWidthPct}%`,
                     }}
                   >
-                    <span className={`absolute inset-0 flex items-center justify-center text-xs font-medium ${
-                      isPending ? "text-slate-500" : "text-white"
-                    }`}>
-                      {isPending ? "Pendente" : `${p.parcelas_restantes} meses`}
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white">
+                      {p.parcelas_restantes} meses
                     </span>
                   </div>
                 </div>
@@ -106,9 +95,8 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
       {/* Mobile: Simplified list with progress bars */}
       <div className="block sm:hidden space-y-3">
         {sortedParcelas.map((p) => {
-          const isPending = p.status_badge === "Pendente";
           const isEnding = p.status_badge === "Encerrando";
-          const progress = isPending ? 0 : ((p.parcela_total - p.parcelas_restantes) / p.parcela_total) * 100;
+          const progress = ((p.parcela_total - p.parcelas_restantes) / p.parcela_total) * 100;
 
           return (
             <div key={p.nome} className="bg-slate-50 rounded-xl p-3">
@@ -118,9 +106,7 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
                   <div className="text-xs text-text-muted">{formatBRL(p.valor_mensal)}/mes</div>
                 </div>
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  isPending
-                    ? "bg-slate-200 text-slate-600"
-                    : isEnding
+                  isEnding
                     ? "bg-amber-100 text-amber-700"
                     : "bg-primary/10 text-primary"
                 }`}>
@@ -130,14 +116,14 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
               <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    isPending ? "bg-slate-300" : isEnding ? "bg-amber-400" : "bg-primary"
+                    isEnding ? "bg-amber-400" : "bg-primary"
                   }`}
                   style={{ width: `${progress}%` }}
                 />
               </div>
               <div className="flex justify-between mt-1 text-xs text-text-muted">
                 <span>{p.parcela_atual}/{p.parcela_total}</span>
-                <span>{isPending ? "Nao iniciada" : `${p.parcelas_restantes} meses restantes`}</span>
+                <span>{p.parcelas_restantes} meses restantes</span>
               </div>
             </div>
           );

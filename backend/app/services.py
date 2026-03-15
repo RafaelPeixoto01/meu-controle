@@ -412,16 +412,11 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         if parcelas_restantes <= 0:
             continue  # Realmente concluida
 
-        if progresso == 0:
-            # Nenhum progresso → Pendente
-            mes_termino = None
-            status_badge = "Pendente"
-        else:
-            # Calcular mes de termino baseado em parcelas restantes
-            mes_termino = mes_atual
-            for _ in range(parcelas_restantes):
-                mes_termino = get_next_month(mes_termino)
-            status_badge = "Encerrando" if parcelas_restantes <= 2 else "Ativa"
+        # Calcular mes de termino baseado em parcelas restantes
+        mes_termino = mes_atual
+        for _ in range(parcelas_restantes):
+            mes_termino = get_next_month(mes_termino)
+        status_badge = "Encerrando" if parcelas_restantes <= 2 else "Ativa"
 
         parcelas_info.append({
             "nome": group["nome"],
@@ -448,9 +443,6 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         encerrando_nomes = []
 
         for p in parcelas_info:
-            if p["status_badge"] == "Pendente":
-                continue  # Pendentes nao contam no comprometido
-
             # A parcela esta ativa se ainda tem parcelas restantes > offset
             if p["parcelas_restantes"] > offset:
                 ativas_nomes.append(p["nome"])
@@ -476,18 +468,18 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
 
     # 5. Calcular KPIs de resumo
     total_comprometido_mes_atual = projecao_mensal[0]["total_comprometido"] if projecao_mensal else 0.0
-    qtd_ativas = len([p for p in parcelas_info if p["status_badge"] != "Pendente"])
+    qtd_ativas = len(parcelas_info)
 
-    # Total restante = soma de (parcelas_restantes * valor_mensal) para todas as parcelas nao-pendentes
+    # Total restante = soma de (parcelas_restantes * valor_mensal) para todas as parcelas
     total_restante = round(
-        sum(p["parcelas_restantes"] * p["valor_mensal"] for p in parcelas_info if p["status_badge"] != "Pendente"),
+        sum(p["parcelas_restantes"] * p["valor_mensal"] for p in parcelas_info),
         2
     )
 
-    # Proxima a encerrar (menor mes_termino entre as nao-pendentes)
+    # Proxima a encerrar (menor mes_termino)
     nao_pendentes_com_termino = [
         p for p in parcelas_info
-        if p["status_badge"] != "Pendente" and p["mes_termino"] is not None
+        if p["mes_termino"] is not None
     ]
     proxima_a_encerrar = None
     if nao_pendentes_com_termino:

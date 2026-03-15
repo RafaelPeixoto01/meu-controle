@@ -67,8 +67,7 @@ export default function ProjectionStackedChart({
 }: ProjectionStackedChartProps) {
   // Build chart data: one key per active installment per month
   const { chartData, activeNames, colorMap } = useMemo(() => {
-    const activeParcelas = parcelas
-      .filter((p) => p.status_badge !== "Pendente")
+    const activeParcelas = [...parcelas]
       .sort((a, b) => b.valor_mensal - a.valor_mensal);
 
     // If more than 8, group smallest as "Outros"

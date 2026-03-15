@@ -260,14 +260,14 @@ class InstallmentsResponse(BaseModel):
 # ========== Installment Projection Schemas (CR-021) ==========
 
 class InstallmentProjectionItem(BaseModel):
-    """Info de uma parcela ativa/pendente para projecao e tabela aprimorada."""
+    """Info de uma parcela ativa para projecao e tabela aprimorada."""
     nome: str
     valor_mensal: float
     parcela_atual: int
     parcela_total: int
     parcelas_restantes: int
-    mes_termino: Optional[date] = None  # None para pendentes (0 de Y)
-    status_badge: str  # "Encerrando" | "Ativa" | "Pendente"
+    mes_termino: Optional[date] = None
+    status_badge: str  # "Encerrando" | "Ativa"
 
 
 class MonthProjectionPoint(BaseModel):

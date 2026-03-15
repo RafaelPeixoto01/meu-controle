@@ -218,19 +218,18 @@ class TestInstallmentProjection:
         # Quando Notebook encerra (offset 2), 500 sao liberados
         assert projecao[2]["valor_liberado"] == 500.0
 
-    def test_pending_installment_excluded_from_total(self, mock_date, db, test_user, income_march, pending_installment):
-        """Parcela pendente (0 de Y) nao deve contar no total comprometido."""
+    def test_zero_paid_installment_included_in_projection(self, mock_date, db, test_user, income_march, pending_installment):
+        """CR-023: Parcela com 0 pagas deve ser incluida na projecao como Ativa."""
         self._mock_today(mock_date)
         result = get_installment_projection(db, test_user.id)
 
-        # Pendente nao conta como ativa
-        assert result["total_comprometido_mes_atual"] == 0.0
-        assert result["qtd_parcelas_ativas"] == 0
+        # Com 0 pagas, todas as 3 parcelas restantes → Ativa (3 > 2)
+        assert result["total_comprometido_mes_atual"] == 2700.0
+        assert result["qtd_parcelas_ativas"] == 1
 
-        # Mas aparece na lista de parcelas com badge Pendente
         assert len(result["parcelas"]) == 1
-        assert result["parcelas"][0]["status_badge"] == "Pendente"
-        assert result["parcelas"][0]["mes_termino"] is None
+        assert result["parcelas"][0]["status_badge"] == "Ativa"
+        assert result["parcelas"][0]["mes_termino"] is not None
 
     def test_no_income_no_division_error(self, mock_date, db, test_user, multiple_installments):
         """Sem renda cadastrada: percentual deve ser 0, sem erro de divisao."""
@@ -333,10 +332,10 @@ class TestInstallmentProjection:
         assert result["parcelas"][0]["status_badge"] == "Encerrando"
         assert result["parcelas"][0]["parcela_atual"] == 10
 
-    def test_all_unpaid_stays_pendente(
+    def test_all_unpaid_is_active(
         self, mock_date, db, test_user
     ):
-        """CR-022: Parcelas sem nenhuma paga = Pendente."""
+        """CR-023: Parcelas sem nenhuma paga devem ser Ativa e incluidas nos KPIs."""
         self._mock_today(mock_date)
         parcelas = []
         for i in range(1, 6):
@@ -357,8 +356,9 @@ class TestInstallmentProjection:
 
         result = get_installment_projection(db, test_user.id)
 
-        # Nenhuma paga → continua Pendente → KPIs zerados
-        assert result["qtd_parcelas_ativas"] == 0
-        assert result["total_comprometido_mes_atual"] == 0.0
+        # Nenhuma paga → Ativa (5 restantes > 2) e incluida nos KPIs
+        assert result["qtd_parcelas_ativas"] == 1
+        assert result["total_comprometido_mes_atual"] == 200.0
         assert len(result["parcelas"]) == 1
-        assert result["parcelas"][0]["status_badge"] == "Pendente"
+        assert result["parcelas"][0]["status_badge"] == "Ativa"
+        assert result["parcelas"][0]["mes_termino"] is not None
