@@ -422,3 +422,111 @@ class TestInstallmentProjection:
             assert p["mes_inicio"] is not None
             assert "mes_termino" in p
             assert p["mes_termino"] is not None
+
+    def test_concluded_installment_with_current_month_vencimento(
+        self, mock_date, db, test_user, income_march
+    ):
+        """Parcela concluida com vencimento em Mar deve aparecer na projecao de Mar."""
+        self._mock_today(mock_date)
+        # Seguro do Carro: 10x incremental, parcelas 8-10 no banco, todas PAGO
+        parcelas = [
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 1, 1),
+                nome="Seguro do Carro",
+                valor=511.80,
+                vencimento=date(2026, 1, 19),
+                parcela_atual=8,
+                parcela_total=10,
+                recorrente=False,
+                status=ExpenseStatus.PAGO.value,
+            ),
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 2, 1),
+                nome="Seguro do Carro",
+                valor=511.80,
+                vencimento=date(2026, 2, 19),
+                parcela_atual=9,
+                parcela_total=10,
+                recorrente=False,
+                status=ExpenseStatus.PAGO.value,
+            ),
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 3, 1),
+                nome="Seguro do Carro",
+                valor=511.80,
+                vencimento=date(2026, 3, 19),
+                parcela_atual=10,
+                parcela_total=10,
+                recorrente=False,
+                status=ExpenseStatus.PAGO.value,
+            ),
+        ]
+        for p in parcelas:
+            db.add(p)
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        # Aparece na projecao (incluida em parcelas)
+        assert len(result["parcelas"]) == 1
+        p = result["parcelas"][0]
+        assert p["nome"] == "Seguro do Carro"
+        assert p["parcelas_restantes"] == 0
+        assert p["mes_inicio"] == date(2026, 3, 1)
+        assert p["mes_termino"] == date(2026, 3, 1)
+        assert p["status_badge"] == "Encerrando"
+
+        # Contribui em Mar no grafico
+        assert result["total_comprometido_mes_atual"] == 511.80
+
+        # KPIs: nao conta como "ativa" nem "restante" (ja concluida)
+        assert result["qtd_parcelas_ativas"] == 0
+        assert result["total_restante_todas_parcelas"] == 0.0
+
+        # Projecao: contribui apenas em Mar
+        projecao = result["projecao_mensal"]
+        assert projecao[0]["total_comprometido"] == 511.80   # Mar
+        assert projecao[1]["total_comprometido"] == 0.0       # Abr
+
+    def test_concluded_installment_past_month_excluded(
+        self, mock_date, db, test_user
+    ):
+        """Parcela concluida sem vencimento em Mar (todas antes) nao aparece."""
+        self._mock_today(mock_date)
+        # Parcela concluida em Fev (sem vencimento em Mar)
+        parcelas = [
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 1, 1),
+                nome="Parcela Antiga",
+                valor=200.00,
+                vencimento=date(2026, 1, 15),
+                parcela_atual=1,
+                parcela_total=2,
+                recorrente=False,
+                status=ExpenseStatus.PAGO.value,
+            ),
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 2, 1),
+                nome="Parcela Antiga",
+                valor=200.00,
+                vencimento=date(2026, 2, 15),
+                parcela_atual=2,
+                parcela_total=2,
+                recorrente=False,
+                status=ExpenseStatus.PAGO.value,
+            ),
+        ]
+        for p in parcelas:
+            db.add(p)
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        # Nao aparece (concluida antes de Mar)
+        assert len(result["parcelas"]) == 0
+        assert result["total_comprometido_mes_atual"] == 0.0

@@ -368,15 +368,25 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
 
     # 3. Extrair info de cada grupo ativo para projecao
     parcelas_info = []
-    for group in groups:
-        if group["status_geral"] != "Em andamento":
-            continue
+    from app.models import ExpenseStatus
 
+    for group in groups:
         installments = group["installments"]
         if not installments:
             continue
 
         parcela_total = group["parcela_total"]
+
+        # Verificar se tem vencimentos no mês atual (para incluir parcelas concluídas este mês)
+        has_current_month_venc = any(
+            date(inst.vencimento.year, inst.vencimento.month, 1) == mes_atual
+            for inst in installments
+        )
+
+        if group["status_geral"] != "Em andamento":
+            # Permitir "Concluído" apenas se tiver vencimento no mês atual
+            if not has_current_month_venc:
+                continue
 
         # Valor mensal = valor da primeira parcela (todas tem mesmo valor)
         valor_mensal = float(installments[0].valor)
@@ -386,18 +396,14 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         #   → usar contagem de PAGO como progresso
         # - Incremental: apenas parcelas recentes existem (len < parcela_total)
         #   → usar max(parcela_atual) como progresso
-        from app.models import ExpenseStatus
         num_paid = sum(
             1 for inst in installments
             if inst.status == ExpenseStatus.PAGO.value
         )
 
         if len(installments) >= parcela_total:
-            # Upfront: todas as parcelas existem, progresso = pagas
             progresso = num_paid
         else:
-            # Incremental: apenas parcelas recentes no banco.
-            # Usar maior parcela_atual entre as PAGAS como progresso real.
             paid_parcela_nums = [
                 inst.parcela_atual or 0 for inst in installments
                 if inst.status == ExpenseStatus.PAGO.value
@@ -407,7 +413,19 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         parcelas_restantes = parcela_total - progresso
 
         if parcelas_restantes <= 0:
-            continue  # Realmente concluida
+            # Parcela concluída — incluir no mês atual se tiver vencimento este mês
+            if has_current_month_venc:
+                parcelas_info.append({
+                    "nome": group["nome"],
+                    "valor_mensal": valor_mensal,
+                    "parcela_atual": parcela_total,
+                    "parcela_total": parcela_total,
+                    "parcelas_restantes": 0,
+                    "mes_inicio": mes_atual,
+                    "mes_termino": mes_atual,
+                    "status_badge": "Encerrando",
+                })
+            continue
 
         # CR-024: Usar datas reais de vencimento para calcular mes_inicio e mes_termino
         # mes_inicio = primeiro vencimento >= mes_atual (independente de status de pagamento)
@@ -510,17 +528,20 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
 
     # 5. Calcular KPIs de resumo
     total_comprometido_mes_atual = projecao_mensal[0]["total_comprometido"] if projecao_mensal else 0.0
-    qtd_ativas = len(parcelas_info)
 
-    # Total restante = soma de (parcelas_restantes * valor_mensal) para todas as parcelas
+    # Excluir parcelas concluídas (restantes=0) dos KPIs de "ativas" e "restante"
+    parcelas_com_restante = [p for p in parcelas_info if p["parcelas_restantes"] > 0]
+    qtd_ativas = len(parcelas_com_restante)
+
+    # Total restante = soma de (parcelas_restantes * valor_mensal)
     total_restante = round(
-        sum(p["parcelas_restantes"] * p["valor_mensal"] for p in parcelas_info),
+        sum(p["parcelas_restantes"] * p["valor_mensal"] for p in parcelas_com_restante),
         2
     )
 
-    # Proxima a encerrar (menor mes_termino)
+    # Proxima a encerrar (menor mes_termino, apenas parcelas com restante > 0)
     nao_pendentes_com_termino = [
-        p for p in parcelas_info
+        p for p in parcelas_com_restante
         if p["mes_termino"] is not None
     ]
     proxima_a_encerrar = None
