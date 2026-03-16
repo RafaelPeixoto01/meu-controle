@@ -219,6 +219,128 @@ export interface DashboardData {
   evolucao: MonthEvolutionPoint[];
 }
 
+// ========== Health Score Types (CR-026) ==========
+
+export interface D2SubfactorDetail {
+  pontos: number;
+  valor?: number;
+  quantidade?: number;
+  percentual_liberacao?: number;
+}
+
+export interface D4SubfactorDetail {
+  pontos: number;
+  percentual_em_dia?: number;
+  dias_registro?: number;
+  primeiro_mes?: boolean;
+  nova_parcela_longa?: string | null;
+}
+
+export interface D2SubfactorsGroup {
+  d2a_percentual: D2SubfactorDetail;
+  d2b_quantidade: D2SubfactorDetail;
+  d2c_pendentes: D2SubfactorDetail;
+  d2d_alivio: D2SubfactorDetail;
+}
+
+export interface D4SubfactorsGroup {
+  d4a_pontualidade: D4SubfactorDetail;
+  d4b_consistencia: D4SubfactorDetail;
+  d4c_tendencia: D4SubfactorDetail;
+  d4d_disciplina: D4SubfactorDetail;
+}
+
+export interface ScoreDimensionD1 {
+  pontos: number;
+  maximo: number;
+  percentual_comprometimento: number;
+  detalhe: string;
+}
+
+export interface ScoreDimensionD2 {
+  pontos: number;
+  maximo: number;
+  subfatores: D2SubfactorsGroup;
+  detalhe: string;
+}
+
+export interface ScoreDimensionD3 {
+  pontos: number;
+  maximo: number;
+  percentual_livre: number;
+  estimativa_variaveis: boolean;
+  dias_dados_variaveis: number;
+  detalhe: string;
+}
+
+export interface ScoreDimensionD4 {
+  pontos: number;
+  maximo: number;
+  subfatores: D4SubfactorsGroup;
+  detalhe: string;
+}
+
+export interface ScoreDimensoes {
+  d1_comprometimento: ScoreDimensionD1;
+  d2_parcelas: ScoreDimensionD2;
+  d3_poupanca: ScoreDimensionD3;
+  d4_comportamento: ScoreDimensionD4;
+}
+
+export interface ScoreInfo {
+  total: number;
+  classificacao: string;
+  cor: string;
+  mensagem: string;
+  mensagem_contextual: string;
+  variacao_mes_anterior: number | null;
+  mes_referencia: string;
+}
+
+export interface ConservativePendingItem {
+  descricao: string;
+  valor_estimado_mensal: number;
+  total_parcelas: number;
+}
+
+export interface ConservativeScenario {
+  score: number;
+  classificacao: string;
+  parcelas_pendentes: ConservativePendingItem[];
+  impacto: string;
+}
+
+export interface ScoreAction {
+  prioridade: number;
+  dimensao_alvo: string;
+  descricao: string;
+  impacto_estimado: number;
+  tipo: string;
+}
+
+export interface HealthScoreData {
+  score: ScoreInfo;
+  dimensoes: ScoreDimensoes;
+  cenario_conservador: ConservativeScenario | null;
+  acoes: ScoreAction[];
+}
+
+export interface ScoreHistoryItem {
+  mes_referencia: string;
+  score_total: number;
+  classificacao: string;
+  d1: number;
+  d2: number;
+  d3: number;
+  d4: number;
+}
+
+export interface ScoreHistoryData {
+  historico: ScoreHistoryItem[];
+  meses_solicitados: number;
+  meses_disponiveis: number;
+}
+
 // ========== Auth Types (CR-002) ==========
 
 export interface User {
