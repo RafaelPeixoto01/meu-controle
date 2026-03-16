@@ -183,7 +183,7 @@ function GroupSection({
     groups: InstallmentGroup[];
     expandedGroups: Record<string, boolean>;
     toggleGroup: (name: string) => void;
-    projectionData?: Array<{ nome: string; parcelas_restantes: number; mes_termino: string | null; status_badge: string }>;
+    projectionData?: Array<{ nome: string; parcela_total: number; parcelas_restantes: number; mes_termino: string | null; status_badge: string }>;
 }) {
     return (
         <div className="space-y-4">
@@ -195,7 +195,9 @@ function GroupSection({
             </h2>
 
             {groups.map((group, idx) => {
-                const projInfo = projectionData?.find((p) => p.nome === group.nome);
+                const projInfo = projectionData?.find(
+                    (p) => p.nome === group.nome && p.parcela_total === group.parcela_total
+                );
                 return (
                     <GroupCard
                         key={`${group.nome}-${idx}`}

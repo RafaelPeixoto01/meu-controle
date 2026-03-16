@@ -38,6 +38,7 @@
 | CR-024 | Projecao com datas reais de vencimento                             | CR24-T-01 a CR24-T-06 | Concluido |
 | CR-026 | Score de Saude Financeira (F04)                                        | CR26-T-01 a CR26-T-22 | Concluido |
 | CR-027 | Mover Score para aba propria no ViewSelector                               | CR27-T-01 a CR27-T-03 | Concluido |
+| CR-028 | Fix badge "Encerrando" duplicado em parcelas com mesmo nome                | CR28-T-01 a CR28-T-05 | Concluido |
 
 ---
 
