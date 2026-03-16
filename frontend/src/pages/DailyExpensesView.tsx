@@ -38,7 +38,7 @@ export default function DailyExpensesView() {
             Erro ao carregar dados
           </p>
           <p className="text-text-muted text-sm">
-            {error?.message || "Verifique sua conexao e tente novamente."}
+            {error?.message || "Verifique sua conexão e tente novamente."}
           </p>
         </div>
       </div>

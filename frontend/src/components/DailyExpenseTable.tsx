@@ -60,7 +60,7 @@ export default function DailyExpenseTable({
     <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
         <h3 className="text-base font-bold text-text uppercase tracking-wide">
-          Gastos Diarios
+          Gastos Diários
         </h3>
         <button
           type="button"
@@ -77,7 +77,7 @@ export default function DailyExpenseTable({
         {isEmpty ? (
           <div className="px-6 py-14 text-center">
             <p className="text-text-muted text-base font-medium">
-              Nenhum gasto diario registrado
+              Nenhum gasto diário registrado
             </p>
             <p className="text-text-muted/60 text-sm mt-1">
               Clique em "+ Novo Gasto" para adicionar
@@ -88,7 +88,7 @@ export default function DailyExpenseTable({
             <thead>
               <tr className="bg-primary-50 border-y border-primary-light">
                 <th className="text-left px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
-                  Descricao
+                  Descrição
                 </th>
                 <th className="text-right px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
                   Valor
@@ -100,7 +100,7 @@ export default function DailyExpenseTable({
                   Pagamento
                 </th>
                 <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
-                  Acoes
+                  Ações
                 </th>
               </tr>
             </thead>
@@ -117,7 +117,7 @@ export default function DailyExpenseTable({
             <tfoot>
               <tr className="bg-slate-50 border-t-2 border-slate-200">
                 <td className="px-3 py-3.5 sm:px-6 font-bold text-text">
-                  Total do Mes
+                  Total do Mês
                 </td>
                 <td className="px-3 py-3.5 sm:px-6 text-right font-bold text-text tabular-nums">
                   {formatBRL(totalMes)}

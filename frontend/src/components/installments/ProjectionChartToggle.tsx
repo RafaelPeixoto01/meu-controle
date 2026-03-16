@@ -17,7 +17,7 @@ export default function ProjectionChartToggle({ data }: ProjectionChartTogglePro
     <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-5 sm:p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-bold text-text-muted uppercase tracking-wide">
-          {view === "projection" ? "Projecao 12 Meses" : "Timeline de Parcelas"}
+          {view === "projection" ? "Projeção 12 Meses" : "Timeline de Parcelas"}
         </h3>
         <div className="flex bg-slate-100 rounded-lg p-0.5">
           <button
@@ -29,7 +29,7 @@ export default function ProjectionChartToggle({ data }: ProjectionChartTogglePro
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Projecao</span>
+            <span className="hidden sm:inline">Projeção</span>
           </button>
           <button
             onClick={() => setView("timeline")}

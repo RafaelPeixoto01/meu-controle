@@ -10,14 +10,14 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 def send_password_reset_email(to_email: str, reset_token: str, user_name: str) -> bool:
     """
-    Envia email de recuperacao de senha via SendGrid.
-    Degradacao graciosa: se SENDGRID_API_KEY nao configurada, loga token e retorna True.
+    Envia email de recuperação de senha via SendGrid.
+    Degradação graciosa: se SENDGRID_API_KEY não configurada, loga token e retorna True.
     """
     reset_link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
 
     if not SENDGRID_API_KEY:
         logger.warning(
-            f"SendGrid nao configurado. Token de reset para {to_email}: {reset_token}"
+            f"SendGrid não configurado. Token de reset para {to_email}: {reset_token}"
         )
         logger.warning(f"Link de reset: {reset_link}")
         return True
@@ -29,14 +29,14 @@ def send_password_reset_email(to_email: str, reset_token: str, user_name: str) -
         message = Mail(
             from_email=SENDGRID_FROM_EMAIL,
             to_emails=to_email,
-            subject="Meu Controle - Recuperacao de Senha",
+            subject="Meu Controle - Recuperação de Senha",
             html_content=f"""
-            <h2>Recuperacao de Senha</h2>
-            <p>Ola {user_name},</p>
-            <p>Voce solicitou a recuperacao de senha. Clique no link abaixo para redefinir:</p>
+            <h2>Recuperação de Senha</h2>
+            <p>Olá {user_name},</p>
+            <p>Você solicitou a recuperação de senha. Clique no link abaixo para redefinir:</p>
             <p><a href="{reset_link}">Redefinir minha senha</a></p>
             <p>Este link expira em 1 hora.</p>
-            <p>Se voce nao solicitou esta recuperacao, ignore este email.</p>
+            <p>Se você não solicitou esta recuperação, ignore este email.</p>
             """,
         )
 

@@ -42,7 +42,7 @@ def update_income(
     """Atualizar receita existente."""
     income = crud.get_income_by_id(db, income_id, current_user.id)  # CR-002: ownership check
     if not income:
-        raise HTTPException(status_code=404, detail="Receita nao encontrada")
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -60,5 +60,5 @@ def delete_income(
     """Excluir receita por ID."""
     income = crud.get_income_by_id(db, income_id, current_user.id)  # CR-002: ownership check
     if not income:
-        raise HTTPException(status_code=404, detail="Receita nao encontrada")
+        raise HTTPException(status_code=404, detail="Receita não encontrada")
     crud.delete_income(db, income)

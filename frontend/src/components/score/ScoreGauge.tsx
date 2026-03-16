@@ -68,7 +68,7 @@ export default function ScoreGauge({
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs text-text-muted font-medium uppercase tracking-wide">
-            Score de Saude
+            Score de Saúde
           </div>
           <div className="text-sm font-semibold" style={{ color: cor }}>
             {classificacao}
@@ -92,7 +92,7 @@ export default function ScoreGauge({
                 }`}
               >
                 {variacao > 0 ? "+" : ""}
-                {variacao} pts vs. mes anterior
+                {variacao} pts vs. mês anterior
               </span>
             </div>
           )}
@@ -143,7 +143,7 @@ export default function ScoreGauge({
               }`}
             >
               {variacao > 0 ? "+" : ""}
-              {variacao} pontos vs. mes anterior
+              {variacao} pontos vs. mês anterior
             </span>
           </div>
         )}

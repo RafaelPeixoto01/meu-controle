@@ -31,7 +31,7 @@ _IS_PRODUCTION = os.environ.get("ENVIRONMENT", "development").lower() != "develo
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
-    """Define o refresh token como HttpOnly cookie (nao acessivel via JS)."""
+    """Define o refresh token como HttpOnly cookie (não acessível via JS)."""
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
@@ -65,10 +65,10 @@ def _create_tokens_for_user(db: Session, user: User) -> dict:
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(data: UserCreate, response: Response, db: Session = Depends(get_db)):
-    """RF-08: Cadastro de usuario com nome, email e senha."""
+    """RF-08: Cadastro de usuário com nome, email e senha."""
     existing = crud.get_user_by_email(db, data.email)
     if existing:
-        raise HTTPException(status_code=409, detail="Email ja cadastrado")  # RN-011
+        raise HTTPException(status_code=409, detail="Email já cadastrado")  # RN-011
 
     user = User(
         nome=data.nome,
@@ -86,7 +86,7 @@ def login(data: LoginRequest, response: Response, db: Session = Depends(get_db))
     """RF-09: Login com email e senha."""
     user = crud.get_user_by_email(db, data.email)
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Credenciais invalidas")  # Mensagem generica
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")  # Mensagem genérica
 
     tokens = _create_tokens_for_user(db, user)
     _set_refresh_cookie(response, tokens["refresh_token"])
@@ -97,7 +97,7 @@ def login(data: LoginRequest, response: Response, db: Session = Depends(get_db))
 async def google_auth(data: GoogleAuthRequest, response: Response, db: Session = Depends(get_db)):
     """RF-09: Login com Google OAuth2 (Authorization Code flow)."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        raise HTTPException(status_code=400, detail="Google OAuth nao configurado")
+        raise HTTPException(status_code=400, detail="Google OAuth não configurado")
 
     # Trocar code por tokens Google via httpx
     async with httpx.AsyncClient() as client:
@@ -113,12 +113,12 @@ async def google_auth(data: GoogleAuthRequest, response: Response, db: Session =
         )
 
     if token_response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Codigo Google invalido")
+        raise HTTPException(status_code=400, detail="Código Google inválido")
 
     google_data = token_response.json()
     id_token = google_data.get("id_token")
 
-    # Decodificar ID token (sem verificacao de assinatura — ja validado pelo Google)
+    # Decodificar ID token (sem verificação de assinatura — já validado pelo Google)
     from jose import jwt as jose_jwt
     user_info = jose_jwt.get_unverified_claims(id_token)
 
@@ -127,7 +127,7 @@ async def google_auth(data: GoogleAuthRequest, response: Response, db: Session =
     nome = user_info.get("name", "")
     avatar_url = user_info.get("picture")
 
-    # Buscar usuario existente por google_id ou email (RN-017: merge)
+    # Buscar usuário existente por google_id ou email (RN-017: merge)
     user = crud.get_user_by_google_id(db, google_id)
     if not user:
         user = crud.get_user_by_email(db, email)
@@ -138,7 +138,7 @@ async def google_auth(data: GoogleAuthRequest, response: Response, db: Session =
                 user.avatar_url = avatar_url
             crud.update_user(db, user)
         else:
-            # Criar novo usuario via Google
+            # Criar novo usuário via Google
             user = User(
                 nome=nome,
                 email=email,
@@ -155,28 +155,28 @@ async def google_auth(data: GoogleAuthRequest, response: Response, db: Session =
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_tokens(request: Request, response: Response, db: Session = Depends(get_db)):
-    """RF-10: Renovar tokens via refresh token (com rotacao — RN-014). Lê refresh token do HttpOnly cookie."""
+    """RF-10: Renovar tokens via refresh token (com rotação — RN-014). Lê refresh token do HttpOnly cookie."""
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token ausente")
 
     payload = verify_token(refresh_token)
     if not payload or payload.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail="Refresh token invalido")
+        raise HTTPException(status_code=401, detail="Refresh token inválido")
 
-    # Verificar se token existe no banco (nao foi revogado)
+    # Verificar se token existe no banco (não foi revogado)
     token_hash = hash_token(refresh_token)
     stored_token = crud.get_refresh_token_by_hash(db, token_hash)
     if not stored_token or stored_token.expires_at < datetime.utcnow():
         raise HTTPException(status_code=401, detail="Refresh token expirado ou revogado")
 
-    # Rotacao: invalidar token antigo
+    # Rotação: invalidar token antigo
     crud.delete_refresh_token(db, stored_token)
 
     # Gerar novo par de tokens
     user = crud.get_user_by_id(db, payload["sub"])
     if not user:
-        raise HTTPException(status_code=401, detail="Usuario nao encontrado")
+        raise HTTPException(status_code=401, detail="Usuário não encontrado")
 
     tokens = _create_tokens_for_user(db, user)
     _set_refresh_cookie(response, tokens["refresh_token"])
@@ -190,7 +190,7 @@ def logout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """RF-10: Logout — invalida refresh token no banco e limpa o cookie."""
+    """RF-10: Logout — invalida refresh token no banco e limpa cookie."""
     refresh_token = request.cookies.get("refresh_token")
     if refresh_token:
         token_hash = hash_token(refresh_token)
@@ -203,11 +203,11 @@ def logout(
 
 @router.post("/forgot-password")
 def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    """RF-11: Solicitar email de recuperacao de senha (RN-016)."""
-    # Sempre retorna 200 por seguranca (nao revela se email existe)
+    """RF-11: Solicitar email de recuperação de senha (RN-016)."""
+    # Sempre retorna 200 por segurança (não revela se email existe)
     user = crud.get_user_by_email(db, data.email)
     if user and user.password_hash:
-        # Gerar token de reset (JWT com 1h de expiracao)
+        # Gerar token de reset (JWT com 1h de expiração)
         from jose import jwt as jose_jwt
         reset_token = jose_jwt.encode(
             {"sub": user.id, "type": "reset", "exp": datetime.utcnow() + timedelta(hours=1)},
@@ -216,7 +216,7 @@ def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
         )
         send_password_reset_email(user.email, reset_token, user.nome)
 
-    return {"message": "Se o email estiver cadastrado, voce recebera um link de recuperacao"}
+    return {"message": "Se o email estiver cadastrado, você receberá um link de recuperação"}
 
 
 @router.post("/reset-password")
@@ -224,16 +224,16 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
     """RF-11: Redefinir senha com token de reset (RN-016)."""
     payload = verify_token(data.token)
     if not payload or payload.get("type") != "reset":
-        raise HTTPException(status_code=400, detail="Token de reset invalido ou expirado")
+        raise HTTPException(status_code=400, detail="Token de reset inválido ou expirado")
 
     user = crud.get_user_by_id(db, payload["sub"])
     if not user:
-        raise HTTPException(status_code=400, detail="Token de reset invalido")
+        raise HTTPException(status_code=400, detail="Token de reset inválido")
 
     user.password_hash = hash_password(data.new_password)
     crud.update_user(db, user)
 
-    # Invalidar todos os refresh tokens do usuario (seguranca)
+    # Invalidar todos os refresh tokens do usuário (segurança)
     crud.delete_user_refresh_tokens(db, user.id)
 
     return {"message": "Senha redefinida com sucesso"}

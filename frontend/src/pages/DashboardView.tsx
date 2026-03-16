@@ -42,7 +42,7 @@ export default function DashboardView() {
             {error?.message || "Erro ao carregar dashboard"}
           </p>
           <p className="text-text-muted text-sm mt-1">
-            Verifique sua conexao e tente novamente.
+            Verifique sua conexão e tente novamente.
           </p>
         </div>
       )}

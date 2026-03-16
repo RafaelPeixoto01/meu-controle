@@ -6,8 +6,8 @@ interface ScoreDimensionBreakdownProps {
 
 const DIMENSION_LABELS: Record<string, { label: string; icon: string }> = {
   d1_comprometimento: { label: "Comprometimento com fixos", icon: "D1" },
-  d2_parcelas: { label: "Pressao de parcelas", icon: "D2" },
-  d3_poupanca: { label: "Capacidade de poupanca", icon: "D3" },
+  d2_parcelas: { label: "Pressão de parcelas", icon: "D2" },
+  d3_poupanca: { label: "Capacidade de poupança", icon: "D3" },
   d4_comportamento: { label: "Comportamento e disciplina", icon: "D4" },
 };
 
@@ -31,7 +31,7 @@ export default function ScoreDimensionBreakdown({
   return (
     <div className="bg-surface rounded-2xl shadow-sm border border-border p-5">
       <h3 className="text-sm font-semibold text-text mb-4">
-        Detalhamento por dimensao
+        Detalhamento por dimensão
       </h3>
       <div className="space-y-4">
         {dims.map(({ key, data }) => {

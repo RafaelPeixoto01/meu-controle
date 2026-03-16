@@ -263,7 +263,7 @@ export default function ExpenseFormModal({
               htmlFor="recorrente"
               className={`text-sm font-medium ${hasParcelas ? "text-slate-400" : "text-text-muted"}`}
             >
-              Recorrente (repete todo mes)
+              Recorrente (repete todo mês)
             </label>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

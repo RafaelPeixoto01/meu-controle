@@ -95,7 +95,7 @@ export default function DailyExpenseFormModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-text-muted mb-1.5">
-              Descricao
+              Descrição
             </label>
             <input
               type="text"
@@ -192,7 +192,7 @@ export default function DailyExpenseFormModal({
 
           <div>
             <label className="block text-sm font-semibold text-text-muted mb-1.5">
-              Metodo de Pagamento
+              Método de Pagamento
             </label>
             <select
               value={metodoPagamento}

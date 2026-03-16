@@ -64,7 +64,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     // Refresh falhou ou cookie ausente
     localStorage.removeItem("access_token");
     window.location.href = "/login";
-    throw new Error("Sessao expirada");
+    throw new Error("Sessão expirada");
   }
 
   if (!response.ok) {

@@ -54,10 +54,10 @@ export default function ScoreHistoryChart({
     return (
       <div className="bg-surface rounded-2xl shadow-sm border border-border p-5">
         <h3 className="text-sm font-semibold text-text mb-3">
-          Evolucao do score
+          Evolução do score
         </h3>
         <p className="text-sm text-text-muted text-center py-8">
-          Historico sera exibido a partir do proximo mes.
+          Histórico será exibido a partir do próximo mês.
         </p>
       </div>
     );
@@ -71,7 +71,7 @@ export default function ScoreHistoryChart({
   return (
     <div className="bg-surface rounded-2xl shadow-sm border border-border p-5">
       <h3 className="text-sm font-semibold text-text mb-3">
-        Evolucao do score
+        Evolução do score
       </h3>
       <div className="h-56 sm:h-64">
         <ResponsiveContainer width="100%" height="100%">

@@ -29,11 +29,11 @@ async def lifespan(app: FastAPI):
     # Startup: validar variáveis de ambiente obrigatórias
     optional_with_warning = {
         "GOOGLE_CLIENT_ID": "Login com Google desabilitado",
-        "SENDGRID_API_KEY": "Recuperacao de senha por email desabilitada",
+        "SENDGRID_API_KEY": "Recuperação de senha por email desabilitada",
     }
     for var, warning in optional_with_warning.items():
         if not os.environ.get(var):
-            logging.warning("Variavel de ambiente %s nao definida: %s", var, warning)
+            logging.warning("Variável de ambiente %s não definida: %s", var, warning)
     yield
 
 

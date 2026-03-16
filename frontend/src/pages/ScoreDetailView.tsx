@@ -26,7 +26,7 @@ export default function ScoreDetailView() {
             {error?.message || "Erro ao calcular score"}
           </p>
           <p className="text-text-muted text-sm mt-1">
-            Verifique sua conexao e tente novamente.
+            Verifique sua conexão e tente novamente.
           </p>
         </div>
       )}
@@ -54,10 +54,10 @@ export default function ScoreDetailView() {
             scoreAtual={score.score.total}
           />
 
-          {/* Acoes sugeridas */}
+          {/* Ações sugeridas */}
           <ScoreActions acoes={score.acoes} />
 
-          {/* Historico */}
+          {/* Histórico */}
           <ScoreHistoryChart historico={history?.historico || []} />
         </div>
       )}

@@ -26,13 +26,13 @@ export default function ProjectionSummaryCards({ data }: ProjectionSummaryCardsP
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-      {/* Total comprometido este mes */}
+      {/* Total comprometido este mês */}
       <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <div className="p-2 rounded-xl bg-primary/10">
             <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
           </div>
-          <span className="text-xs sm:text-sm font-medium text-text-muted">Comprometido/Mes</span>
+          <span className="text-xs sm:text-sm font-medium text-text-muted">Comprometido/Mês</span>
         </div>
         <div className="text-lg sm:text-2xl font-extrabold tabular-nums text-primary">
           {formatBRL(data.total_comprometido_mes_atual)}
@@ -65,13 +65,13 @@ export default function ProjectionSummaryCards({ data }: ProjectionSummaryCardsP
         </div>
       </div>
 
-      {/* Proxima a encerrar */}
+      {/* Próxima a encerrar */}
       <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <div className="p-2 rounded-xl bg-success/10">
             <CalendarCheck className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
           </div>
-          <span className="text-xs sm:text-sm font-medium text-text-muted">Proxima a Encerrar</span>
+          <span className="text-xs sm:text-sm font-medium text-text-muted">Próxima a Encerrar</span>
         </div>
         {data.proxima_a_encerrar ? (
           <div>
@@ -87,13 +87,13 @@ export default function ProjectionSummaryCards({ data }: ProjectionSummaryCardsP
         )}
       </div>
 
-      {/* Liberacao proximos 3 meses */}
+      {/* Liberação próximos 3 meses */}
       <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <div className="p-2 rounded-xl bg-success/10">
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
           </div>
-          <span className="text-xs sm:text-sm font-medium text-text-muted">Liberacao 3 Meses</span>
+          <span className="text-xs sm:text-sm font-medium text-text-muted">Liberação 3 Meses</span>
         </div>
         <div className="text-lg sm:text-2xl font-extrabold tabular-nums text-success-dark">
           {formatBRL(data.liberacao_proximos_3_meses)}

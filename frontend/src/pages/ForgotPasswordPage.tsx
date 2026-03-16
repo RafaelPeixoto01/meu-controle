@@ -49,7 +49,7 @@ export default function ForgotPasswordPage() {
           {sent ? (
             <div className="text-center">
               <div className="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-r-xl mb-6 text-sm font-medium">
-                Se o email estiver cadastrado, voce recebera um link de recuperacao.
+                Se o email estiver cadastrado, você receberá um link de recuperação.
               </div>
               <Link
                 to="/login"
@@ -86,7 +86,7 @@ export default function ForgotPasswordPage() {
                   {loading && (
                     <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   )}
-                  {loading ? "Enviando..." : "Enviar link de recuperacao"}
+                  {loading ? "Enviando..." : "Enviar link de recuperação"}
                 </button>
               </form>
 

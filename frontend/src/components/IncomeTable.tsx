@@ -77,7 +77,7 @@ export default function IncomeTable({
                 Data
               </th>
               <th className="text-center px-3 py-3 sm:px-6 text-xs font-bold text-primary uppercase tracking-wide">
-                Acoes
+                Ações
               </th>
             </tr>
           </thead>

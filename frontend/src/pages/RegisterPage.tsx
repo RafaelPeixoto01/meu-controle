@@ -21,7 +21,7 @@ export default function RegisterPage() {
     setError("");
 
     if (password !== confirmPassword) {
-      setError("As senhas nao coincidem");
+      setError("As senhas não coincidem");
       return;
     }
 
@@ -125,7 +125,7 @@ export default function RegisterPage() {
                   required
                   minLength={6}
                   className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white transition-all duration-200"
-                  placeholder="Minimo 6 caracteres"
+                  placeholder="Mínimo 6 caracteres"
                 />
               </div>
               <div>
