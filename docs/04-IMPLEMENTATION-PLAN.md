@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.7
-**Data:** 2026-03-14
-**PRD Ref:** 01-PRD v2.2
-**Arquitetura Ref:** 02-ARCHITECTURE v2.6
-**Spec Ref:** 03-SPEC v2.6
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais)
+**Versao:** 2.8
+**Data:** 2026-03-16
+**PRD Ref:** 01-PRD v2.3
+**Arquitetura Ref:** 02-ARCHITECTURE v2.8
+**Spec Ref:** 03-SPEC v2.8
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais), CR-026 (Score de Saude Financeira)
 
 ---
 
@@ -36,6 +36,7 @@
 | CR-021 | Visao Consolidada de Parcelas Futuras (F03)                        | CR21-T-01 a CR21-T-08 | Concluido |
 | CR-023 | Remover status Pendente da projecao                                | CR23-T-01 a CR23-T-05 | Concluido |
 | CR-024 | Projecao com datas reais de vencimento                             | CR24-T-01 a CR24-T-06 | Concluido |
+| CR-026 | Score de Saude Financeira (F04)                                        | CR26-T-01 a CR26-T-22 | Concluido |
 
 ---
 
@@ -611,4 +612,39 @@ graph TD
 | CR21-T-06  | Frontend: componentes visuais (cards, chart, gantt, toggle) | components/installments/*.tsx | CR-021 | CR21-T-05 | ProjectionSummaryCards, ProjectionStackedChart, ProjectionGantt, ProjectionChartToggle renderizam |
 | CR21-T-07  | Frontend: reorganizar InstallmentsView (3 secoes)         | pages/InstallmentsView.tsx | CR-021 | CR21-T-06 | Cards + grafico (com toggle Gantt) + tabela aprimorada |
 | CR21-T-08  | Atualizacao de documentacao                               | docs/, CLAUDE.md | CR-021 | CR21-T-01~07 | Docs refletem mudancas |
+
+---
+
+## CR-026: Score de Saude Financeira (F04)
+
+> Ref: `/docs/changes/CR-026-score-saude-financeira.md`
+>
+> Score deterministico 0-100 com 4 dimensoes (D1-D4, 25pts cada), card no Dashboard,
+> tela de detalhe com breakdown/historico/acoes/cenario conservador, persistencia mensal.
+> Migration: tabela score_historico.
+
+| ID         | Tarefa                                                    | Arquivos | Ref | Depende de | Done When |
+|------------|-----------------------------------------------------------|----------|-----|------------|-----------|
+| CR26-T-01  | Backend: migration score_historico                        | alembic/versions/006_add_score_historico.py | CR-026 | — | alembic upgrade/downgrade round-trip |
+| CR26-T-02  | Backend: modelo ORM ScoreHistorico                        | models.py | CR-026 | CR26-T-01 | Modelo com relationship no User |
+| CR26-T-03  | Backend: engine de calculo health_score.py                | health_score.py | CR-026 | CR26-T-02 | 4 dimensoes calculam corretamente |
+| CR26-T-04  | Backend: gerador de acoes sugeridas                       | health_score.py | CR-026 | CR26-T-03 | Top 3 acoes por impacto |
+| CR26-T-05  | Backend: cenario conservador                              | health_score.py | CR-026 | CR26-T-03 | Recalcula D1+D2 com pendentes ativados |
+| CR26-T-06  | Backend: CRUD score_historico (upsert, history, by_month) | crud.py | CR-026 | CR26-T-02 | Upsert e queries funcionam |
+| CR26-T-07  | Backend: router /api/score e /api/score/history           | routers/score.py | CR-026 | CR26-T-03~06 | Endpoints retornam JSON valido |
+| CR26-T-08  | Backend: registrar score router em main.py                | main.py | CR-026 | CR26-T-07 | App starta com novo router |
+| CR26-T-09  | Backend: testes do health_score                           | tests/test_health_score.py | CR-026 | CR26-T-03~05 | 13 testes passam (cenarios + edge cases) |
+| CR26-T-10  | Backend: schemas Pydantic para score                      | schemas.py | CR-026 | CR26-T-03 | Schemas validam responses |
+| CR26-T-11  | Frontend: types de score em types.ts                      | types.ts | CR-026 | CR26-T-10 | Tipos espelham schemas |
+| CR26-T-12  | Frontend: API functions (fetchHealthScore, fetchScoreHistory) | api.ts | CR-026 | CR26-T-07 | Funcoes chamam endpoints |
+| CR26-T-13  | Frontend: hook useHealthScore                             | hooks/useHealthScore.ts | CR-026 | CR26-T-12 | 2 queries com user?.id |
+| CR26-T-14  | Frontend: ScoreGauge (SVG circular)                       | components/score/ScoreGauge.tsx | CR-026 | CR26-T-13 | Modos compact e expanded |
+| CR26-T-15  | Frontend: ScoreDimensionBreakdown                         | components/score/ScoreDimensionBreakdown.tsx | CR-026 | CR26-T-13 | 4 barras horizontais coloridas |
+| CR26-T-16  | Frontend: ScoreHistoryChart (recharts)                    | components/score/ScoreHistoryChart.tsx | CR-026 | CR26-T-13 | LineChart com zones coloridas |
+| CR26-T-17  | Frontend: ScoreActions                                    | components/score/ScoreActions.tsx | CR-026 | CR26-T-13 | Cards com impacto estimado |
+| CR26-T-18  | Frontend: ScoreConservativeNote                           | components/score/ScoreConservativeNote.tsx | CR-026 | CR26-T-13 | Banner amber com pendentes |
+| CR26-T-19  | Frontend: ScoreDetailView (pagina /score)                 | pages/ScoreDetailView.tsx | CR-026 | CR26-T-14~18 | Gauge + breakdown + acoes + historico |
+| CR26-T-20  | Frontend: card score no DashboardView                     | pages/DashboardView.tsx | CR-026 | CR26-T-14 | ScoreGauge compact no dashboard |
+| CR26-T-21  | Frontend: rota /score em App.tsx                          | App.tsx | CR-026 | CR26-T-19 | Rota protegida funciona |
+| CR26-T-22  | Atualizacao de documentacao                               | docs/, CLAUDE.md | CR-026 | CR26-T-01~21 | Docs refletem mudancas |
 

@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 2.2
-**Data:** 2026-02-17
+**Versao:** 2.3
+**Data:** 2026-03-16
 **Status:** Aprovado
-**Fase:** 1 + 3 + Gastos Diarios + Parcelas — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas
-**CR Ref:** CR-002, CR-004, CR-005, CR-007
+**Fase:** 1 + 3 + Gastos Diarios + Parcelas + Score — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Score de Saude Financeira
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-026
 
 ---
 
@@ -148,6 +148,21 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - A visao mensal exibe gastos agrupados por dia, com subtotal por dia e total do mes.
 - Gastos diarios sao independentes dos gastos planejados (nao participam da transicao de mes).
 - O usuario navega entre as duas visoes (Gastos Planejados e Gastos Diarios) por meio de um seletor de visao (ViewSelector).
+
+### Modulo: Score de Saude Financeira (CR-026)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-15 | Score deterministico de saude financeira 0-100 com 4 dimensoes, card no Dashboard, tela de detalhe com breakdown, historico, acoes sugeridas e cenario conservador | Alta | Rafael |
+
+**RF-15 — Detalhamento:**
+- Score deterministico 0-100 calculado a partir de 4 dimensoes (25 pontos cada): D1 (comprometimento fixo), D2 (pressao de parcelas), D3 (capacidade de poupanca), D4 (comportamento/disciplina).
+- Classificacao em 5 faixas: Critica (0-25), Atencao (26-45), Estavel (46-65), Saudavel (66-85), Excelente (86-100).
+- Card compacto no Dashboard com gauge circular SVG, score numerico e variacao mensal. Click navega para tela de detalhe.
+- Tela de detalhe `/score`: gauge expandido com mensagem contextual, breakdown das 4 dimensoes com barras horizontais coloridas, cenario conservador (se ha parcelas pendentes), ate 3 acoes sugeridas ordenadas por impacto, grafico de historico 12 meses.
+- Cenario conservador: recalcula score assumindo parcelas pendentes (0/Y) como ativas.
+- Persistencia mensal em tabela `score_historico` com upsert-on-read (INSERT ON CONFLICT).
+- Endpoints: `GET /api/score` (calculo + persistencia), `GET /api/score/history?months=12`.
 
 ### Modulo: Autenticacao e Usuarios (CR-002)
 
