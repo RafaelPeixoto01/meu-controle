@@ -342,9 +342,10 @@ Personal Finance/
 - CR-022: Fix KPI cards zerados na página Compras Parceladas — progresso calculado por contagem de parcelas PAGO em vez de max(parcela_atual) (concluido)
 - CR-023: Remover status "Pendente" da projeção de parcelas — parcelamentos com 0 pagas agora são incluídos na projeção como "Ativa" (concluido)
 - CR-024: Corrigir projeção para usar datas reais de vencimento — mes_inicio/mes_termino derivados dos vencimentos no banco, parcelas contribuem apenas nos meses corretos (concluido)
+- CR-025: Remover scroll das legendas dos donut charts no Dashboard — legendas crescem naturalmente sem max-height/overflow (concluido)
 
 ### Última Tarefa Implementada
-- CR-024: Corrigir projeção para usar datas reais de vencimento (concluido)
+- CR-025: Remover scroll das legendas dos donut charts no Dashboard (concluido)
 
 ---
 
