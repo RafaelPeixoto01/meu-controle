@@ -14,6 +14,8 @@ import type {
   InstallmentsResponse,
   InstallmentProjectionResponse,
   DashboardData,
+  HealthScoreData,
+  ScoreHistoryData,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -197,4 +199,14 @@ export function updateDailyExpense(
 
 export function deleteDailyExpense(id: string): Promise<void> {
   return request<void>(`/daily-expenses/${id}`, { method: "DELETE" });
+}
+
+// ========== Health Score (CR-026) ==========
+
+export function fetchHealthScore(): Promise<HealthScoreData> {
+  return request<HealthScoreData>("/score");
+}
+
+export function fetchScoreHistory(months = 12): Promise<ScoreHistoryData> {
+  return request<ScoreHistoryData>(`/score/history?months=${months}`);
 }

@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.7
-**Data:** 2026-03-13
-**PRD Ref:** 01-PRD v2.2
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual)
+**Versao:** 2.8
+**Data:** 2026-03-16
+**PRD Ref:** 01-PRD v2.3
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira)
 
 ---
 
@@ -200,6 +200,7 @@ erDiagram
     USER ||--o{ INCOME : "has many"
     USER ||--o{ REFRESH_TOKEN : "has many"
     USER ||--o{ DAILY_EXPENSE : "has many"
+    USER ||--o{ SCORE_HISTORICO : "has many"
 
     USER {
         string id PK
@@ -258,6 +259,20 @@ erDiagram
         string metodo_pagamento
         datetime created_at
         datetime updated_at
+    }
+    SCORE_HISTORICO {
+        string id PK
+        string user_id FK
+        date mes_referencia
+        int score_total
+        int d1_comprometimento
+        int d2_parcelas
+        int d3_capacidade
+        int d4_comportamento
+        string classificacao
+        int score_conservador
+        text dados_snapshot
+        datetime created_at
     }
 ```
 
@@ -350,6 +365,27 @@ erDiagram
 
 > **Categorias:** 14 categorias fixas + "Outros" definidas em `backend/app/categories.py` (`EXPENSE_CATEGORIES`). A categoria e derivada automaticamente da subcategoria via `get_category_for_subcategory()`. Compartilhada entre despesas planejadas (CR-016) e gastos diarios (CR-005).
 
+#### ScoreHistorico (`score_historico`) — CR-026
+
+| Campo              | Tipo           | Restricoes                        | Descricao                                         |
+|--------------------|----------------|-----------------------------------|----------------------------------------------------|
+| id                 | String(36)     | PK, auto-gerado (UUID)           | Identificador unico                                |
+| user_id            | String(36)     | NOT NULL, FK→users.id, CASCADE   | Usuario dono do registro                           |
+| mes_referencia     | Date           | NOT NULL                          | Mes/ano de referencia (ex: 2026-03-01)             |
+| score_total        | Integer        | NOT NULL                          | Score total 0-100                                  |
+| d1_comprometimento | Integer        | NOT NULL                          | Dimensao 1: comprometimento fixo (0-25)            |
+| d2_parcelas        | Integer        | NOT NULL                          | Dimensao 2: pressao de parcelas (0-25)             |
+| d3_capacidade      | Integer        | NOT NULL                          | Dimensao 3: capacidade de poupanca (0-25)          |
+| d4_comportamento   | Integer        | NOT NULL                          | Dimensao 4: comportamento/disciplina (0-25)        |
+| classificacao      | String(20)     | NOT NULL                          | Critica/Atencao/Estavel/Saudavel/Excelente         |
+| score_conservador  | Integer        | Nullable                          | Score com pendentes ativados (cenario conservador)  |
+| dados_snapshot     | Text           | Nullable                          | JSON string com snapshot dos dados do calculo       |
+| created_at         | DateTime       | NOT NULL, default now()           | Data de criacao do registro                        |
+
+> **UniqueConstraint:** `(user_id, mes_referencia)` — um registro por usuario por mes. Upsert on read: INSERT ON CONFLICT UPDATE.
+> **Index:** `ix_score_historico_user_month (user_id, mes_referencia)`
+> **dados_snapshot como Text:** SQLite nao suporta JSONB; Text funciona em ambos os DBs (AD-7).
+
 ### Relacionamentos
 
 ```
@@ -357,14 +393,16 @@ Usuario (1) ---- possui ----> Despesa (N)
 Usuario (1) ---- possui ----> Receita (N)
 Usuario (1) ---- possui ----> RefreshToken (N)
 Usuario (1) ---- possui ----> GastoDiario (N)
+Usuario (1) ---- possui ----> ScoreHistorico (N)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
 Receita (N) ---- pertence a ----> Mes de referencia (1)
 GastoDiario (N) ---- pertence a ----> Mes de referencia (1)
+ScoreHistorico (N) ---- pertence a ----> Mes de referencia (1)
 ```
 
 > **Isolamento de dados (CR-002):** Cada usuario so pode ver, criar, editar e deletar seus proprios dados. Todas as queries CRUD filtram por `user_id`. Operacoes de update/delete verificam ownership antes de executar.
 
-> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
+> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios, score historico e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
 
 ---
 
@@ -776,4 +814,4 @@ npm outdated                       # Lista pacotes com versao mais nova disponiv
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005 e CR-010.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Atualizado para v2.8 em 2026-03-16 (CR-026: Score de Saude Financeira — ScoreHistorico model, ER diagram, health_score.py, routers/score.py). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005, CR-010 e CR-026.*

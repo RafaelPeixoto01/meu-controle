@@ -12,6 +12,7 @@ import ProfilePage from "./pages/ProfilePage";
 import DailyExpensesView from "./pages/DailyExpensesView";
 import { InstallmentsView } from "./pages/InstallmentsView";
 import DashboardView from "./pages/DashboardView";
+import ScoreDetailView from "./pages/ScoreDetailView";
 
 function AppHeader() {
   const { isAuthenticated, user } = useAuth();
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="/dashboard" element={<DashboardView />} />
               <Route path="/daily-expenses" element={<DailyExpensesView />} />
               <Route path="/installments" element={<InstallmentsView />} />
+              <Route path="/score" element={<ScoreDetailView />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
 

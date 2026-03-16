@@ -213,15 +213,17 @@ Personal Finance/
 │   │       ├── 002_add_users_and_auth.py  # CR-002
 │   │       ├── 003_add_origem_id.py       # RF-06
 │       ├── 004_add_daily_expenses.py  # CR-005
-│       └── 005_add_expense_categories.py  # CR-016
+│       ├── 005_add_expense_categories.py  # CR-016
+│       └── 006_add_score_historico.py     # CR-026
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py           # Entry point FastAPI + lifespan
 │       ├── database.py       # Engine SQLAlchemy + SessionLocal
-│       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense
-│       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard schemas
-│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates
+│       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense, ScoreHistorico
+│       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard + health score schemas
+│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates + score historico
 │       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary, dashboard data, installment projection (CR-021)
+│       ├── health_score.py   # CR-026: calculo deterministico score 0-100, 4 dimensoes, acoes, cenario conservador
 │       ├── categories.py     # EXPENSE_CATEGORIES compartilhadas (CR-005, CR-016) + metodos de pagamento
 │       ├── auth.py           # CR-002: JWT + bcrypt auth module
 │       ├── email_service.py  # CR-002: SendGrid email (password reset)
@@ -232,9 +234,11 @@ Personal Finance/
 │           ├── incomes.py    # CRUD (auth required)
 │           ├── months.py     # GET visao mensal (auth required)
 │           ├── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
-│           └── dashboard.py      # CR-019: GET /api/dashboard/{year}/{month} (auth required)
+│           ├── dashboard.py      # CR-019: GET /api/dashboard/{year}/{month} (auth required)
+│           └── score.py          # CR-026: GET /api/score, GET /api/score/history (auth required)
 │   └── tests/
-│       └── test_installment_projection.py  # CR-021
+│       ├── test_installment_projection.py  # CR-021
+│       └── test_health_score.py            # CR-026
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts        # Proxy /api -> :8000
@@ -244,17 +248,18 @@ Personal Finance/
 │       ├── App.tsx           # Shell com AuthProvider + Routes
 │       ├── index.css         # Tailwind v4 (@import + @theme)
 │       ├── vite-env.d.ts     # Vite client types
-│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019) + InstallmentProjection types (CR-021)
+│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019) + InstallmentProjection types (CR-021) + HealthScore types (CR-026)
 │       ├── utils/            # format.ts (formatBRL, formatDateFull), date.ts
 │       ├── services/
-│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses + dashboard API
+│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses + dashboard + score API
 │       │   └── authApi.ts    # CR-002: auth API functions
 │       ├── contexts/
 │       │   └── AuthContext.tsx  # CR-002: auth state management
-│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard, useInstallmentProjection
-│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector, dashboard/, installments/
+│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard, useInstallmentProjection, useHealthScore
+│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector, dashboard/, installments/, score/
 │       │   ├── installments/    # CR-021: ProjectionSummaryCards, ProjectionStackedChart, ProjectionGantt, ProjectionChartToggle
-│       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, Login, Register, ForgotPassword, ResetPassword, Profile
+│       │   └── score/           # CR-026: ScoreGauge, ScoreDimensionBreakdown, ScoreHistoryChart, ScoreActions, ScoreConservativeNote
+│       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, ScoreDetailView, Login, Register, ForgotPassword, ResetPassword, Profile
 ├── CLAUDE.md
 └── .gitignore
 ```
@@ -343,9 +348,10 @@ Personal Finance/
 - CR-023: Remover status "Pendente" da projeção de parcelas — parcelamentos com 0 pagas agora são incluídos na projeção como "Ativa" (concluido)
 - CR-024: Corrigir projeção para usar datas reais de vencimento — mes_inicio/mes_termino derivados dos vencimentos no banco, parcelas contribuem apenas nos meses corretos (concluido)
 - CR-025: Remover scroll das legendas dos donut charts no Dashboard — legendas crescem naturalmente sem max-height/overflow (concluido)
+- CR-026: Score de Saude Financeira (F04) — score deterministico 0-100 com 4 dimensoes (D1-D4), card no Dashboard, tela de detalhe com breakdown/historico/acoes/cenario conservador, persistencia mensal (concluido)
 
 ### Última Tarefa Implementada
-- CR-025: Remover scroll das legendas dos donut charts no Dashboard (concluido)
+- CR-026: Score de Saude Financeira (concluido)
 
 ---
 
