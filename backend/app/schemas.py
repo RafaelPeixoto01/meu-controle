@@ -342,3 +342,110 @@ class DashboardResponse(BaseModel):
     categorias_diarios: list[CategoryBreakdown]
     # Evolucao 6 meses
     evolucao: list[MonthEvolutionPoint]
+
+
+# ========== Health Score (CR-026) ==========
+
+class D2SubfactorDetail(BaseModel):
+    pontos: int
+    valor: float | int | None = None
+    quantidade: int | None = None
+    percentual_liberacao: float | None = None
+
+class D4SubfactorDetail(BaseModel):
+    pontos: int
+    percentual_em_dia: float | None = None
+    dias_registro: int | None = None
+    primeiro_mes: bool | None = None
+    nova_parcela_longa: str | None = None
+
+class D2SubfactorsGroup(BaseModel):
+    d2a_percentual: D2SubfactorDetail
+    d2b_quantidade: D2SubfactorDetail
+    d2c_pendentes: D2SubfactorDetail
+    d2d_alivio: D2SubfactorDetail
+
+class D4SubfactorsGroup(BaseModel):
+    d4a_pontualidade: D4SubfactorDetail
+    d4b_consistencia: D4SubfactorDetail
+    d4c_tendencia: D4SubfactorDetail
+    d4d_disciplina: D4SubfactorDetail
+
+class ScoreDimensionD1(BaseModel):
+    pontos: int
+    maximo: int
+    percentual_comprometimento: float
+    detalhe: str
+
+class ScoreDimensionD2(BaseModel):
+    pontos: int
+    maximo: int
+    subfatores: D2SubfactorsGroup | dict = {}
+    detalhe: str
+
+class ScoreDimensionD3(BaseModel):
+    pontos: int
+    maximo: int
+    percentual_livre: float
+    estimativa_variaveis: bool
+    dias_dados_variaveis: int
+    detalhe: str
+
+class ScoreDimensionD4(BaseModel):
+    pontos: int
+    maximo: int
+    subfatores: D4SubfactorsGroup | dict = {}
+    detalhe: str
+
+class ScoreDimensoes(BaseModel):
+    d1_comprometimento: ScoreDimensionD1
+    d2_parcelas: ScoreDimensionD2
+    d3_poupanca: ScoreDimensionD3
+    d4_comportamento: ScoreDimensionD4
+
+class ScoreInfo(BaseModel):
+    total: int
+    classificacao: str
+    cor: str
+    mensagem: str
+    mensagem_contextual: str
+    variacao_mes_anterior: int | None = None
+    mes_referencia: str
+
+class ConservativePendingItem(BaseModel):
+    descricao: str
+    valor_estimado_mensal: float
+    total_parcelas: int
+
+class ConservativeScenario(BaseModel):
+    score: int
+    classificacao: str
+    parcelas_pendentes: list[ConservativePendingItem]
+    impacto: str
+
+class ScoreAction(BaseModel):
+    prioridade: int
+    dimensao_alvo: str
+    descricao: str
+    impacto_estimado: int
+    tipo: str
+
+class HealthScoreResponse(BaseModel):
+    score: ScoreInfo
+    dimensoes: ScoreDimensoes
+    cenario_conservador: ConservativeScenario | None = None
+    acoes: list[ScoreAction] = []
+
+class ScoreHistoryItem(BaseModel):
+    mes_referencia: str
+    score_total: int
+    classificacao: str
+    d1: int
+    d2: int
+    d3: int
+    d4: int
+
+class ScoreHistoryResponse(BaseModel):
+    historico: list[ScoreHistoryItem]
+    meses_solicitados: int
+    meses_disponiveis: int

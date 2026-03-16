@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from datetime import date
 
-from app.models import Expense, Income, User, RefreshToken, DailyExpense  # CR-002: User, RefreshToken; CR-005: DailyExpense
+from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico
 
 
 # ========== Expenses ==========
@@ -404,4 +404,73 @@ def get_installment_expenses_grouped(db: Session, user_id: str) -> dict:
         "total_pendente": round(global_pendente, 2),
         "total_atrasado": round(global_atrasado, 2)
     }
+
+
+# ========== Score Historico (CR-026) ==========
+
+def upsert_score_historico(
+    db: Session, user_id: str, mes_referencia: date, score_data: dict
+) -> ScoreHistorico:
+    """Insere ou atualiza o score do mes para o usuario."""
+    import json
+    import uuid
+
+    stmt = (
+        select(ScoreHistorico)
+        .where(ScoreHistorico.user_id == user_id, ScoreHistorico.mes_referencia == mes_referencia)
+    )
+    existing = db.scalars(stmt).first()
+
+    if existing:
+        existing.score_total = score_data["score_total"]
+        existing.d1_comprometimento = score_data["d1_comprometimento"]
+        existing.d2_parcelas = score_data["d2_parcelas"]
+        existing.d3_poupanca = score_data["d3_poupanca"]
+        existing.d4_comportamento = score_data["d4_comportamento"]
+        existing.classificacao = score_data["classificacao"]
+        existing.score_conservador = score_data.get("score_conservador")
+        existing.dados_snapshot = json.dumps(score_data.get("dados_snapshot", {}))
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        record = ScoreHistorico(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            mes_referencia=mes_referencia,
+            score_total=score_data["score_total"],
+            d1_comprometimento=score_data["d1_comprometimento"],
+            d2_parcelas=score_data["d2_parcelas"],
+            d3_poupanca=score_data["d3_poupanca"],
+            d4_comportamento=score_data["d4_comportamento"],
+            classificacao=score_data["classificacao"],
+            score_conservador=score_data.get("score_conservador"),
+            dados_snapshot=json.dumps(score_data.get("dados_snapshot", {})),
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record
+
+
+def get_score_history(db: Session, user_id: str, months: int = 12) -> list[ScoreHistorico]:
+    """Retorna historico de scores do usuario, ordenado cronologicamente (mais antigo primeiro)."""
+    stmt = (
+        select(ScoreHistorico)
+        .where(ScoreHistorico.user_id == user_id)
+        .order_by(ScoreHistorico.mes_referencia.desc())
+        .limit(months)
+    )
+    results = list(db.scalars(stmt).all())
+    results.reverse()  # cronologico: mais antigo primeiro
+    return results
+
+
+def get_score_by_month(db: Session, user_id: str, mes_referencia: date) -> ScoreHistorico | None:
+    """Retorna o score de um mes especifico do usuario."""
+    stmt = (
+        select(ScoreHistorico)
+        .where(ScoreHistorico.user_id == user_id, ScoreHistorico.mes_referencia == mes_referencia)
+    )
+    return db.scalars(stmt).first()
 

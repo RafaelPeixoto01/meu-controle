@@ -2,7 +2,7 @@ import uuid
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import String, Date, Boolean, Integer, Numeric, ForeignKey, Index
+from sqlalchemy import String, Date, Boolean, Integer, Numeric, Text, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -35,6 +35,7 @@ class User(Base):
     incomes = relationship("Income", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     daily_expenses = relationship("DailyExpense", back_populates="user", cascade="all, delete-orphan")  # CR-005
+    score_historico = relationship("ScoreHistorico", back_populates="user", cascade="all, delete-orphan")  # CR-026
 
 
 class Expense(Base):
@@ -142,3 +143,31 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
     user = relationship("User", back_populates="refresh_tokens")
+
+
+class ScoreHistorico(Base):
+    """CR-026: Histórico mensal do score de saúde financeira."""
+    __tablename__ = "score_historico"
+    __table_args__ = (
+        UniqueConstraint("user_id", "mes_referencia", name="uq_score_user_month"),
+        Index("ix_score_historico_user_month", "user_id", "mes_referencia"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    mes_referencia: Mapped[date] = mapped_column(Date, nullable=False)
+    score_total: Mapped[int] = mapped_column(Integer, nullable=False)
+    d1_comprometimento: Mapped[int] = mapped_column(Integer, nullable=False)
+    d2_parcelas: Mapped[int] = mapped_column(Integer, nullable=False)
+    d3_poupanca: Mapped[int] = mapped_column(Integer, nullable=False)
+    d4_comportamento: Mapped[int] = mapped_column(Integer, nullable=False)
+    classificacao: Mapped[str] = mapped_column(String(20), nullable=False)
+    score_conservador: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dados_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+    user = relationship("User", back_populates="score_historico")
