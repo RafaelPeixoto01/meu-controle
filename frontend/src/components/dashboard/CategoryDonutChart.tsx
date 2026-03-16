@@ -97,7 +97,7 @@ export default function CategoryDonutChart({ title, data, total }: CategoryDonut
         </div>
 
         {/* Legend */}
-        <div className="w-full mt-4 space-y-1.5 max-h-40 overflow-y-auto">
+        <div className="w-full mt-4 space-y-1.5">
           {data.map((cat, index) => (
             <div key={cat.categoria} className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 min-w-0">
