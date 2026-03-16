@@ -1,18 +1,20 @@
 import { useNavigate, useLocation } from "react-router-dom";
 
-type ViewId = "dashboard" | "planejados" | "diarios" | "parcelas";
+type ViewId = "dashboard" | "planejados" | "diarios" | "parcelas" | "score";
 
 const VIEWS: { id: ViewId; label: string; path: string }[] = [
   { id: "dashboard", label: "Dashboard", path: "/dashboard" },
   { id: "planejados", label: "Gastos Planejados", path: "/" },
   { id: "diarios", label: "Gastos Diários", path: "/daily-expenses" },
   { id: "parcelas", label: "Parcelas", path: "/installments" },
+  { id: "score", label: "Score", path: "/score" },
 ];
 
 function getActiveView(pathname: string): ViewId {
   if (pathname === "/dashboard") return "dashboard";
   if (pathname === "/daily-expenses") return "diarios";
   if (pathname === "/installments") return "parcelas";
+  if (pathname === "/score") return "score";
   return "planejados";
 }
 

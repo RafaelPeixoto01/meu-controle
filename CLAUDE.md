@@ -349,9 +349,10 @@ Personal Finance/
 - CR-024: Corrigir projeção para usar datas reais de vencimento — mes_inicio/mes_termino derivados dos vencimentos no banco, parcelas contribuem apenas nos meses corretos (concluido)
 - CR-025: Remover scroll das legendas dos donut charts no Dashboard — legendas crescem naturalmente sem max-height/overflow (concluido)
 - CR-026: Score de Saude Financeira (F04) — score deterministico 0-100 com 4 dimensoes (D1-D4), card no Dashboard, tela de detalhe com breakdown/historico/acoes/cenario conservador, persistencia mensal (concluido)
+- CR-027: Mover Score para aba propria — remover card do Dashboard, adicionar 5a aba "Score" no ViewSelector (concluido)
 
 ### Última Tarefa Implementada
-- CR-026: Score de Saude Financeira (concluido)
+- CR-027: Mover Score para aba propria no ViewSelector (concluido)
 
 ---
 
