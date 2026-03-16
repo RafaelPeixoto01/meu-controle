@@ -4274,7 +4274,7 @@ Score deterministico 0-100, soma de 4 dimensoes (0-25 cada):
 
 - RN-S01: Score e deterministico — mesmos dados de entrada produzem mesmo score
 - RN-S02: Cada dimensao contribui 0-25 pontos, total 0-100
-- RN-S03: Score nao entra no ViewSelector (limite de 4 tabs mobile); acesso via card no Dashboard
+- RN-S03: Score tem aba propria no ViewSelector ("Score", 5a aba); removido do Dashboard (CR-027)
 - RN-S04: Variacao mensal calculada comparando score atual com score_historico do mes anterior
 - RN-S05: Cenario conservador so exibido quando ha parcelas pendentes (0/Y)
 - RN-S06: Acoes ordenadas por impacto_estimado decrescente, maximo 3

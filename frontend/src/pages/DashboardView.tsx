@@ -4,9 +4,7 @@ import KeyIndicators from "../components/dashboard/KeyIndicators";
 import CategoryDonutChart from "../components/dashboard/CategoryDonutChart";
 import EvolutionBarChart from "../components/dashboard/EvolutionBarChart";
 import StatusBreakdown from "../components/dashboard/StatusBreakdown";
-import ScoreGauge from "../components/score/ScoreGauge";
 import { useDashboard } from "../hooks/useDashboard";
-import { useHealthScore } from "../hooks/useHealthScore";
 
 export default function DashboardView() {
   const {
@@ -19,7 +17,6 @@ export default function DashboardView() {
     goToPreviousMonth,
     goToNextMonth,
   } = useDashboard();
-  const { score: healthScore } = useHealthScore();
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 pb-12 space-y-6">
@@ -52,17 +49,6 @@ export default function DashboardView() {
 
       {data && (
         <div className="space-y-6 animate-fade-in-up">
-          {/* Score Card (CR-026) */}
-          {healthScore && (
-            <ScoreGauge
-              total={healthScore.score.total}
-              classificacao={healthScore.score.classificacao}
-              cor={healthScore.score.cor}
-              variacao={healthScore.score.variacao_mes_anterior}
-              compact
-            />
-          )}
-
           {/* KPI Cards */}
           <KeyIndicators
             saldoLivre={data.saldo_livre}
