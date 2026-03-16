@@ -351,9 +351,10 @@ Personal Finance/
 - CR-026: Score de Saude Financeira (F04) — score deterministico 0-100 com 4 dimensoes (D1-D4), card no Dashboard, tela de detalhe com breakdown/historico/acoes/cenario conservador, persistencia mensal (concluido)
 - CR-027: Mover Score para aba propria — remover card do Dashboard, adicionar 5a aba "Score" no ViewSelector (concluido)
 - CR-028: Fix badge "Encerrando" duplicado em parcelas com mesmo nome — lookup de projecao por nome+parcela_total (concluido)
+- CR-029: Fix ViewSelector cortado no mobile — justify-start em mobile, sm:justify-center em telas maiores (concluido)
 
 ### Última Tarefa Implementada
-- CR-028: Fix badge "Encerrando" duplicado em parcelas com mesmo nome (concluido)
+- CR-029: Fix ViewSelector cortado no mobile (concluido)
 
 ---
 

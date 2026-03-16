@@ -24,7 +24,7 @@ export default function ViewSelector() {
   const activeView = getActiveView(location.pathname);
 
   return (
-    <div className="flex items-center justify-center gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto">
+    <div className="flex items-center justify-start sm:justify-center gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto">
       {VIEWS.map((view) => (
         <button
           key={view.id}
