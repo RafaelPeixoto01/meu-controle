@@ -74,7 +74,7 @@ export default function IncomeFormModal({
               onChange={(e) => setNome(e.target.value)}
               required
               maxLength={255}
-              placeholder="Ex: Salario"
+              placeholder="Ex: Salário"
               className="w-full border border-border rounded-xl px-4 py-3 text-text bg-slate-50/50
                 placeholder:text-slate-400
                 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
@@ -121,7 +121,7 @@ export default function IncomeFormModal({
               className="h-4 w-4 accent-primary rounded"
             />
             <label htmlFor="recorrente-income" className="text-sm font-medium text-text-muted">
-              Recorrente (repete todo mes)
+              Recorrente (repete todo mês)
             </label>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

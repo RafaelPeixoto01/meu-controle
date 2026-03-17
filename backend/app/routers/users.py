@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 @router.get("/me", response_model=UserResponse)
 def get_profile(current_user: User = Depends(get_current_user)):
-    """RF-12: Visualizar perfil do usuario autenticado."""
+    """RF-12: Visualizar perfil do usuário autenticado."""
     return current_user
 
 
@@ -29,7 +29,7 @@ def update_profile(
     if "email" in update_data and update_data["email"] != current_user.email:
         existing = crud.get_user_by_email(db, update_data["email"])
         if existing:
-            raise HTTPException(status_code=409, detail="Email ja esta em uso")
+            raise HTTPException(status_code=409, detail="Email já está em uso")
 
     for field, value in update_data.items():
         setattr(current_user, field, value)
@@ -47,7 +47,7 @@ def change_password(
     if not current_user.password_hash:
         raise HTTPException(
             status_code=400,
-            detail="Usuario cadastrado via Google nao possui senha para alterar"  # RN-018
+            detail="Usuário cadastrado via Google não possui senha para alterar"  # RN-018
         )
 
     if not verify_password(data.current_password, current_user.password_hash):

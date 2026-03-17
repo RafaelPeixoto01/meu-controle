@@ -34,7 +34,7 @@ export default function MonthNavigator({
           hover:bg-primary/10 active:bg-primary/20 active:scale-[0.97]
           transition-all duration-150"
       >
-        <span className="hidden sm:inline">Proximo</span> →
+        <span className="hidden sm:inline">Próximo</span> →
       </button>
     </div>
   );

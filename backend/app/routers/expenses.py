@@ -55,7 +55,7 @@ def duplicate_expense(
     """RF-07: Duplicar despesa existente no mesmo mes."""
     original = crud.get_expense_by_id(db, expense_id, current_user.id)  # CR-002: ownership check
     if not original:
-        raise HTTPException(status_code=404, detail="Despesa nao encontrada")
+        raise HTTPException(status_code=404, detail="Despesa não encontrada")
 
     new_expense = Expense(
         user_id=current_user.id,  # CR-002: isolamento de dados
@@ -91,7 +91,7 @@ def create_expense(
     
     # Validações básicas
     if data.parcela_total and data.parcela_total > 1 and data.parcela_atual and data.parcela_atual > data.parcela_total:
-        raise HTTPException(status_code=400, detail="Parcela atual nao pode ser maior que total")
+        raise HTTPException(status_code=400, detail="Parcela atual não pode ser maior que total")
 
     # CR-016: Validar e derivar categoria
     categoria = None
@@ -163,7 +163,7 @@ def update_expense(
     """Atualizar despesa existente. PATCH: apenas campos enviados sao alterados."""
     expense = crud.get_expense_by_id(db, expense_id, current_user.id)  # CR-002: ownership check
     if not expense:
-        raise HTTPException(status_code=404, detail="Despesa nao encontrada")
+        raise HTTPException(status_code=404, detail="Despesa não encontrada")
 
     update_data = data.model_dump(exclude_unset=True)
 
@@ -196,8 +196,8 @@ def delete_expense(
     """Excluir despesa por ID. Suporta exclusao em serie (CR-009)."""
     expense = crud.get_expense_by_id(db, expense_id, current_user.id)  # CR-002: ownership check
     if not expense:
-        raise HTTPException(status_code=404, detail="Despesa nao encontrada")
-    
+        raise HTTPException(status_code=404, detail="Despesa não encontrada")
+
     if delete_all and ((expense.parcela_total is not None and expense.parcela_total > 1) or expense.recorrente):
         crud.delete_expense_related(db, expense)
     else:

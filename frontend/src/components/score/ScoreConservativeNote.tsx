@@ -19,7 +19,7 @@ export default function ScoreConservativeNote({
         <AlertTriangle size={18} className="text-warning flex-shrink-0 mt-0.5" />
         <div>
           <h4 className="text-sm font-semibold text-amber-900">
-            Cenario conservador
+            Cenário conservador
           </h4>
           <p className="text-sm text-amber-800 mt-1">
             Se todas as parcelas pendentes forem ativadas, seu score cairia de{" "}
@@ -31,7 +31,7 @@ export default function ScoreConservativeNote({
             <div className="mt-2 space-y-1">
               {cenario.parcelas_pendentes.map((p, i) => (
                 <div key={i} className="text-xs text-amber-700">
-                  {p.descricao}: {formatBRL(p.valor_estimado_mensal)}/mes (
+                  {p.descricao}: {formatBRL(p.valor_estimado_mensal)}/mês (
                   {p.total_parcelas}x)
                 </div>
               ))}

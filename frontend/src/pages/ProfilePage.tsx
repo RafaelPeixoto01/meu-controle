@@ -43,7 +43,7 @@ export default function ProfilePage() {
     setPasswordSuccess("");
 
     if (newPassword !== confirmPassword) {
-      setPasswordError("As senhas nao coincidem");
+      setPasswordError("As senhas não coincidem");
       return;
     }
 
@@ -67,10 +67,10 @@ export default function ProfilePage() {
     <div className="max-w-lg mx-auto py-8 px-4">
       <h2 className="text-2xl font-bold text-text mb-6">Meu Perfil</h2>
 
-      {/* Secao Perfil */}
+      {/* Seção Perfil */}
       <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-7 mb-6">
         <h3 className="text-base font-bold text-text uppercase tracking-wide mb-5">
-          Informacoes Pessoais
+          Informações Pessoais
         </h3>
 
         {profileError && (
@@ -159,7 +159,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Secao Trocar Senha (backend rejeita para usuarios Google-only via RN-018) */}
+      {/* Seção Trocar Senha (backend rejeita para usuários Google-only via RN-018) */}
       <div className="bg-surface rounded-2xl shadow-lg shadow-black/[0.04] border border-slate-100/80 p-7">
         <h3 className="text-base font-bold text-text uppercase tracking-wide mb-5">
           Trocar Senha

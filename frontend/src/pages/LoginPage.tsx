@@ -52,7 +52,7 @@ export default function LoginPage() {
 
   function handleGoogleLogin() {
     if (!googleClientId) {
-      setError("Google OAuth nao configurado");
+      setError("Google OAuth não configurado");
       return;
     }
     const redirectUri = `${window.location.origin}/login`;

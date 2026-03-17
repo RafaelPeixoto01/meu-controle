@@ -11,12 +11,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import crud
 
-# Configuracao
+# Configuração
 SECRET_KEY = os.environ.get("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError(
-        "SECRET_KEY nao definido. "
-        "Defina a variavel de ambiente SECRET_KEY antes de iniciar a aplicacao."
+        "SECRET_KEY não definido. "
+        "Defina a variável de ambiente SECRET_KEY antes de iniciar a aplicação."
     )
 ALGORITHM = os.environ.get("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
@@ -37,7 +37,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(data: dict) -> str:
-    """Cria JWT access token com expiracao de 15 minutos (RN-013)."""
+    """Cria JWT access token com expiração de 15 minutos (RN-013)."""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access"})
@@ -45,7 +45,7 @@ def create_access_token(data: dict) -> str:
 
 
 def create_refresh_token(data: dict) -> str:
-    """Cria JWT refresh token com expiracao de 7 dias (RN-013)."""
+    """Cria JWT refresh token com expiração de 7 dias (RN-013)."""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
@@ -53,7 +53,7 @@ def create_refresh_token(data: dict) -> str:
 
 
 def verify_token(token: str) -> dict | None:
-    """Decodifica e valida um JWT. Retorna payload ou None se invalido."""
+    """Decodifica e valida um JWT. Retorna payload ou None se inválido."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
@@ -71,13 +71,13 @@ def get_current_user(
     db: Session = Depends(get_db),
 ):
     """
-    FastAPI dependency: extrai usuario do JWT access token.
+    FastAPI dependency: extrai usuário do JWT access token.
     Usado como Depends(get_current_user) nos endpoints protegidos.
-    Retorna instancia User ou lanca HTTPException 401.
+    Retorna instância User ou lança HTTPException 401.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token invalido ou expirado",
+        detail="Token inválido ou expirado",
         headers={"WWW-Authenticate": "Bearer"},
     )
 

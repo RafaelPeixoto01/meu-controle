@@ -169,7 +169,7 @@ export default function ExpenseTable({
                 Status
               </th>
               <th className="text-center px-3 py-3 sm:px-4 text-xs font-bold text-primary uppercase tracking-wide">
-                Acoes
+                Ações
               </th>
             </tr>
           </thead>

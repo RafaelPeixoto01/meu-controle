@@ -81,7 +81,7 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
               <div key={p.nome} className="flex items-center py-1 hover:bg-slate-50 rounded">
                 <div className="w-40 shrink-0 px-2">
                   <div className="text-sm font-medium text-text truncate">{p.nome}</div>
-                  <div className="text-xs text-text-muted tabular-nums">{formatBRL(p.valor_mensal)}/mes</div>
+                  <div className="text-xs text-text-muted tabular-nums">{formatBRL(p.valor_mensal)}/mês</div>
                 </div>
                 <div className="flex-1 relative h-7">
                   <div
@@ -117,7 +117,7 @@ export default function ProjectionGantt({ projecao, parcelas }: ProjectionGanttP
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <div className="text-sm font-medium text-text">{p.nome}</div>
-                  <div className="text-xs text-text-muted">{formatBRL(p.valor_mensal)}/mes</div>
+                  <div className="text-xs text-text-muted">{formatBRL(p.valor_mensal)}/mês</div>
                 </div>
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                   isEnding
