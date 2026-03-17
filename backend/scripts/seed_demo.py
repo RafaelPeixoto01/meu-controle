@@ -379,34 +379,45 @@ def seed_demo_data():
             print(f"  {model.__tablename__}: {count} registros removidos")
 
         # 3. Inserir Receitas
+        # Encadear origem_id: cada mês aponta para o id do mês anterior
+        # (assim generate_month_data não duplica ao navegar)
         print("\nInserindo receitas...")
-        salary_origem_id = _id()  # origem_id compartilhado para salários recorrentes
         income_count = 0
+        # Rastrear id do mês anterior por nome de receita recorrente
+        prev_income_ids = {}  # nome -> id do mês anterior
 
         for mes in MONTHS:
             incomes = INCOMES_PER_MONTH.get(mes, [])
             for nome, valor, data_pgto, recorrente in incomes:
+                income_id = _id()
+                # origem_id aponta para o id da receita do mês anterior (se recorrente)
+                origem_id = prev_income_ids.get(nome) if recorrente else None
+
                 income = Income(
-                    id=_id(),
+                    id=income_id,
                     user_id=user_id,
                     mes_referencia=mes,
                     nome=nome,
                     valor=valor,
                     data=data_pgto,
                     recorrente=recorrente,
-                    origem_id=salary_origem_id if nome == "Salário" else None,
+                    origem_id=origem_id,
                 )
                 db.add(income)
                 income_count += 1
+
+                # Atualizar rastreamento para próximo mês
+                if recorrente:
+                    prev_income_ids[nome] = income_id
 
         db.commit()
         print(f"  {income_count} receitas inseridas")
 
         # 4. Inserir Despesas Fixas Recorrentes
+        # Encadear origem_id: cada mês aponta para o id do mês anterior
         print("\nInserindo despesas fixas...")
         fixed_count = 0
-        # Criar origem_ids para cada despesa fixa recorrente
-        fixed_origem_ids = {name: _id() for name, *_ in FIXED_EXPENSES}
+        prev_expense_ids = {}  # nome -> id do mês anterior
 
         for mes in MONTHS:
             for nome, valor_base, dia_venc, subcategoria, variacao in FIXED_EXPENSES:
@@ -416,12 +427,13 @@ def seed_demo_data():
                 else:
                     valor = valor_base
 
+                expense_id = _id()
                 vencimento = date(mes.year, mes.month, dia_venc)
                 categoria = get_category_for_subcategory(subcategoria)
                 status = _status_for(mes, nome, vencimento)
 
                 expense = Expense(
-                    id=_id(),
+                    id=expense_id,
                     user_id=user_id,
                     mes_referencia=mes,
                     nome=nome,
@@ -430,16 +442,20 @@ def seed_demo_data():
                     valor=valor,
                     vencimento=vencimento,
                     recorrente=True,
-                    origem_id=fixed_origem_ids[nome],
+                    origem_id=prev_expense_ids.get(nome),
                     status=status,
                 )
                 db.add(expense)
                 fixed_count += 1
 
+                # Atualizar rastreamento para próximo mês
+                prev_expense_ids[nome] = expense_id
+
         db.commit()
         print(f"  {fixed_count} despesas fixas inseridas")
 
         # 5. Inserir Parcelamentos
+        # Encadear origem_id mês a mês para cada parcelamento
         print("\nInserindo parcelamentos...")
         installment_count = 0
 
@@ -450,13 +466,15 @@ def seed_demo_data():
             subcategoria = inst_def["subcategoria"]
             dia_venc = inst_def["dia_vencimento"]
             categoria = get_category_for_subcategory(subcategoria)
+            prev_installment_id = None
 
             for mes, parcela_atual in inst_def["parcelas"]:
+                expense_id = _id()
                 vencimento = date(mes.year, mes.month, dia_venc)
                 status = _status_for(mes, nome, vencimento)
 
                 expense = Expense(
-                    id=_id(),
+                    id=expense_id,
                     user_id=user_id,
                     mes_referencia=mes,
                     nome=nome,
@@ -467,10 +485,12 @@ def seed_demo_data():
                     parcela_atual=parcela_atual,
                     parcela_total=parcela_total,
                     recorrente=False,
+                    origem_id=prev_installment_id,
                     status=status,
                 )
                 db.add(expense)
                 installment_count += 1
+                prev_installment_id = expense_id
 
         db.commit()
         print(f"  {installment_count} parcelas inseridas")
