@@ -1,0 +1,122 @@
+Analise os dados financeiros abaixo e retorne sua análise no formato JSON especificado.
+
+<dados_financeiros>
+
+<score_saude_financeira>
+  Score atual: {{score_total}}/100 ({{classificacao}})
+  D1 - Comprometimento com fixos: {{d1}}/25 — {{d1_detalhe}}
+  D2 - Pressão de parcelas: {{d2}}/25 — {{d2_detalhe}}
+  D3 - Capacidade de poupança: {{d3}}/25 — {{d3_detalhe}}
+  D4 - Comportamento e disciplina: {{d4}}/25 — {{d4_detalhe}}
+  Cenário conservador (com parcelas pendentes): {{score_conservador}}/100
+  Histórico: {{historico_scores}}
+</score_saude_financeira>
+
+<resumo_mensal>
+  Mês de referência: {{mes_referencia}}
+  Renda líquida mensal: R$ {{renda_liquida}}
+  Total de gastos planejados (fixos): R$ {{total_planejados}}
+  Total de gastos não planejados (variáveis): R$ {{total_nao_planejados}}
+  Total comprometido com parcelas: R$ {{total_parcelas}}
+  Saldo restante: R$ {{saldo_restante}}
+  Dias de registro de gastos diários: {{dias_registro}}
+</resumo_mensal>
+
+<gastos_por_categoria>
+  {{breakdown_categorias}}
+</gastos_por_categoria>
+
+<gastos_planejados>
+  {{lista_gastos_planejados}}
+</gastos_planejados>
+
+<gastos_nao_planejados_ultimos_3_meses>
+  {{lista_gastos_nao_planejados}}
+</gastos_nao_planejados_ultimos_3_meses>
+
+<parcelas_ativas>
+  {{lista_parcelas}}
+</parcelas_ativas>
+
+<projecao_parcelas_proximos_3_meses>
+  {{projecao_3_meses}}
+</projecao_parcelas_proximos_3_meses>
+
+<historico_mensal>
+  {{comparativo_ultimos_meses}}
+</historico_mensal>
+
+</dados_financeiros>
+
+Retorne APENAS o JSON abaixo preenchido. Sem texto antes ou depois.
+
+{
+  "diagnostico": {
+    "resumo_geral": "string (2-3 frases, max 300 chars)",
+    "comparativo_benchmark": "string (max 200 chars)",
+    "variacao_vs_mes_anterior": "string | null (max 150 chars)",
+    "categorias_destaque": [
+      {
+        "categoria": "string",
+        "percentual_renda": 0.0,
+        "benchmark_saudavel": 0.0,
+        "variacao_mensal_percentual": 0.0,
+        "observacao": "string (max 120 chars)"
+      }
+    ]
+  },
+  "alertas": [
+    {
+      "tipo": "critico | atencao | informativo",
+      "titulo": "string (max 60 chars)",
+      "descricao": "string (max 200 chars)",
+      "impacto_mensal": 0.0,
+      "impacto_anual": 0.0
+    }
+  ],
+  "bons_comportamentos": [
+    {
+      "comportamento": "string (max 80 chars)",
+      "mensagem_reforco": "string (max 150 chars)"
+    }
+  ],
+  "recomendacoes": [
+    {
+      "prioridade": 1,
+      "acao": "string (max 100 chars)",
+      "justificativa": "string (max 200 chars)",
+      "economia_estimada_mensal": 0.0,
+      "dificuldade": "fácil | moderada | difícil",
+      "impacto_score_estimado": 0
+    }
+  ],
+  "metas": {
+    "curto_prazo": {
+      "descricao": "string (max 120 chars)",
+      "valor_alvo": 0.0,
+      "prazo_meses": 0,
+      "primeiro_passo": "string (max 100 chars)"
+    },
+    "medio_prazo": {
+      "descricao": "string (max 120 chars)",
+      "valor_alvo": 0.0,
+      "prazo_meses": 0,
+      "primeiro_passo": "string (max 100 chars)"
+    },
+    "longo_prazo": {
+      "descricao": "string (max 120 chars)",
+      "valor_alvo": 0.0,
+      "prazo_meses": 0,
+      "primeiro_passo": "string (max 100 chars)"
+    }
+  },
+  "gastos_recorrentes_disfarcados": [
+    {
+      "descricao": "string (max 80 chars)",
+      "frequencia_mensal": 0,
+      "valor_medio_mensal": 0.0,
+      "sugestao": "string (max 120 chars)"
+    }
+  ],
+  "mensagem_motivacional": "string (max 300 chars)"
+}

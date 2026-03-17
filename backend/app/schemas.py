@@ -449,3 +449,83 @@ class ScoreHistoryResponse(BaseModel):
     historico: list[ScoreHistoryItem]
     meses_solicitados: int
     meses_disponiveis: int
+
+
+# ========== AI Analysis (CR-032) ==========
+
+class AiCategoriaDestaque(BaseModel):
+    categoria: str
+    percentual_renda: float
+    benchmark_saudavel: float
+    variacao_mensal_percentual: float
+    observacao: str
+
+
+class AiDiagnostico(BaseModel):
+    resumo_geral: str
+    comparativo_benchmark: str
+    variacao_vs_mes_anterior: str | None = None
+    categorias_destaque: list[AiCategoriaDestaque] = []
+
+
+class AiAlerta(BaseModel):
+    tipo: str  # critico | atencao | informativo
+    titulo: str
+    descricao: str
+    impacto_mensal: float
+    impacto_anual: float
+
+
+class AiBomComportamento(BaseModel):
+    comportamento: str
+    mensagem_reforco: str
+
+
+class AiRecomendacao(BaseModel):
+    prioridade: int
+    acao: str
+    justificativa: str
+    economia_estimada_mensal: float
+    dificuldade: str  # fácil | moderada | difícil
+    impacto_score_estimado: int
+
+
+class AiMeta(BaseModel):
+    descricao: str
+    valor_alvo: float
+    prazo_meses: int
+    primeiro_passo: str
+
+
+class AiMetas(BaseModel):
+    curto_prazo: AiMeta
+    medio_prazo: AiMeta
+    longo_prazo: AiMeta
+
+
+class AiGastoRecorrente(BaseModel):
+    descricao: str
+    frequencia_mensal: int
+    valor_medio_mensal: float
+    sugestao: str
+
+
+class AiAnalysisResult(BaseModel):
+    diagnostico: AiDiagnostico
+    alertas: list[AiAlerta] = []
+    bons_comportamentos: list[AiBomComportamento] = []
+    recomendacoes: list[AiRecomendacao] = []
+    metas: AiMetas
+    gastos_recorrentes_disfarcados: list[AiGastoRecorrente] = []
+    mensagem_motivacional: str
+
+
+class AiAnalysisResponse(BaseModel):
+    status: str  # disponivel | indisponivel | erro
+    mes_referencia: str | None = None
+    score_referencia: int | None = None
+    resultado: AiAnalysisResult | None = None
+    modelo: str | None = None
+    generated_at: str | None = None
+    is_cached: bool = False
+    reason: str | None = None

@@ -16,6 +16,7 @@ import type {
   DashboardData,
   HealthScoreData,
   ScoreHistoryData,
+  AiAnalysisResponse,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -209,4 +210,10 @@ export function fetchHealthScore(): Promise<HealthScoreData> {
 
 export function fetchScoreHistory(months = 12): Promise<ScoreHistoryData> {
   return request<ScoreHistoryData>(`/score/history?months=${months}`);
+}
+
+// ========== AI Analysis (CR-032) ==========
+
+export function fetchAiAnalysis(): Promise<AiAnalysisResponse> {
+  return request<AiAnalysisResponse>("/analysis");
 }

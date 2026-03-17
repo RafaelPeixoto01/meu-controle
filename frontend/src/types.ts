@@ -341,6 +341,86 @@ export interface ScoreHistoryData {
   meses_disponiveis: number;
 }
 
+// ========== AI Analysis (CR-032) ==========
+
+export interface AiCategoriaDestaque {
+  categoria: string;
+  percentual_renda: number;
+  benchmark_saudavel: number;
+  variacao_mensal_percentual: number;
+  observacao: string;
+}
+
+export interface AiDiagnostico {
+  resumo_geral: string;
+  comparativo_benchmark: string;
+  variacao_vs_mes_anterior: string;
+  categorias_destaque: AiCategoriaDestaque[];
+}
+
+export interface AiAlerta {
+  tipo: "critico" | "atencao" | "informativo";
+  titulo: string;
+  descricao: string;
+  impacto_mensal: number;
+  impacto_anual: number;
+}
+
+export interface AiBomComportamento {
+  comportamento: string;
+  mensagem_reforco: string;
+}
+
+export interface AiRecomendacao {
+  prioridade: number;
+  acao: string;
+  justificativa: string;
+  economia_estimada_mensal: number;
+  dificuldade: "fácil" | "moderada" | "difícil";
+  impacto_score_estimado: number;
+}
+
+export interface AiMeta {
+  descricao: string;
+  valor_alvo: number;
+  prazo_meses: number;
+  primeiro_passo: string;
+}
+
+export interface AiMetas {
+  curto_prazo: AiMeta;
+  medio_prazo: AiMeta;
+  longo_prazo: AiMeta;
+}
+
+export interface AiGastoRecorrente {
+  descricao: string;
+  frequencia_mensal: number;
+  valor_medio_mensal: number;
+  sugestao: string;
+}
+
+export interface AiAnalysisResult {
+  diagnostico: AiDiagnostico;
+  alertas: AiAlerta[];
+  bons_comportamentos: AiBomComportamento[];
+  recomendacoes: AiRecomendacao[];
+  metas: AiMetas;
+  gastos_recorrentes_disfarcados: AiGastoRecorrente[];
+  mensagem_motivacional: string;
+}
+
+export interface AiAnalysisResponse {
+  status: "disponivel" | "indisponivel" | "erro";
+  mes_referencia?: string;
+  score_referencia?: number;
+  resultado?: AiAnalysisResult;
+  modelo?: string;
+  generated_at?: string;
+  is_cached?: boolean;
+  reason?: string;
+}
+
 // ========== Auth Types (CR-002) ==========
 
 export interface User {

@@ -90,7 +90,7 @@ Funcionalidades que eliminam os gaps mais básicos em relação ao mercado. Sem 
 
 | Prioridade | Esforço | Impacto | Horizonte |
 |---|---|---|---|
-| P1 - Alta | Baixo | Alto | H1 |
+| P1 - Alta | Baixo | Alto | H1 | Concluída |
 
 **Descrição:** Nota de 0-100 baseada em: comprometimento de renda com fixos (25%), controle sobre gastos variáveis (25%), nível de endividamento com parcelas (25%), capacidade de poupança (25%). Evolução mensal visível. Já existe prompt de IA desenhado para isso.
 
@@ -118,13 +118,13 @@ Funcionalidades que eliminam os gaps mais básicos em relação ao mercado. Sem 
 
 Funcionalidades que adicionam inteligência e diferenciação. A integração da análise por IA (prompt já pronto) e o sistema de metas transformam o app de tracker passivo em coach financeiro ativo. Aqui o MeuControle começa a se diferenciar do Mobills e Organizze.
 
-### F06: Análise financeira por IA
+### F06: Análise financeira por IA — CONCLUÍDA (CR-032, 2026-03-17)
 
-| Prioridade | Esforço | Impacto | Horizonte |
-|---|---|---|---|
-| P0 - Crítica | Médio | Muito Alto | H2 |
+| Prioridade | Esforço | Impacto | Horizonte | Status |
+|---|---|---|---|---|
+| P0 - Crítica | Médio | Muito Alto | H2 | Concluída |
 
-**Descrição:** Integração do prompt de análise financeira já desenhado: diagnóstico automático, identificação de padrões, recomendações personalizadas, metas sugeridas. Output JSON renderizado em cards na interface. Execução mensal automática + sob demanda.
+**Descrição:** Integração do prompt de análise financeira com API Claude: diagnóstico automático, alertas por severidade, bons comportamentos, recomendações mescladas com ações do score F04, metas (curto/médio/longo prazo), detecção de gastos recorrentes disfarçados, mensagem motivacional. Output JSON renderizado em 8 componentes na aba Score. Geração automática mensal com cache em banco. Graceful degradation sem API key.
 
 **Gap identificado:** 78% das firmas financeiras já implementaram IA generativa. Cleo tem ARR de US$300M+ com coaching por IA. O prompt já existe no projeto mas não está integrado ao app.
 

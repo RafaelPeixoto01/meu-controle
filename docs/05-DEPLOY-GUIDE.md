@@ -90,6 +90,10 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 | `FRONTEND_URL` | Nao | `http://localhost:5173` | `backend/.env` |
 | `ALLOWED_ORIGINS` | Nao | `http://localhost:5173` | `backend/.env` (CSV, ex: `http://localhost:5173,http://localhost:3000`) |
 | `ENVIRONMENT` | Nao | `development` | `backend/.env` (use `production` para habilitar Secure no cookie) |
+| `ANTHROPIC_API_KEY` | Nao | Análise IA desabilitada | `backend/.env` — chave da API Anthropic (CR-032) |
+| `CLAUDE_MODEL` | Nao | `claude-sonnet-4-20250514` | `backend/.env` — modelo Claude a usar (CR-032) |
+| `AI_ANALYSIS_ENABLED` | Nao | `true` | `backend/.env` — feature flag para desabilitar análise IA (CR-032) |
+| `AI_ANALYSIS_TIMEOUT_SECONDS` | Nao | `30` | `backend/.env` — timeout da chamada à API Anthropic (CR-032) |
 
 ### 2.2 Producao (Railway)
 
@@ -105,8 +109,11 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 | `FRONTEND_URL` | Sim | Manual | `https://<railway-domain>` |
 | `ALLOWED_ORIGINS` | Recomendado | Manual | CSV de origins permitidas no CORS. Default `http://localhost:5173` — **definir para dominio de producao** |
 | `ENVIRONMENT` | Recomendado | Manual | Definir como `production` para habilitar flag `Secure` no cookie de refresh token |
+| `ANTHROPIC_API_KEY` | Sim* | Manual | Chave da API Anthropic para análise financeira por IA (CR-032) |
+| `CLAUDE_MODEL` | Nao | — | Modelo Claude (default: `claude-sonnet-4-20250514`) |
+| `AI_ANALYSIS_ENABLED` | Nao | — | Feature flag — definir `false` para desabilitar análise IA |
 
-> (*) Obrigatorio apenas se a feature correspondente estiver habilitada (Google login, email recovery).
+> (*) Obrigatorio apenas se a feature correspondente estiver habilitada (Google login, email recovery, análise IA).
 
 ### 2.3 Notas Importantes
 
