@@ -352,9 +352,10 @@ Personal Finance/
 - CR-027: Mover Score para aba propria — remover card do Dashboard, adicionar 5a aba "Score" no ViewSelector (concluido)
 - CR-028: Fix badge "Encerrando" duplicado em parcelas com mesmo nome — lookup de projecao por nome+parcela_total (concluido)
 - CR-029: Fix ViewSelector cortado no mobile — justify-start em mobile, sm:justify-center em telas maiores (concluido)
+- CR-030: Corrigir acentuação PT-BR em textos do sistema — labels, mensagens de erro, placeholders, títulos no frontend e mensagens HTTP no backend (concluido)
 
 ### Última Tarefa Implementada
-- CR-029: Fix ViewSelector cortado no mobile (concluido)
+- CR-030: Corrigir acentuação PT-BR em textos do sistema (concluido)
 
 ---
 
