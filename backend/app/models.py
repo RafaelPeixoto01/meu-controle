@@ -36,6 +36,7 @@ class User(Base):
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     daily_expenses = relationship("DailyExpense", back_populates="user", cascade="all, delete-orphan")  # CR-005
     score_historico = relationship("ScoreHistorico", back_populates="user", cascade="all, delete-orphan")  # CR-026
+    analises_financeiras = relationship("AnaliseFinanceira", back_populates="user", cascade="all, delete-orphan")  # CR-032
 
 
 class Expense(Base):
@@ -171,3 +172,31 @@ class ScoreHistorico(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
     user = relationship("User", back_populates="score_historico")
+
+
+class AnaliseFinanceira(Base):
+    """CR-032: Persistencia de analises financeiras geradas por IA."""
+    __tablename__ = "analise_financeira"
+    __table_args__ = (
+        UniqueConstraint("user_id", "mes_referencia", "tipo", name="uq_analise_user_month_tipo"),
+        Index("ix_analise_user_month", "user_id", "mes_referencia"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    mes_referencia: Mapped[date] = mapped_column(Date, nullable=False)
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False, default="mensal")
+    score_referencia: Mapped[int] = mapped_column(Integer, nullable=False)
+    dados_input: Mapped[str] = mapped_column(Text, nullable=False)
+    resultado: Mapped[str] = mapped_column(Text, nullable=False)
+    tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    modelo: Mapped[str] = mapped_column(String(50), nullable=False)
+    tempo_processamento_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+    user = relationship("User", back_populates="analises_financeiras")

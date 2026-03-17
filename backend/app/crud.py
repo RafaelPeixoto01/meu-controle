@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from datetime import date
 
-from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico
+from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira
 
 
 # ========== Expenses ==========
@@ -473,4 +473,29 @@ def get_score_by_month(db: Session, user_id: str, mes_referencia: date) -> Score
         .where(ScoreHistorico.user_id == user_id, ScoreHistorico.mes_referencia == mes_referencia)
     )
     return db.scalars(stmt).first()
+
+
+# ========== AI Analysis (CR-032) ==========
+
+def get_analise_by_month(
+    db: Session, user_id: str, mes_referencia: date, tipo: str = "mensal"
+) -> AnaliseFinanceira | None:
+    """Retorna analise financeira de um mes especifico, se existir (cache)."""
+    stmt = (
+        select(AnaliseFinanceira)
+        .where(
+            AnaliseFinanceira.user_id == user_id,
+            AnaliseFinanceira.mes_referencia == mes_referencia,
+            AnaliseFinanceira.tipo == tipo,
+        )
+    )
+    return db.scalars(stmt).first()
+
+
+def create_analise(db: Session, analise: AnaliseFinanceira) -> AnaliseFinanceira:
+    """Persiste uma nova analise financeira."""
+    db.add(analise)
+    db.commit()
+    db.refresh(analise)
+    return analise
 
