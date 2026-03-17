@@ -271,8 +271,48 @@ railway run python -c "from app.database import engine; print(engine.url)"
 
 ---
 
+## 8. Seed de Dados Demo (CR-031)
+
+Script para popular dados ficticios no usuario demo (`meucontrole.demo@gmail.com`).
+
+### 8.1 Executar o Seed
+
+```bash
+cd backend
+
+# Producao (via URL publica do Railway PostgreSQL):
+python -m scripts.seed_demo --database-url "postgresql://postgres:<password>@switchyard.proxy.rlwy.net:<port>/railway"
+
+# Dev local (SQLite):
+python -m scripts.seed_demo
+```
+
+### 8.2 O que o script faz
+
+1. Busca o usuario demo por email (aborta se nao encontrar)
+2. **Limpa** todos os dados existentes do usuario (idempotente)
+3. Insere 6 meses de dados (Out/2025 - Mar/2026):
+   - 8 receitas (salario + freelance eventual)
+   - 48 despesas fixas recorrentes
+   - 15 parcelas (3 parcelamentos)
+   - 129 gastos diarios
+   - 6 scores de saude financeira (calculados dinamicamente)
+
+### 8.3 Re-executar
+
+O script e idempotente — pode ser executado multiplas vezes sem duplicar dados. Cada execucao limpa os dados anteriores antes de inserir.
+
+### 8.4 Obter URL publica do PostgreSQL
+
+```bash
+railway variables -s Postgres | grep DATABASE_PUBLIC_URL
+```
+
+---
+
 ## Changelog
 
 | Data | Autor | Descricao |
 |------|-------|-----------|
 | 2026-02-11 | Rafael | Documento criado (v1.0) |
+| 2026-03-17 | Claude | Adicionada secao 8: Seed de Dados Demo (CR-031) |

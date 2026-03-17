@@ -236,6 +236,9 @@ Personal Finance/
 │           ├── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
 │           ├── dashboard.py      # CR-019: GET /api/dashboard/{year}/{month} (auth required)
 │           └── score.py          # CR-026: GET /api/score, GET /api/score/history (auth required)
+│   ├── scripts/
+│       ├── seed_demo.py                    # CR-031: seed dados demo (idempotente, 6 meses)
+│       └── propagate_categories_mar2026.py # CR-016: script one-off
 │   └── tests/
 │       ├── test_installment_projection.py  # CR-021
 │       └── test_health_score.py            # CR-026
@@ -353,9 +356,10 @@ Personal Finance/
 - CR-028: Fix badge "Encerrando" duplicado em parcelas com mesmo nome — lookup de projecao por nome+parcela_total (concluido)
 - CR-029: Fix ViewSelector cortado no mobile — justify-start em mobile, sm:justify-center em telas maiores (concluido)
 - CR-030: Corrigir acentuação PT-BR em textos do sistema — labels, mensagens de erro, placeholders, títulos no frontend e mensagens HTTP no backend (concluido)
+- CR-031: Seed de Dados Demo — script idempotente para popular dados fictícios (6 meses) no usuário demo, cobrindo todas as features (concluido)
 
 ### Última Tarefa Implementada
-- CR-030: Corrigir acentuação PT-BR em textos do sistema (concluido)
+- CR-031: Seed de Dados Demo para demonstração do produto (concluido)
 
 ---
 
