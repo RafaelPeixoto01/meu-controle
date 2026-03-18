@@ -25,6 +25,15 @@ export default function MonthlyView() {
 
   const { alertsForTab, dismiss } = useAlerts();
   const queryClient = useQueryClient();
+  const tabAlerts = alertsForTab("gastos_planejados");
+
+  const handleAlertAction = useCallback(async (alerta: Alerta) => {
+    if (alerta.acao?.tipo === "marcar_pago" && alerta.acao.referencia_id) {
+      await updateExpense(alerta.acao.referencia_id, { status: "Pago" });
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
+    }
+  }, [queryClient]);
 
   if (isLoading) {
     return (
@@ -53,15 +62,6 @@ export default function MonthlyView() {
       </div>
     );
   }
-  const tabAlerts = alertsForTab("gastos_planejados");
-
-  const handleAlertAction = useCallback(async (alerta: Alerta) => {
-    if (alerta.acao?.tipo === "marcar_pago" && alerta.acao.referencia_id) {
-      await updateExpense(alerta.acao.referencia_id, { status: "Pago" });
-      queryClient.invalidateQueries({ queryKey: ["alerts"] });
-      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
-    }
-  }, [queryClient]);
 
   if (!data) return null;
 
