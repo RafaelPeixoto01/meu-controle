@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.routers import expenses, incomes, months, auth, users, daily_expenses, dashboard, score, ai_analysis  # CR-002: auth, users; CR-005: daily_expenses; CR-019: dashboard; CR-026: score; CR-032: ai_analysis
+from app.routers import expenses, incomes, months, auth, users, daily_expenses, dashboard, score, ai_analysis, alerts  # CR-002: auth, users; CR-005: daily_expenses; CR-019: dashboard; CR-026: score; CR-032: ai_analysis; CR-033: alerts
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -65,6 +65,7 @@ app.include_router(daily_expenses.router)  # CR-005: gastos diarios
 app.include_router(dashboard.router)       # CR-019: dashboard visual
 app.include_router(score.router)           # CR-026: score de saude financeira
 app.include_router(ai_analysis.router)    # CR-032: analise financeira por IA
+app.include_router(alerts.router)         # CR-033: alertas inteligentes
 
 
 @app.get("/api/health")

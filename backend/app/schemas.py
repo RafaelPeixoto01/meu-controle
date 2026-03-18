@@ -529,3 +529,62 @@ class AiAnalysisResponse(BaseModel):
     generated_at: str | None = None
     is_cached: bool = False
     reason: str | None = None
+
+
+# ========== Alerts (CR-033) ==========
+
+class AlertaAcao(BaseModel):
+    tipo: str  # marcar_pago | navegar | criar_planejado
+    label: str
+    referencia_id: str | None = None
+    destino: str | None = None
+
+
+class AlertaOutput(BaseModel):
+    model_config = {"from_attributes": True}
+    id: str | None = None
+    tipo: str  # A1-A8
+    severidade: str  # critico | atencao | informativo
+    titulo: str
+    descricao: str
+    impacto_mensal: float | None = None
+    impacto_anual: float | None = None
+    status: str = "ativo"  # ativo | visto | dispensado | resolvido
+    acao: AlertaAcao | None = None
+    contexto_aba: str  # gastos_planejados | parcelas | score
+    created_at: str | None = None
+
+
+class AlertasResumo(BaseModel):
+    total_ativos: int
+    criticos: int
+    atencao: int
+    informativos: int
+    nao_vistos: int
+
+
+class AlertasResponse(BaseModel):
+    alertas: list[AlertaOutput]
+    resumo: AlertasResumo
+
+
+class ConfiguracaoAlertasResponse(BaseModel):
+    antecedencia_vencimento: int
+    alerta_atrasadas: bool
+    alerta_parcelas_encerrando: bool
+    alerta_score: bool
+    alerta_comprometimento: bool
+    limiar_comprometimento: int
+    alerta_parcela_ativada: bool
+    alerta_ia: bool
+
+
+class ConfiguracaoAlertasUpdate(BaseModel):
+    antecedencia_vencimento: int | None = Field(None, ge=1, le=7)
+    alerta_atrasadas: bool | None = None
+    alerta_parcelas_encerrando: bool | None = None
+    alerta_score: bool | None = None
+    alerta_comprometimento: bool | None = None
+    limiar_comprometimento: int | None = Field(None, ge=30, le=90)
+    alerta_parcela_ativada: bool | None = None
+    alerta_ia: bool | None = None
