@@ -1,11 +1,11 @@
 # Plano de Implementacao — Meu Controle (Fase 1 + 3)
 
-**Versao:** 2.8
-**Data:** 2026-03-16
+**Versao:** 2.9
+**Data:** 2026-03-18
 **PRD Ref:** 01-PRD v2.3
-**Arquitetura Ref:** 02-ARCHITECTURE v2.8
-**Spec Ref:** 03-SPEC v2.8
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais), CR-026 (Score de Saude Financeira)
+**Arquitetura Ref:** 02-ARCHITECTURE v2.9
+**Spec Ref:** 03-SPEC v2.9
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes)
 
 ---
 
@@ -39,6 +39,7 @@
 | CR-026 | Score de Saude Financeira (F04)                                        | CR26-T-01 a CR26-T-22 | Concluido |
 | CR-027 | Mover Score para aba propria no ViewSelector                               | CR27-T-01 a CR27-T-03 | Concluido |
 | CR-028 | Fix badge "Encerrando" duplicado em parcelas com mesmo nome                | CR28-T-01 a CR28-T-05 | Concluido |
+| CR-033 | Alertas e Notificacoes Inteligentes (F05)                                      | CR33-T-01 a CR33-T-31 | Concluido |
 
 ---
 
