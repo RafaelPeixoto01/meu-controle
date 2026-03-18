@@ -23,6 +23,9 @@ export default function MonthlyView() {
     goToNextMonth,
   } = useMonthlyView();
 
+  const { alertsForTab, dismiss } = useAlerts();
+  const queryClient = useQueryClient();
+
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-6 pb-12 space-y-6">
@@ -50,9 +53,6 @@ export default function MonthlyView() {
       </div>
     );
   }
-
-  const { alertsForTab, dismiss } = useAlerts();
-  const queryClient = useQueryClient();
   const tabAlerts = alertsForTab("gastos_planejados");
 
   const handleAlertAction = useCallback(async (alerta: Alerta) => {
