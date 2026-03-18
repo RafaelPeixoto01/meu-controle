@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from datetime import date
 
-from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira
+from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira; CR-033: AlertaEstado, ConfiguracaoAlertas
 
 
 # ========== Expenses ==========
@@ -498,4 +498,141 @@ def create_analise(db: Session, analise: AnaliseFinanceira) -> AnaliseFinanceira
     db.commit()
     db.refresh(analise)
     return analise
+
+
+# ========== Alerts (CR-033) ==========
+
+def get_alerta_estado(
+    db: Session, user_id: str, alerta_tipo: str, alerta_referencia: str, mes_referencia: date
+) -> AlertaEstado | None:
+    """Retorna estado de um alerta especifico, se existir."""
+    stmt = (
+        select(AlertaEstado)
+        .where(
+            AlertaEstado.user_id == user_id,
+            AlertaEstado.alerta_tipo == alerta_tipo,
+            AlertaEstado.alerta_referencia == alerta_referencia,
+            AlertaEstado.mes_referencia == mes_referencia,
+        )
+    )
+    return db.scalars(stmt).first()
+
+
+def get_alertas_by_month(db: Session, user_id: str, mes_referencia: date) -> list[AlertaEstado]:
+    """Retorna todos os alertas persistidos do usuario para o mes."""
+    stmt = (
+        select(AlertaEstado)
+        .where(
+            AlertaEstado.user_id == user_id,
+            AlertaEstado.mes_referencia == mes_referencia,
+        )
+    )
+    return list(db.scalars(stmt).all())
+
+
+def upsert_alerta_estado(db: Session, user_id: str, alerta_data: dict) -> AlertaEstado:
+    """Cria ou atualiza estado de um alerta. Preserva status se ja existe."""
+    import uuid as _uuid
+
+    existing = get_alerta_estado(
+        db, user_id,
+        alerta_data["alerta_tipo"],
+        alerta_data["alerta_referencia"],
+        alerta_data["mes_referencia"],
+    )
+    if existing:
+        # Atualiza titulo/descricao (podem mudar a cada calculo) mas preserva status
+        existing.titulo = alerta_data["titulo"]
+        existing.descricao = alerta_data.get("descricao")
+        existing.severidade = alerta_data["severidade"]
+        existing.impacto_mensal = alerta_data.get("impacto_mensal")
+        existing.impacto_anual = alerta_data.get("impacto_anual")
+        existing.acao_tipo = alerta_data.get("acao_tipo")
+        existing.acao_referencia_id = alerta_data.get("acao_referencia_id")
+        existing.acao_destino = alerta_data.get("acao_destino")
+        existing.contexto_aba = alerta_data["contexto_aba"]
+        db.commit()
+        db.refresh(existing)
+        return existing
+    else:
+        record = AlertaEstado(
+            id=str(_uuid.uuid4()),
+            user_id=user_id,
+            **{k: v for k, v in alerta_data.items() if k != "user_id"},
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record
+
+
+def get_alerta_by_id(db: Session, alerta_id: str, user_id: str) -> AlertaEstado | None:
+    """Retorna alerta por ID se pertence ao usuario."""
+    stmt = (
+        select(AlertaEstado)
+        .where(AlertaEstado.id == alerta_id, AlertaEstado.user_id == user_id)
+    )
+    return db.scalars(stmt).first()
+
+
+def mark_alerta_visto(db: Session, alerta: AlertaEstado) -> AlertaEstado:
+    """Marca alerta como visto."""
+    from datetime import datetime as _dt
+    if alerta.status == "ativo":
+        alerta.status = "visto"
+        alerta.visto_em = _dt.now()
+        db.commit()
+        db.refresh(alerta)
+    return alerta
+
+
+def mark_alerta_dispensado(db: Session, alerta: AlertaEstado) -> AlertaEstado:
+    """Marca alerta como dispensado."""
+    from datetime import datetime as _dt
+    if alerta.status in ("ativo", "visto"):
+        alerta.status = "dispensado"
+        alerta.dispensado_em = _dt.now()
+        db.commit()
+        db.refresh(alerta)
+    return alerta
+
+
+def mark_alerta_resolvido(db: Session, alerta: AlertaEstado) -> AlertaEstado:
+    """Marca alerta como resolvido automaticamente."""
+    from datetime import datetime as _dt
+    if alerta.status in ("ativo", "visto"):
+        alerta.status = "resolvido"
+        alerta.resolvido_em = _dt.now()
+        db.commit()
+        db.refresh(alerta)
+    return alerta
+
+
+# ========== Alert Config (CR-033) ==========
+
+def get_configuracao_alertas(db: Session, user_id: str) -> ConfiguracaoAlertas:
+    """Retorna config de alertas do usuario. Cria com defaults se nao existir."""
+    import uuid as _uuid
+
+    stmt = select(ConfiguracaoAlertas).where(ConfiguracaoAlertas.user_id == user_id)
+    config = db.scalars(stmt).first()
+    if config:
+        return config
+
+    config = ConfiguracaoAlertas(id=str(_uuid.uuid4()), user_id=user_id)
+    db.add(config)
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+def update_configuracao_alertas(db: Session, user_id: str, data: dict) -> ConfiguracaoAlertas:
+    """Atualiza config de alertas do usuario."""
+    config = get_configuracao_alertas(db, user_id)
+    for key, value in data.items():
+        if value is not None and hasattr(config, key):
+            setattr(config, key, value)
+    db.commit()
+    db.refresh(config)
+    return config
 

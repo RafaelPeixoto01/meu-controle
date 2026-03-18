@@ -37,6 +37,8 @@ class User(Base):
     daily_expenses = relationship("DailyExpense", back_populates="user", cascade="all, delete-orphan")  # CR-005
     score_historico = relationship("ScoreHistorico", back_populates="user", cascade="all, delete-orphan")  # CR-026
     analises_financeiras = relationship("AnaliseFinanceira", back_populates="user", cascade="all, delete-orphan")  # CR-032
+    alertas = relationship("AlertaEstado", back_populates="user", cascade="all, delete-orphan")  # CR-033
+    configuracao_alertas = relationship("ConfiguracaoAlertas", back_populates="user", uselist=False, cascade="all, delete-orphan")  # CR-033
 
 
 class Expense(Base):
@@ -200,3 +202,66 @@ class AnaliseFinanceira(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
     user = relationship("User", back_populates="analises_financeiras")
+
+
+class AlertaEstado(Base):
+    """CR-033: Estado persistido dos alertas inteligentes."""
+    __tablename__ = "alerta_estado"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "alerta_tipo", "alerta_referencia", "mes_referencia",
+            name="uq_alerta_user_tipo_ref_mes",
+        ),
+        Index("ix_alerta_user_status", "user_id", "status"),
+        Index("ix_alerta_user_mes", "user_id", "mes_referencia"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    alerta_tipo: Mapped[str] = mapped_column(String(10), nullable=False)
+    alerta_referencia: Mapped[str] = mapped_column(String(100), nullable=False)
+    mes_referencia: Mapped[date] = mapped_column(Date, nullable=False)
+    severidade: Mapped[str] = mapped_column(String(20), nullable=False)
+    titulo: Mapped[str] = mapped_column(String(200), nullable=False)
+    descricao: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    dados_extra: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="ativo", nullable=False)
+    contexto_aba: Mapped[str] = mapped_column(String(30), nullable=False)
+    acao_tipo: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    acao_referencia_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    acao_destino: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    impacto_mensal: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    impacto_anual: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    visto_em: Mapped[datetime | None] = mapped_column(nullable=True)
+    dispensado_em: Mapped[datetime | None] = mapped_column(nullable=True)
+    resolvido_em: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+    user = relationship("User", back_populates="alertas")
+
+
+class ConfiguracaoAlertas(Base):
+    """CR-033: Configurações de alertas por usuário."""
+    __tablename__ = "configuracao_alertas"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    antecedencia_vencimento: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    alerta_atrasadas: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    alerta_parcelas_encerrando: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    alerta_score: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    alerta_comprometimento: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    limiar_comprometimento: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    alerta_parcela_ativada: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    alerta_ia: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.now, onupdate=datetime.now)
+
+    user = relationship("User", back_populates="configuracao_alertas")

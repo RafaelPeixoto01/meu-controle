@@ -17,6 +17,8 @@ import type {
   HealthScoreData,
   ScoreHistoryData,
   AiAnalysisResponse,
+  AlertasResponse,
+  ConfiguracaoAlertas,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -216,4 +218,29 @@ export function fetchScoreHistory(months = 12): Promise<ScoreHistoryData> {
 
 export function fetchAiAnalysis(): Promise<AiAnalysisResponse> {
   return request<AiAnalysisResponse>("/analysis");
+}
+
+// ========== Alerts (CR-033) ==========
+
+export function fetchAlerts(): Promise<AlertasResponse> {
+  return request<AlertasResponse>("/alerts");
+}
+
+export function markAlertSeen(alertaId: string): Promise<void> {
+  return request<void>(`/alerts/${alertaId}/seen`, { method: "PATCH" });
+}
+
+export function dismissAlert(alertaId: string): Promise<void> {
+  return request<void>(`/alerts/${alertaId}/dismiss`, { method: "PATCH" });
+}
+
+export function fetchAlertsConfig(): Promise<ConfiguracaoAlertas> {
+  return request<ConfiguracaoAlertas>("/alerts/config");
+}
+
+export function updateAlertsConfig(data: Partial<ConfiguracaoAlertas>): Promise<ConfiguracaoAlertas> {
+  return request<ConfiguracaoAlertas>("/alerts/config", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 }

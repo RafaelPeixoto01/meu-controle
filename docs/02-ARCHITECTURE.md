@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.8
-**Data:** 2026-03-16
+**Versao:** 2.9
+**Data:** 2026-03-18
 **PRD Ref:** 01-PRD v2.3
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes)
 
 ---
 
@@ -128,6 +128,7 @@ Personal Finance/
 │       ├── crud.py
 │       ├── services.py
 │       ├── auth.py                          # CR-002: JWT, password hashing, get_current_user
+│       ├── alerts.py                        # CR-033: AlertEngine + 7 checkers (A1-A8), motor de alertas on-demand
 │       ├── categories.py                    # Categorias compartilhadas (EXPENSE_CATEGORIES) + metodos pagamento + helpers (CR-005, CR-016)
 │       ├── email_service.py                 # CR-002: SendGrid integration
 │       └── routers/
@@ -138,7 +139,8 @@ Personal Finance/
 │           ├── auth.py                      # CR-002: register, login, Google, refresh, logout, forgot/reset password
 │           ├── users.py                     # CR-002: GET/PATCH /me, change password
 │           ├── daily_expenses.py            # CR-005: CRUD gastos diarios (5 endpoints)
-│           └── dashboard.py                # CR-019: endpoints de agregacao para dashboard visual
+│           ├── dashboard.py                # CR-019: endpoints de agregacao para dashboard visual
+│           └── alerts.py                  # CR-033: GET /api/alerts, PATCH seen/dismiss, GET/PUT config
 ├── frontend/
 │   ├── package.json
 │   ├── tsconfig.json
@@ -201,6 +203,8 @@ erDiagram
     USER ||--o{ REFRESH_TOKEN : "has many"
     USER ||--o{ DAILY_EXPENSE : "has many"
     USER ||--o{ SCORE_HISTORICO : "has many"
+    USER ||--o{ ALERTA_ESTADO : "has many"
+    USER ||--o| CONFIGURACAO_ALERTAS : "has one"
 
     USER {
         string id PK
@@ -273,6 +277,35 @@ erDiagram
         int score_conservador
         text dados_snapshot
         datetime created_at
+    }
+    ALERTA_ESTADO {
+        int id PK
+        string user_id FK
+        string alerta_tipo
+        string alerta_referencia
+        date mes_referencia
+        string severidade
+        string titulo
+        string descricao
+        text dados_extra
+        string status
+        datetime visto_em
+        datetime dispensado_em
+        datetime resolvido_em
+        datetime created_at
+    }
+    CONFIGURACAO_ALERTAS {
+        int id PK
+        string user_id FK
+        int antecedencia_vencimento
+        bool alerta_atrasadas
+        bool alerta_parcelas_encerrando
+        bool alerta_score
+        bool alerta_comprometimento
+        int limiar_comprometimento
+        bool alerta_parcela_ativada
+        bool alerta_ia
+        datetime updated_at
     }
 ```
 
@@ -386,6 +419,46 @@ erDiagram
 > **Index:** `ix_score_historico_user_month (user_id, mes_referencia)`
 > **dados_snapshot como Text:** SQLite nao suporta JSONB; Text funciona em ambos os DBs (AD-7).
 
+#### AlertaEstado (`alerta_estado`) — CR-033
+
+| Campo              | Tipo           | Restricoes                        | Descricao                                         |
+|--------------------|----------------|-----------------------------------|----------------------------------------------------|
+| id                 | Integer        | PK, autoincrement                 | Identificador unico                                |
+| user_id            | String(36)     | NOT NULL, FK→users.id, CASCADE   | Usuario dono do alerta                             |
+| alerta_tipo        | String(10)     | NOT NULL                          | Tipo do alerta (A1-A8)                             |
+| alerta_referencia  | String(100)    | NOT NULL                          | Referencia unica do alerta (ex: expense_id)        |
+| mes_referencia     | Date           | NOT NULL                          | Mes/ano de referencia                              |
+| severidade         | String(20)     | NOT NULL                          | critico, atencao, informativo                      |
+| titulo             | String(100)    | NOT NULL                          | Titulo do alerta                                   |
+| descricao          | String(300)    | Nullable                          | Descricao detalhada                                |
+| dados_extra        | Text           | Nullable                          | JSON string com dados adicionais                   |
+| status             | String(20)     | NOT NULL, default "ativo"         | ativo, visto, dispensado, resolvido                |
+| visto_em           | DateTime       | Nullable                          | Quando o alerta foi visto                          |
+| dispensado_em      | DateTime       | Nullable                          | Quando o alerta foi dispensado                     |
+| resolvido_em       | DateTime       | Nullable                          | Quando o alerta foi resolvido                      |
+| created_at         | DateTime       | NOT NULL, default now()           | Data de criacao do registro                        |
+
+> **UniqueConstraint:** `(user_id, alerta_tipo, alerta_referencia, mes_referencia)` — evita alertas duplicados.
+> **Indexes:** `idx_alerta_user_status (user_id, status)`, `idx_alerta_user_mes (user_id, mes_referencia)`
+
+#### ConfiguracaoAlertas (`configuracao_alertas`) — CR-033
+
+| Campo                       | Tipo           | Restricoes                        | Descricao                                         |
+|-----------------------------|----------------|-----------------------------------|----------------------------------------------------|
+| id                          | Integer        | PK, autoincrement                 | Identificador unico                                |
+| user_id                     | String(36)     | NOT NULL, FK→users.id, CASCADE, UNIQUE | Usuario dono da configuracao                  |
+| antecedencia_vencimento     | Integer        | NOT NULL, default 3               | Dias de antecedencia para A1 (1/3/5/7)            |
+| alerta_atrasadas            | Boolean        | NOT NULL, default True            | Toggle A2 (despesas atrasadas)                     |
+| alerta_parcelas_encerrando  | Boolean        | NOT NULL, default True            | Toggle A3 (parcelas encerrando)                    |
+| alerta_score                | Boolean        | NOT NULL, default True            | Toggle A4 (score deteriorando)                     |
+| alerta_comprometimento      | Boolean        | NOT NULL, default True            | Toggle A5 (comprometimento alto)                   |
+| limiar_comprometimento      | Integer        | NOT NULL, default 50              | Limiar % para A5 (40/50/60/70)                     |
+| alerta_parcela_ativada      | Boolean        | NOT NULL, default True            | Toggle A6 (parcela pendente ativada)               |
+| alerta_ia                   | Boolean        | NOT NULL, default True            | Toggle A7/A8 (alertas da analise IA)               |
+| updated_at                  | DateTime       | NOT NULL, default now(), onupdate | Data da ultima atualizacao                         |
+
+> **Relacao 1:1:** Um registro por usuario. Criado com defaults na primeira consulta (lazy creation).
+
 ### Relacionamentos
 
 ```
@@ -394,15 +467,18 @@ Usuario (1) ---- possui ----> Receita (N)
 Usuario (1) ---- possui ----> RefreshToken (N)
 Usuario (1) ---- possui ----> GastoDiario (N)
 Usuario (1) ---- possui ----> ScoreHistorico (N)
+Usuario (1) ---- possui ----> AlertaEstado (N)
+Usuario (1) ---- possui ----> ConfiguracaoAlertas (1)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
 Receita (N) ---- pertence a ----> Mes de referencia (1)
 GastoDiario (N) ---- pertence a ----> Mes de referencia (1)
 ScoreHistorico (N) ---- pertence a ----> Mes de referencia (1)
+AlertaEstado (N) ---- pertence a ----> Mes de referencia (1)
 ```
 
 > **Isolamento de dados (CR-002):** Cada usuario so pode ver, criar, editar e deletar seus proprios dados. Todas as queries CRUD filtram por `user_id`. Operacoes de update/delete verificam ownership antes de executar.
 
-> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios, score historico e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
+> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios, score historico, alertas, configuracoes de alertas e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
 
 ---
 

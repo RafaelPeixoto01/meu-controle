@@ -215,7 +215,8 @@ Personal Finance/
 │       ├── 004_add_daily_expenses.py  # CR-005
 │       ├── 005_add_expense_categories.py  # CR-016
 │       ├── 006_add_score_historico.py     # CR-026
-│       └── 007_add_analise_financeira.py  # CR-032
+│       ├── 007_add_analise_financeira.py  # CR-032
+│       └── 008_add_alertas_tables.py     # CR-033
 │   ├── prompts/
 │       ├── financial_analysis_system.txt  # CR-032: system prompt IA
 │       └── financial_analysis_user.txt    # CR-032: user prompt template
@@ -223,12 +224,13 @@ Personal Finance/
 │       ├── __init__.py
 │       ├── main.py           # Entry point FastAPI + lifespan
 │       ├── database.py       # Engine SQLAlchemy + SessionLocal
-│       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira
-│       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard + health score + AI analysis schemas
-│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates + score historico + analise financeira
+│       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas
+│       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard + health score + AI analysis + alerts schemas
+│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates + score historico + analise financeira + alertas
 │       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary, dashboard data, installment projection (CR-021)
 │       ├── health_score.py   # CR-026: calculo deterministico score 0-100, 4 dimensoes, acoes, cenario conservador
 │       ├── ai_analysis.py    # CR-032: coletor de dados, prompt builder, cliente Anthropic, merger de acoes
+│       ├── alerts.py         # CR-033: AlertEngine + 7 checkers (A1-A8), motor de alertas on-demand
 │       ├── categories.py     # EXPENSE_CATEGORIES compartilhadas (CR-005, CR-016) + metodos de pagamento
 │       ├── auth.py           # CR-002: JWT + bcrypt auth module
 │       ├── email_service.py  # CR-002: SendGrid email (password reset)
@@ -241,14 +243,16 @@ Personal Finance/
 │           ├── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
 │           ├── dashboard.py      # CR-019: GET /api/dashboard/{year}/{month} (auth required)
 │           ├── score.py          # CR-026: GET /api/score, GET /api/score/history (auth required)
-│           └── ai_analysis.py    # CR-032: GET /api/analysis (auth required)
+│           ├── ai_analysis.py    # CR-032: GET /api/analysis (auth required)
+│           └── alerts.py        # CR-033: GET /api/alerts, PATCH seen/dismiss, GET/PUT config (auth required)
 │   ├── scripts/
 │       ├── seed_demo.py                    # CR-031: seed dados demo (idempotente, 6 meses)
 │       └── propagate_categories_mar2026.py # CR-016: script one-off
 │   └── tests/
 │       ├── test_installment_projection.py  # CR-021
 │       ├── test_health_score.py            # CR-026
-│       └── test_ai_analysis.py             # CR-032
+│       ├── test_ai_analysis.py             # CR-032
+│       └── test_alerts.py                  # CR-033
 ├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts        # Proxy /api -> :8000
@@ -258,18 +262,19 @@ Personal Finance/
 │       ├── App.tsx           # Shell com AuthProvider + Routes
 │       ├── index.css         # Tailwind v4 (@import + @theme)
 │       ├── vite-env.d.ts     # Vite client types
-│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019) + InstallmentProjection types (CR-021) + HealthScore types (CR-026) + AiAnalysis types (CR-032)
+│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019) + InstallmentProjection types (CR-021) + HealthScore types (CR-026) + AiAnalysis types (CR-032) + Alerts types (CR-033)
 │       ├── utils/            # format.ts (formatBRL, formatDateFull), date.ts
 │       ├── services/
-│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses + dashboard + score + AI analysis API
+│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses + dashboard + score + AI analysis + alerts API
 │       │   └── authApi.ts    # CR-002: auth API functions
 │       ├── contexts/
 │       │   └── AuthContext.tsx  # CR-002: auth state management
-│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard, useInstallmentProjection, useHealthScore, useAiAnalysis
+│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard, useInstallmentProjection, useHealthScore, useAiAnalysis, useAlerts
 │       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector, dashboard/, installments/, score/
 │       │   ├── installments/    # CR-021: ProjectionSummaryCards, ProjectionStackedChart, ProjectionGantt, ProjectionChartToggle
 │       │   ├── score/           # CR-026: ScoreGauge, ScoreDimensionBreakdown, ScoreHistoryChart, ScoreActions, ScoreConservativeNote
-│       │   └── analysis/        # CR-032: DiagnosticoCard, AlertasList, BonsComportamentos, MetasSugeridas, GastosRecorrentes, MensagemMotivacional, AnalysisPlaceholder, AnalysisFooter
+│       │   ├── analysis/        # CR-032: DiagnosticoCard, AlertasList, BonsComportamentos, MetasSugeridas, GastosRecorrentes, MensagemMotivacional, AnalysisPlaceholder, AnalysisFooter
+│       │   └── alerts/          # CR-033: AlertItem, AlertBadge, AlertBanner, AlertsCard, AlertsModal, AlertsSettings
 │       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, ScoreDetailView, Login, Register, ForgotPassword, ResetPassword, Profile
 ├── CLAUDE.md
 └── .gitignore
@@ -366,9 +371,10 @@ Personal Finance/
 - CR-030: Corrigir acentuação PT-BR em textos do sistema — labels, mensagens de erro, placeholders, títulos no frontend e mensagens HTTP no backend (concluido)
 - CR-031: Seed de Dados Demo — script idempotente para popular dados fictícios (6 meses) no usuário demo, cobrindo todas as features (concluido)
 - CR-032: Análise Financeira por IA (F06) — endpoint /api/analysis com API Claude, diagnóstico, alertas, recomendações mescladas com score F04, metas, gastos recorrentes disfarçados, mensagem motivacional, cache mensal, graceful degradation (concluido)
+- CR-033: Alertas e Notificações Inteligentes (F05) — 8 tipos de alertas (A1-A8), motor on-demand com 7 checkers, 3 pontos de exibição (AlertsCard no Dashboard, AlertBadge no ViewSelector, AlertBanner inline), ciclo de vida ativo/visto/dispensado/resolvido, configurações do usuário (8 toggles + limiares), 5 endpoints REST, 26 testes backend (concluido)
 
 ### Última Tarefa Implementada
-- CR-032: Análise Financeira por IA integrada à aba Score (concluido)
+- CR-033: Alertas e Notificações Inteligentes integradas ao Dashboard e navegação (concluido)
 
 ---
 
