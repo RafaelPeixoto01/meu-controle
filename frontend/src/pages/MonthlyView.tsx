@@ -1,9 +1,15 @@
+import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMonthlyView } from "../hooks/useMonthTransition";
 import MonthNavigator from "../components/MonthNavigator";
 import IncomeTable from "../components/IncomeTable";
 import ExpenseTable from "../components/ExpenseTable";
 import SaldoLivre from "../components/SaldoLivre";
 import ViewSelector from "../components/ViewSelector";
+import AlertBanner from "../components/alerts/AlertBanner";
+import { useAlerts } from "../hooks/useAlerts";
+import { updateExpense } from "../services/api";
+import type { Alerta } from "../types";
 
 export default function MonthlyView() {
   const {
@@ -45,11 +51,24 @@ export default function MonthlyView() {
     );
   }
 
+  const { alertsForTab, dismiss } = useAlerts();
+  const queryClient = useQueryClient();
+  const tabAlerts = alertsForTab("gastos_planejados");
+
+  const handleAlertAction = useCallback(async (alerta: Alerta) => {
+    if (alerta.acao?.tipo === "marcar_pago" && alerta.acao.referencia_id) {
+      await updateExpense(alerta.acao.referencia_id, { status: "Pago" });
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
+    }
+  }, [queryClient]);
+
   if (!data) return null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 pb-12 space-y-6">
       <ViewSelector />
+      <AlertBanner alertas={tabAlerts} onDismiss={dismiss} onAction={handleAlertAction} />
       <MonthNavigator
         year={year}
         month={month}

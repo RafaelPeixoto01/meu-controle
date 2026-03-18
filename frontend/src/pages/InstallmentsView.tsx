@@ -11,9 +11,11 @@ import { fetchInstallments } from "../services/api";
 import type { InstallmentGroup } from "../types";
 import StatusBadge from "../components/StatusBadge";
 import ViewSelector from "../components/ViewSelector";
+import AlertBanner from "../components/alerts/AlertBanner";
 import ProjectionSummaryCards from "../components/installments/ProjectionSummaryCards";
 import ProjectionChartToggle from "../components/installments/ProjectionChartToggle";
 import { useAuth } from "../hooks/useAuth";
+import { useAlerts } from "../hooks/useAlerts";
 import { useInstallmentProjection } from "../hooks/useInstallmentProjection";
 import { getMonthName } from "../utils/date";
 
@@ -33,6 +35,8 @@ export function InstallmentsView() {
     });
 
     const projection = useInstallmentProjection();
+    const { alertsForTab, dismiss } = useAlerts();
+    const parcelasAlerts = alertsForTab("parcelas");
 
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
         {}
@@ -96,6 +100,7 @@ export function InstallmentsView() {
     return (
         <div className="px-4 py-6 sm:p-6 space-y-6 max-w-7xl mx-auto">
             <ViewSelector />
+            <AlertBanner alertas={parcelasAlerts} onDismiss={dismiss} />
             <header className="mb-8">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                     <CreditCard className="w-8 h-8 text-primary-600" />

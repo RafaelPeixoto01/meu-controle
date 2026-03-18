@@ -421,6 +421,53 @@ export interface AiAnalysisResponse {
   reason?: string;
 }
 
+// ========== Alerts Types (CR-033) ==========
+
+export interface AlertaAcao {
+  tipo: string;  // marcar_pago | navegar | criar_planejado
+  label: string;
+  referencia_id: string | null;
+  destino: string | null;
+}
+
+export interface Alerta {
+  id: string | null;
+  tipo: string;
+  severidade: "critico" | "atencao" | "informativo";
+  titulo: string;
+  descricao: string;
+  impacto_mensal: number | null;
+  impacto_anual: number | null;
+  status: string;
+  acao: AlertaAcao | null;
+  contexto_aba: string;
+  created_at: string | null;
+}
+
+export interface AlertasResumo {
+  total_ativos: number;
+  criticos: number;
+  atencao: number;
+  informativos: number;
+  nao_vistos: number;
+}
+
+export interface AlertasResponse {
+  alertas: Alerta[];
+  resumo: AlertasResumo;
+}
+
+export interface ConfiguracaoAlertas {
+  antecedencia_vencimento: number;
+  alerta_atrasadas: boolean;
+  alerta_parcelas_encerrando: boolean;
+  alerta_score: boolean;
+  alerta_comprometimento: boolean;
+  limiar_comprometimento: number;
+  alerta_parcela_ativada: boolean;
+  alerta_ia: boolean;
+}
+
 // ========== Auth Types (CR-002) ==========
 
 export interface User {

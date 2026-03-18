@@ -12,19 +12,24 @@ import GastosRecorrentes from "../components/analysis/GastosRecorrentes";
 import MensagemMotivacional from "../components/analysis/MensagemMotivacional";
 import AnalysisPlaceholder from "../components/analysis/AnalysisPlaceholder";
 import AnalysisFooter from "../components/analysis/AnalysisFooter";
+import AlertBanner from "../components/alerts/AlertBanner";
 import { useHealthScore } from "../hooks/useHealthScore";
 import { useAiAnalysis } from "../hooks/useAiAnalysis";
+import { useAlerts } from "../hooks/useAlerts";
 
 export default function ScoreDetailView() {
   const { score, history, isLoading, isError, error } = useHealthScore();
   const { analysis, isLoading: aiLoading, isError: aiError, refetch: aiRefetch } = useAiAnalysis();
+  const { alertsForTab, dismiss } = useAlerts();
 
   const aiDisponivel = analysis?.status === "disponivel" && analysis.resultado;
   const aiResult = analysis?.resultado;
+  const scoreAlerts = alertsForTab("score");
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 pb-12 space-y-6">
       <ViewSelector />
+      <AlertBanner alertas={scoreAlerts} onDismiss={dismiss} />
 
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-20">
