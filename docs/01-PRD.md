@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 2.3
-**Data:** 2026-03-16
+**Versao:** 3.0
+**Data:** 2026-03-18
 **Status:** Aprovado
-**Fase:** 1 + 3 + Gastos Diarios + Parcelas + Score — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Score de Saude Financeira
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-026
+**Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033
 
 ---
 
@@ -164,6 +164,88 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - Persistencia mensal em tabela `score_historico` com upsert-on-read (INSERT ON CONFLICT).
 - Endpoints: `GET /api/score` (calculo + persistencia), `GET /api/score/history?months=12`.
 
+### Modulo: Categorizacao de Despesas Planejadas (CR-016)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-16 | Campos categoria e subcategoria nas despesas planejadas, com selects cascading e coluna na tabela | Alta | Rafael |
+
+**RF-16 — Detalhamento:**
+- Adiciona campos `categoria` e `subcategoria` ao modelo Expense (campos opcionais, nullable).
+- O usuario seleciona a subcategoria a partir de um select; a categoria e auto-derivada (mesmo mecanismo dos gastos diarios, compartilhando `categories.py`).
+- Categorias compartilhadas entre Expense e DailyExpense: 14 categorias fixas + "Outros" (definidas em `backend/app/categories.py`).
+- Formulario de despesa exibe selects em cascata: primeiro subcategoria, depois categoria preenchida automaticamente.
+- Coluna de categoria visivel na tabela de despesas (ExpenseTable).
+- Despesas existentes sem categoria continuam funcionando normalmente (campos nullable).
+
+### Modulo: Dashboard Visual (CR-019)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-17 | Dashboard com KPI cards, graficos de distribuicao por categoria e evolucao mensal | Alta | Rafael |
+
+**RF-17 — Detalhamento:**
+- Endpoint `GET /api/dashboard/{year}/{month}` retorna dados agregados para o mes: totais, breakdown por status, distribuicao por categoria (planejadas e diarios separados), evolucao de 6 meses.
+- 4 KPI cards: Total Despesas Planejadas, Total Gastos Diarios, Total Receitas, Saldo Livre.
+- 2 donut charts (recharts): distribuicao por categoria de despesas planejadas e de gastos diarios.
+- 1 bar chart: evolucao de 6 meses (despesas planejadas vs gastos diarios vs receitas).
+- Status breakdown: barras visuais de Pago/Pendente/Atrasado.
+- Dashboard acessivel via ViewSelector como aba "Dashboard".
+
+### Modulo: Visao Consolidada de Parcelas Futuras (CR-021)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-18 | Projecao de parcelas futuras com KPI cards, grafico empilhado 12 meses e timeline Gantt | Alta | Rafael |
+
+**RF-18 — Detalhamento:**
+- Endpoint de projecao retorna dados consolidados de todos os parcelamentos ativos do usuario.
+- 6 KPI cards: Total Parcelas Ativas, Valor Mensal Comprometido, Valor Total Restante, Proxima a Encerrar, Media por Parcela, Progresso Geral.
+- Grafico de barras empilhadas (recharts): projecao de 12 meses mostrando comprometimento futuro por parcelamento.
+- Timeline Gantt visual: cada parcelamento como barra horizontal com inicio, fim e progresso.
+- Tabela aprimorada com badges de status (Ativa, Encerrando, Concluida) e data de encerramento.
+- Acessivel via ViewSelector como aba "Parcelas".
+
+### Modulo: Analise Financeira por IA (CR-032)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-19 | Analise financeira automatica via API Claude com diagnostico, recomendacoes, metas e mensagem motivacional | Alta | Rafael |
+
+**RF-19 — Detalhamento:**
+- Endpoint `GET /api/analysis` coleta dados financeiros do mes, monta prompt estruturado e envia para API Claude (Anthropic).
+- Resposta em JSON com 8 secoes: diagnostico geral, alertas por severidade, bons comportamentos, recomendacoes (mescladas com acoes do Score F04), metas de curto/medio/longo prazo, gastos recorrentes disfarcados, mensagem motivacional.
+- Cache mensal em banco de dados (tabela `analise_financeira`): uma geracao por mes, reutilizada em acessos subsequentes.
+- Graceful degradation: se API key ausente ou erro na API, retorna analise vazia com mensagem explicativa (sem quebrar o app).
+- Frontend renderiza em 8 componentes na aba Score: DiagnosticoCard, AlertasList, BonsComportamentos, MetasSugeridas, GastosRecorrentes, MensagemMotivacional, AnalysisPlaceholder, AnalysisFooter.
+- Dependencia: API key Anthropic (`ANTHROPIC_API_KEY`) configurada como variavel de ambiente.
+
+### Modulo: Alertas e Notificacoes Inteligentes (CR-033)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-20 | Sistema de alertas on-demand com 8 tipos, ciclo de vida, configuracoes do usuario e 3 pontos de exibicao | Alta | Rafael |
+
+**RF-20 — Detalhamento:**
+- Motor de alertas on-demand (AlertEngine) com 7 checkers que verificam 8 tipos de alerta:
+  - A1: Despesas vencendo em breve (1-7 dias)
+  - A2: Despesas atrasadas
+  - A3: Saldo livre baixo (abaixo de limiar configuravel)
+  - A4: Parcela encerrando no mes (oportunidade de realocar)
+  - A5: Gasto diario acima do padrao
+  - A6: Comprometimento de renda alto (acima de limiar configuravel)
+  - A7: Sem receita cadastrada no mes
+  - A8: Score de saude financeira em queda
+- Ciclo de vida: ativo → visto → dispensado → resolvido (resolucao automatica quando condicao desaparece).
+- Persistencia em banco: tabelas `alerta_estado` (estado por alerta/usuario/mes) e `configuracao_alertas` (preferencias do usuario).
+- Configuracoes do usuario: 8 toggles (um por tipo de alerta) + 2 limiares configuraveis (saldo minimo para A3, % comprometimento para A6).
+- 3 pontos de exibicao no frontend:
+  - AlertsCard: card no Dashboard com lista de alertas ativos
+  - AlertBadge: badge numerico no ViewSelector indicando alertas nao vistos
+  - AlertBanner: banner inline em paginas relevantes
+- 5 endpoints REST: `GET /api/alerts`, `PATCH /api/alerts/{id}/seen`, `PATCH /api/alerts/{id}/dismiss`, `GET /api/alerts/config`, `PUT /api/alerts/config`.
+- Frontend: AlertItem, AlertBadge, AlertBanner, AlertsCard, AlertsModal, AlertsSettings.
+
 ### Modulo: Autenticacao e Usuarios (CR-002)
 
 | ID    | Requisito | Prioridade | Persona |
@@ -322,6 +404,33 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
   - Criterios de aceite:
     - [ ] O ViewSelector no topo da pagina permite alternar entre as duas visoes sem perder o contexto do mes selecionado.
 
+- **US-24:** Como usuario, quero categorizar minhas despesas planejadas, para entender a composicao dos meus gastos fixos e variaveis. (CR-016)
+  - Criterios de aceite:
+    - [ ] Dado que o usuario esta criando ou editando uma despesa, quando seleciona uma subcategoria, entao a categoria e preenchida automaticamente e salva junto com a despesa.
+    - [ ] A coluna de categoria e visivel na tabela de despesas.
+
+- **US-25:** Como usuario, quero ver um dashboard visual com graficos do meu mes financeiro, para ter uma visao rapida e clara da minha saude financeira. (CR-019)
+  - Criterios de aceite:
+    - [ ] O dashboard exibe 4 KPI cards (despesas planejadas, gastos diarios, receitas, saldo livre), graficos de distribuicao por categoria e evolucao de 6 meses.
+    - [ ] O dashboard e acessivel via ViewSelector como aba "Dashboard".
+
+- **US-26:** Como usuario, quero ver uma projecao consolidada de todas as minhas parcelas futuras, para saber quanto estarei comprometido nos proximos meses. (CR-021)
+  - Criterios de aceite:
+    - [ ] A visao de parcelas exibe KPI cards com totais, grafico de barras empilhadas de 12 meses e timeline Gantt dos parcelamentos.
+    - [ ] Cada parcelamento mostra badge de status (Ativa, Encerrando, Concluida) e data de encerramento.
+
+- **US-27:** Como usuario, quero receber uma analise financeira inteligente gerada por IA, para entender minha situacao e receber recomendacoes personalizadas. (CR-032)
+  - Criterios de aceite:
+    - [ ] A analise exibe diagnostico, alertas, bons comportamentos, recomendacoes, metas e mensagem motivacional.
+    - [ ] A analise e gerada uma vez por mes e reutilizada em acessos subsequentes (cache mensal).
+    - [ ] Se a API de IA estiver indisponivel, o app exibe mensagem explicativa sem quebrar.
+
+- **US-28:** Como usuario, quero receber alertas inteligentes sobre minha situacao financeira, para agir proativamente em vez de reagir a problemas. (CR-033)
+  - Criterios de aceite:
+    - [ ] Alertas aparecem no Dashboard (AlertsCard), no ViewSelector (badge numerico) e inline nas paginas relevantes (banner).
+    - [ ] Posso marcar alertas como vistos ou dispensa-los.
+    - [ ] Posso configurar quais tipos de alerta quero receber e ajustar limiares (saldo minimo, % comprometimento).
+
 ---
 
 ## 7. Regras de Negocio
@@ -352,23 +461,39 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-022 | Gastos diarios sao independentes de gastos planejados — nao participam da transicao automatica de mes | Gastos Diarios (RF-13) |
 | RN-023 | Gastos diarios pertencem a um usuario via FK user_id; isolamento de dados por usuario | Gastos Diarios (RF-13) |
 | RN-024 | Ao excluir uma despesa parcelada ou recorrente, o usuario deve ter a opcao de excluir todas as relacionadas simultaneamente | Despesas (RN-005 / CR-009) |
+| RN-025 | Categoria de despesa planejada e auto-derivada da subcategoria, compartilhando as mesmas categorias dos gastos diarios (categories.py) | Categorizacao (RF-16) |
+| RN-026 | Campos categoria e subcategoria de despesa planejada sao opcionais (nullable); despesas existentes sem categoria continuam funcionando | Categorizacao (RF-16) |
+| RN-027 | Dashboard agrega dados separadamente para despesas planejadas e gastos diarios (donut charts independentes) | Dashboard (RF-17) |
+| RN-028 | Evolucao de 6 meses no dashboard inclui despesas planejadas, gastos diarios e receitas como series separadas | Dashboard (RF-17) |
+| RN-029 | Projecao de parcelas considera apenas parcelamentos ativos (parcela_atual < parcela_total) com pelo menos 1 parcela paga | Parcelas Futuras (RF-18) |
+| RN-030 | Projecao usa datas reais de vencimento do banco (nao estimativas); parcelas contribuem apenas nos meses corretos | Parcelas Futuras (RF-18) |
+| RN-031 | Analise de IA e gerada uma vez por mes e cacheada em banco (tabela analise_financeira); acessos subsequentes reutilizam o cache | Analise IA (RF-19) |
+| RN-032 | Acoes sugeridas pela IA sao mescladas com acoes do Score F04 (deduplicacao por similaridade) | Analise IA (RF-19) |
+| RN-033 | Se API Anthropic estiver indisponivel ou sem chave configurada, o app retorna analise vazia com mensagem explicativa | Analise IA (RF-19) |
+| RN-034 | Alertas possuem ciclo de vida: ativo → visto → dispensado → resolvido (resolucao automatica quando condicao desaparece) | Alertas (RF-20) |
+| RN-035 | Cada tipo de alerta pode ser habilitado/desabilitado individualmente pelo usuario | Alertas (RF-20) |
+| RN-036 | Limiares dos alertas A3 (saldo minimo) e A6 (% comprometimento) sao configuraveis pelo usuario | Alertas (RF-20) |
+| RN-037 | Motor de alertas e on-demand (executado a cada requisicao GET /api/alerts), nao baseado em cron/scheduler | Alertas (RF-20) |
 
 ---
 
 ## 8. Fora de Escopo
 
-Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
+Os itens abaixo **nao** estao no escopo atual:
 
 - ~~Autenticacao e gestao de usuarios (multi-usuario)~~ — **Implementada via CR-002**
-- ~~Categorias e tags para despesas~~ — **Parcialmente implementado via CR-005** (categorias fixas para gastos diarios)
-- Graficos e dashboards de analise
+- ~~Categorias e tags para despesas~~ — **Implementado via CR-005 (gastos diarios) e CR-016 (despesas planejadas)**
+- ~~Graficos e dashboards de analise~~ — **Implementado via CR-019 (Dashboard Visual)**
+- ~~Notificacoes e alertas de vencimento~~ — **Implementado via CR-033 (Alertas Inteligentes)**
 - Exportacao de dados (PDF, CSV, Excel)
-- Notificacoes e alertas de vencimento
 - Contas bancarias e conciliacao
 - Metas de economia e orcamento por categoria
 - Integracao com bancos ou APIs externas (Open Finance)
 - Aplicativo mobile nativo
 - Modo offline / PWA
+- Contas compartilhadas (casal/familia)
+- Tracking de investimentos
+- Deteccao automatica de assinaturas
 
 ---
 
@@ -379,6 +504,8 @@ Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 - PostgreSQL em producao (add-on Railway) para persistencia de dados entre deploys. SQLite para desenvolvimento local. (CR-001)
 - Google OAuth2 (Google Cloud Console) para login social com Google. (CR-002)
 - SendGrid para envio de emails de recuperacao de senha. (CR-002)
+- API Anthropic (Claude) para analise financeira por IA. Requer variavel de ambiente `ANTHROPIC_API_KEY`. (CR-032)
+- recharts para graficos no Dashboard e projecao de parcelas. (CR-019, CR-021)
 
 ### Premissas
 
@@ -407,28 +534,35 @@ Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 | Gasto Diario | Despesa nao planejada do dia a dia — mercado, transporte, alimentacao, lazer, etc. (CR-005) |
 | Subcategoria | Classificacao especifica dentro de uma categoria de gasto diario (ex: "Supermercado" dentro de "Alimentacao") (CR-005) |
 | Metodo de Pagamento | Forma de pagamento utilizada em um gasto diario: Dinheiro, Cartao de Credito, Cartao de Debito, Pix, Vale Alimentacao, Vale Refeicao (CR-005) |
-| ViewSelector | Componente de navegacao que permite alternar entre Gastos Planejados e Gastos Diarios (CR-005) |
+| ViewSelector | Componente de navegacao que permite alternar entre as abas do app: Planejados, Diarios, Dashboard, Parcelas, Score (CR-005, expandido em CRs subsequentes) |
+| Dashboard | Tela com KPI cards e graficos agregados do mes: distribuicao por categoria, evolucao 6 meses, breakdown por status (CR-019) |
+| Score de Saude Financeira | Nota de 0-100 calculada deterministicamente a partir de 4 dimensoes: comprometimento fixo, pressao de parcelas, capacidade de poupanca, comportamento/disciplina (CR-026) |
+| Projecao de Parcelas | Visao consolidada de todos os parcelamentos ativos com projecao de comprometimento futuro em 12 meses (CR-021) |
+| Analise por IA | Diagnostico financeiro automatico gerado pela API Claude (Anthropic) com recomendacoes personalizadas, metas e mensagem motivacional (CR-032) |
+| Alerta Inteligente | Notificacao automatica sobre condicoes financeiras que requerem atencao: vencimentos, atrasos, saldo baixo, score em queda, etc. (CR-033) |
+| AlertEngine | Motor on-demand que executa 7 checkers para detectar 8 tipos de alerta a cada requisicao (CR-033) |
+| Categoria (Despesa Planejada) | Classificacao de uma despesa planejada derivada automaticamente da subcategoria selecionada, compartilhando o mesmo sistema de categorias dos gastos diarios (CR-016) |
 
 ---
 
 ## Apendice: Roadmap Futuro
 
-### Fase 2 — Categorias e Analise
-- Categorias de despesas (Moradia, Transporte, Educacao, Lazer, etc.)
-- Dashboard com graficos de distribuicao por categoria
-- Comparativo entre meses (evolucao de gastos)
+### ~~Fase 2 — Categorias e Analise~~ (Implementada via CR-016, CR-019, CR-032)
+- ~~Categorias de despesas (Moradia, Transporte, Educacao, Lazer, etc.)~~ — RF-16 (CR-016)
+- ~~Dashboard com graficos de distribuicao por categoria~~ — RF-17 (CR-019)
+- ~~Comparativo entre meses (evolucao de gastos)~~ — RF-17 (CR-019, evolucao 6 meses)
 
 ### ~~Fase 3 — Multi-usuario e Autenticacao~~ (Implementada via CR-002)
 - ~~Cadastro e login de usuarios~~ — RF-08, RF-09
 - ~~Dados isolados por usuario~~ — RF-10
 - ~~Recuperacao de senha~~ — RF-11
-- Login social com Google (OAuth2) — RF-09
-- Perfil de usuario (visualizar/editar) — RF-12
-- Gestao de sessao com JWT (access + refresh tokens) — RF-10
+- ~~Login social com Google (OAuth2)~~ — RF-09
+- ~~Perfil de usuario (visualizar/editar)~~ — RF-12
+- ~~Gestao de sessao com JWT (access + refresh tokens)~~ — RF-10
 
-### Fase 4 — Alertas e Notificacoes
-- Notificacao de despesas proximas do vencimento (email ou push)
-- Alerta quando o saldo livre ficar abaixo de um limite configuravel
+### ~~Fase 4 — Alertas e Notificacoes~~ (Implementada via CR-033)
+- ~~Notificacao de despesas proximas do vencimento~~ — RF-20, alertas A1/A2 (CR-033)
+- ~~Alerta quando o saldo livre ficar abaixo de um limite configuravel~~ — RF-20, alerta A3 (CR-033)
 
 ### Fase 5 — Exportacao e Relatorios
 - Exportacao mensal em PDF e CSV
@@ -444,9 +578,17 @@ Os itens abaixo **nao** estao no escopo atual (Fase 1 + 3):
 - Integracao com Open Finance para importacao automatica de transacoes
 - Conciliacao entre despesas planejadas e transacoes reais
 
+### Fase 8 — Expansao (ver roadmap detalhado em `/docs/meucontrole-roadmap-funcionalidades.md`)
+- Copiloto financeiro via WhatsApp (F11)
+- Contas compartilhadas casal/familia (F12)
+- Tracking de investimentos brasileiros (F14)
+- Deteccao e gestao de assinaturas (F15)
+
 ---
 
 *Documento migrado em 2026-02-08. Baseado em PRD_MeuControle.md v1.0 (2026-02-06).*
 *Atualizado para v2.0 em 2026-02-09. Inclui Fase 3 — Multi-usuario e Autenticacao (CR-002).*
 *Atualizado para v2.1 em 2026-02-11. RF-04: totalizadores por status de despesa (CR-004).*
 *Atualizado para v2.2 em 2026-02-17. RF-13: Gastos Diarios — CRUD, categorias fixas, visao mensal agrupada por dia (CR-005).*
+*Atualizado para v2.3 em 2026-03-16. RF-15: Score de Saude Financeira (CR-026).*
+*Atualizado para v3.0 em 2026-03-18. Sincronizacao massiva: RF-16 Categorizacao (CR-016), RF-17 Dashboard (CR-019), RF-18 Parcelas Futuras (CR-021), RF-19 Analise IA (CR-032), RF-20 Alertas (CR-033). Atualizados User Stories (US-24 a US-28), Regras de Negocio (RN-025 a RN-037), Fora de Escopo, Glossario e Roadmap.*

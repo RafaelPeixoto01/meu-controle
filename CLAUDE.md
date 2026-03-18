@@ -372,9 +372,10 @@ Personal Finance/
 - CR-031: Seed de Dados Demo — script idempotente para popular dados fictícios (6 meses) no usuário demo, cobrindo todas as features (concluido)
 - CR-032: Análise Financeira por IA (F06) — endpoint /api/analysis com API Claude, diagnóstico, alertas, recomendações mescladas com score F04, metas, gastos recorrentes disfarçados, mensagem motivacional, cache mensal, graceful degradation (concluido)
 - CR-033: Alertas e Notificações Inteligentes (F05) — 8 tipos de alertas (A1-A8), motor on-demand com 7 checkers, 3 pontos de exibição (AlertsCard no Dashboard, AlertBadge no ViewSelector, AlertBanner inline), ciclo de vida ativo/visto/dispensado/resolvido, configurações do usuário (8 toggles + limiares), 5 endpoints REST, 26 testes backend (concluido)
+- CR-034: Fix Rules of Hooks no MonthlyView — tela branca após login causada por useAlerts() chamado após early returns condicionais (concluido)
 
 ### Última Tarefa Implementada
-- CR-033: Alertas e Notificações Inteligentes integradas ao Dashboard e navegação (concluido)
+- CR-034: Fix Rules of Hooks no MonthlyView — tela branca após login (concluido)
 
 ---
 
