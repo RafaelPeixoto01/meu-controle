@@ -9,6 +9,20 @@
 
 ---
 
+## Comandos Essenciais
+
+| Ação | Comando |
+|------|---------|
+| Backend (dev) | `cd backend && alembic upgrade head && python -m uvicorn app.main:app --reload` (porta 8000) |
+| Frontend (dev) | `cd frontend && npm run dev` (porta 5173, proxy `/api` → 8000) |
+| Testes backend | `cd backend && python -m pytest tests/ -v` |
+| Build check TS | `cd frontend && npx tsc --noEmit -p tsconfig.app.json` |
+| Migrations | `cd backend && alembic upgrade head` (aplicar) / `alembic downgrade -1` (reverter) |
+
+> Rode `alembic upgrade head` antes de iniciar o backend pela primeira vez — as tabelas são criadas via migration, não via `create_all()`.
+
+---
+
 ## Fluxo de Desenvolvimento (Spec-Driven Development)
 
 Este projeto segue um fluxo de desenvolvimento baseado em documentação. **Nunca implemente código sem antes consultar os documentos existentes.**
@@ -190,8 +204,9 @@ Personal Finance/
 │   ├── hooks/
 │   │   └── check-typescript.js   # Bloqueia commit se tsc --noEmit falhar
 │   ├── skills/
-│   │   └── sdd-pipeline/
-│   │       └── SKILL.md          # Skill /sdd-pipeline: pipeline SDD completo (CR → commit)
+│   │   ├── deploy-railway/       # Skill /deploy-railway: deploy manual no Railway
+│   │   ├── sdd-pipeline/         # Skill /sdd-pipeline: pipeline SDD completo (CR → commit)
+│   │   └── seed-demo/            # Skill /seed-demo: popular conta demo com dados ficticios
 │   └── settings.json             # Hook PreToolUse para git commit
 ├── docs/
 │   ├── 01-PRD.md
@@ -228,6 +243,7 @@ Personal Finance/
 │       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard + health score + AI analysis + alerts schemas
 │       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates + score historico + analise financeira + alertas
 │       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary, dashboard data, installment projection (CR-021)
+│       ├── utils.py          # Helpers de data (add_months com ajuste de fim de mes)
 │       ├── health_score.py   # CR-026: calculo deterministico score 0-100, 4 dimensoes, acoes, cenario conservador
 │       ├── ai_analysis.py    # CR-032: coletor de dados, prompt builder, cliente Anthropic, merger de acoes
 │       ├── alerts.py         # CR-033: AlertEngine + 7 checkers (A1-A8), motor de alertas on-demand
@@ -249,6 +265,8 @@ Personal Finance/
 │       ├── seed_demo.py                    # CR-031: seed dados demo (idempotente, 6 meses)
 │       └── propagate_categories_mar2026.py # CR-016: script one-off
 │   └── tests/
+│       ├── conftest.py
+│       ├── test_services.py                # Transicao de mes, auto-status
 │       ├── test_installment_projection.py  # CR-021
 │       ├── test_health_score.py            # CR-026
 │       ├── test_ai_analysis.py             # CR-032
@@ -275,7 +293,7 @@ Personal Finance/
 │       │   ├── score/           # CR-026: ScoreGauge, ScoreDimensionBreakdown, ScoreHistoryChart, ScoreActions, ScoreConservativeNote
 │       │   ├── analysis/        # CR-032: DiagnosticoCard, AlertasList, BonsComportamentos, MetasSugeridas, GastosRecorrentes, MensagemMotivacional, AnalysisPlaceholder, AnalysisFooter
 │       │   └── alerts/          # CR-033: AlertItem, AlertBadge, AlertBanner, AlertsCard, AlertsModal, AlertsSettings
-│       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, ScoreDetailView, Login, Register, ForgotPassword, ResetPassword, Profile
+│       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, InstallmentsView, ScoreDetailView, LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage, ProfilePage
 ├── CLAUDE.md
 └── .gitignore
 ```
@@ -312,7 +330,9 @@ Personal Finance/
 | State/Fetch    | TanStack Query              | 5.62+     |
 | Routing        | react-router-dom            | 7.x       |
 | Auth (FE)      | jwt-decode                  | 4.x       |
-| Graficos       | recharts                    | 2.x       |
+| Graficos       | recharts                    | 3.x       |
+| Icones         | lucide-react                | 0.5x      |
+| Datas          | date-fns                    | 4.x       |
 | HTTP Client    | fetch nativo                | —         |
 | Backend        | Python + FastAPI            | 0.115     |
 | Auth (BE)      | python-jose + passlib/bcrypt| 3.3/1.7   |
@@ -323,6 +343,18 @@ Personal Finance/
 | Migrations     | Alembic                     | 1.14+     |
 | Validação      | Pydantic                    | 2.x       |
 | Arquitetura    | Monorepo                    | —         |
+
+---
+
+## Variáveis de Ambiente (backend/.env)
+
+Não existe `.env.example` no repositório — os nomes abaixo são a referência. Em produção, configurar no Railway.
+
+- **Obrigatórias:** `SECRET_KEY` (JWT — app não inicia sem ela, CR-010), `DATABASE_URL` (fallback SQLite se ausente)
+- **Google OAuth:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
+- **Email (SendGrid):** `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `FRONTEND_URL`
+- **Análise IA (CR-032):** `ANTHROPIC_API_KEY`, `AI_ANALYSIS_ENABLED`, `CLAUDE_MODEL`, `AI_ANALYSIS_TIMEOUT_SECONDS`
+- **Auth/CORS (com defaults):** `ALLOWED_ORIGINS`, `ENVIRONMENT`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`
 
 ---
 
