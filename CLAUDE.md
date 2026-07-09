@@ -415,9 +415,10 @@ Não existe `.env.example` no repositório — os nomes abaixo são a referênci
 - CR-033: Alertas e Notificações Inteligentes (F05) — 8 tipos de alertas (A1-A8), motor on-demand com 7 checkers, 3 pontos de exibição (AlertsCard no Dashboard, AlertBadge no ViewSelector, AlertBanner inline), ciclo de vida ativo/visto/dispensado/resolvido, configurações do usuário (8 toggles + limiares), 5 endpoints REST, 26 testes backend (concluido)
 - CR-034: Fix Rules of Hooks no MonthlyView — tela branca após login causada por useAlerts() chamado após early returns condicionais (concluido)
 - CR-035: ESLint (react-hooks) + CI GitHub Actions — flat config com preset completo (rules-of-hooks: error), hook de commit tsc+eslint, workflow CI com pytest backend e tsc/eslint frontend, requirements-dev.txt (concluido)
+- CR-036: npm audit fix — 7 vulnerabilidades corrigidas via lockfile (react-router-dom 7.13.0→7.18.1 com advisory HIGH de RCE, vite 6.4.3, rollup, babel, postcss, picomatch); validacao runtime via Playwright (concluido)
 
 ### Última Tarefa Implementada
-- CR-035: ESLint (react-hooks) + CI GitHub Actions (concluido)
+- CR-036: npm audit fix — vulnerabilidades de dependências frontend (concluido)
 
 ---
 
