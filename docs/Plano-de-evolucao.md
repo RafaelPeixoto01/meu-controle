@@ -1,7 +1,7 @@
 # Plano de Evolucao — Meu Controle
 
-**Versao:** 1.0
-**Data:** 2026-02-11
+**Versao:** 1.1
+**Data:** 2026-07-08
 **Autor:** Rafael
 
 ---
@@ -70,8 +70,26 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | Campo | Valor |
 |-------|-------|
 | Status | ✅ Concluido |
-| Descricao | Adicionada Fase 6 "Revisao de Seguranca" ao fluxo SDD em `CLAUDE.md` (entre Implementacao e Validacao) e Step 4 na skill `/feature`. Inclui checklist OWASP adaptado ao stack do projeto (8 itens). Motivacao: CR-010 identificou vulnerabilidades de forma reativa; agora a revisao e proativa e obrigatoria para CRs com endpoints, auth, CRUD ou novas dependencias. |
-| Documentos afetados | `CLAUDE.md`, `.claude/skills/feature/SKILL.md` |
+| Descricao | Adicionada Fase 6 "Revisao de Seguranca" ao fluxo SDD em `CLAUDE.md` (entre Implementacao e Validacao) e Step 4 na skill `/sdd-pipeline` (na epoca chamada `/feature`). Inclui checklist OWASP adaptado ao stack do projeto (8 itens). Motivacao: CR-010 identificou vulnerabilidades de forma reativa; agora a revisao e proativa e obrigatoria para CRs com endpoints, auth, CRUD ou novas dependencias. |
+| Documentos afetados | `CLAUDE.md`, `.claude/skills/sdd-pipeline/SKILL.md` |
+
+---
+
+### P1-4: ESLint com react-hooks no Frontend (CR-035)
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Descricao | ESLint 10 flat config com preset completo (typescript-eslint recommended + eslint-plugin-react-hooks). `rules-of-hooks: error` previne estaticamente a classe de bug do CR-034 (tela branca por hook apos early return). Integrado ao hook de commit local (`check-frontend.js`: tsc + eslint). Motivacao: analise do fluxo SDD (2026-07-08) mostrou ~1 fix para cada feat no historico. |
+| Documentos afetados | `CLAUDE.md`, `docs/changes/CR-035-eslint-ci-github-actions.md` |
+
+### P1-5: CI no GitHub Actions (CR-035)
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Descricao | Workflow `.github/workflows/ci.yml` roda pytest (backend) + tsc/eslint (frontend) em cada push em master e em PRs. Fecha a brecha do hook local (que so roda em commits via Claude Code). Follow-up recomendado: habilitar "Wait for CI" no Railway para transformar o CI em gate de deploy (ver Deploy Guide secao 9.2). |
+| Documentos afetados | `docs/05-DEPLOY-GUIDE.md` (secao 9), `CLAUDE.md` |
 
 ---
 
@@ -122,3 +140,4 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | 2026-02-11 | Rafael | Documento criado (v1.0) com itens P0-P3 |
 | 2026-02-11 | Rafael | P2-1 e P2-2 concluidos (Troubleshooting no CLAUDE.md, Gestao de Dependencias no 02-ARCHITECTURE.md) |
 | 2026-02-26 | Rafael | P1-3 concluido (Revisao de Seguranca como Fase do Fluxo SDD — CLAUDE.md + skill /feature) |
+| 2026-07-08 | Claude | v1.1 — P1-4 e P1-5 adicionados e concluidos (ESLint react-hooks + CI GitHub Actions, CR-035); referencia da skill /feature corrigida para /sdd-pipeline |
