@@ -64,6 +64,7 @@
 | `/docs/03-SPEC.md`              | Sim / Não  | [ex: Feature RF-XXX]         | Reescrever seção 2.X  |
 | `/docs/04-IMPLEMENTATION-PLAN.md` | Sim / Não | [ex: Grupo 3]              | Adicionar tarefas     |
 | `/docs/05-DEPLOY-GUIDE.md`      | Sim / Não  | [ex: Checklist pré-deploy]   | Atualizar procedimento|
+| `CLAUDE.md`                     | Sim / Não  | [ex: Change Requests, estrutura, comandos] | Adicionar CR-XXX |
 
 ---
 
@@ -111,7 +112,10 @@ ALTER TABLE ...;
 - [ ] [Critério 3: ...]
 - [ ] Testes existentes continuam passando (regressão)
 - [ ] Novos testes cobrem a mudança
+- [ ] Fluxo afetado exercitado em runtime antes do merge — descrever O QUE foi validado e o resultado (Playwright para UI, chamada HTTP para endpoints); ou "N/A — [justificativa]" (CR-037)
 - [ ] Documentos afetados foram atualizados
+
+> **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.
 
 ---
 

@@ -1,6 +1,6 @@
 # Plano de Evolucao — Meu Controle
 
-**Versao:** 1.1
+**Versao:** 1.2
 **Data:** 2026-07-08
 **Autor:** Rafael
 
@@ -91,6 +91,14 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | Descricao | Workflow `.github/workflows/ci.yml` roda pytest (backend) + tsc/eslint (frontend) em cada push em master e em PRs. Fecha a brecha do hook local (que so roda em commits via Claude Code). Follow-up recomendado: habilitar "Wait for CI" no Railway para transformar o CI em gate de deploy (ver Deploy Guide secao 9.2). |
 | Documentos afetados | `docs/05-DEPLOY-GUIDE.md` (secao 9), `CLAUDE.md` |
 
+### P1-6: Validacao Runtime obrigatoria no Pipeline SDD (CR-037)
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Descricao | Passo 6 da skill `/sdd-pipeline` agora exige exercitar o fluxo afetado em execucao antes do merge (Playwright para UI, chamada HTTP para endpoints), com registro no CR do que foi validado. Regra dura de conclusao: CR so e "Concluido" com todos os criterios de aceite fechados (anti-padrao do CR-034). Motivacao: 5 CRs de fix (022-024, 028, 034) foram bugs que so se manifestam em runtime. |
+| Documentos afetados | `.claude/skills/sdd-pipeline/SKILL.md` (local), `CLAUDE.md` (Done When Universal + Lembretes), `docs/templates/00-template-change-request.md` (§5, §8) |
+
 ---
 
 ## P2 — Desejavel
@@ -141,3 +149,4 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | 2026-02-11 | Rafael | P2-1 e P2-2 concluidos (Troubleshooting no CLAUDE.md, Gestao de Dependencias no 02-ARCHITECTURE.md) |
 | 2026-02-26 | Rafael | P1-3 concluido (Revisao de Seguranca como Fase do Fluxo SDD — CLAUDE.md + skill /feature) |
 | 2026-07-08 | Claude | v1.1 — P1-4 e P1-5 adicionados e concluidos (ESLint react-hooks + CI GitHub Actions, CR-035); referencia da skill /feature corrigida para /sdd-pipeline |
+| 2026-07-08 | Claude | v1.2 — P1-6 adicionado e concluido (Validacao Runtime obrigatoria no pipeline, CR-037). Fecha as 3 recomendacoes P1 da analise do fluxo SDD |
