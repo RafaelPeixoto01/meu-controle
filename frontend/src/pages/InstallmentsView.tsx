@@ -257,7 +257,7 @@ function GroupCard({
                             </span>
                         </h3>
                         <div className="text-sm text-gray-500 flex items-center gap-2 mt-1 flex-wrap">
-                            <StatusBadge status={group.status_geral as any} />
+                            <StatusBadge status={group.status_geral} />
                             {badge && statusBadge && (
                                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badge.bg} ${badge.text}`}>
                                     {statusBadge}

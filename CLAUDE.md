@@ -17,6 +17,7 @@
 | Frontend (dev) | `cd frontend && npm run dev` (porta 5173, proxy `/api` → 8000) |
 | Testes backend | `cd backend && python -m pytest tests/ -v` |
 | Build check TS | `cd frontend && npx tsc --noEmit -p tsconfig.app.json` |
+| Lint frontend | `cd frontend && npm run lint` (ESLint: erros bloqueiam commit e CI) |
 | Migrations | `cd backend && alembic upgrade head` (aplicar) / `alembic downgrade -1` (reverter) |
 
 > Rode `alembic upgrade head` antes de iniciar o backend pela primeira vez — as tabelas são criadas via migration, não via `create_all()`.
@@ -161,7 +162,8 @@ Pular com justificativa explícita apenas se o CR for exclusivamente: mudança d
 
 ### Push e Deploy
 
-- Antes de push, verifique se o build TypeScript passa: `cd frontend && npx tsc --noEmit -p tsconfig.app.json`
+- Antes de push, verifique se o build TypeScript passa: `cd frontend && npx tsc --noEmit -p tsconfig.app.json` e o lint: `npm run lint`
+- CI (GitHub Actions) roda pytest + tsc + eslint em cada push em `master` e em PRs — verifique que ficou verde após o push (`gh run watch`)
 - Commits devem referenciar o CR relevante (ex: `feat: CR-004 - descricao`)
 - Após implementação, atualize TODOS os documentos relacionados antes de push
 - Faça merge da branch do CR em `master` e então `git push origin master`
@@ -200,9 +202,12 @@ Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que j
 
 ```
 Personal Finance/
-├── .claude/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                # CR-035: CI — pytest (backend) + tsc/eslint (frontend)
+├── .claude/                      # Local (gitignored) — hooks, skills e settings desta maquina
 │   ├── hooks/
-│   │   └── check-typescript.js   # Bloqueia commit se tsc --noEmit falhar
+│   │   └── check-frontend.js     # Bloqueia commit se tsc --noEmit ou eslint falhar (CR-035)
 │   ├── skills/
 │   │   ├── deploy-railway/       # Skill /deploy-railway: deploy manual no Railway
 │   │   ├── sdd-pipeline/         # Skill /sdd-pipeline: pipeline SDD completo (CR → commit)
@@ -219,6 +224,7 @@ Personal Finance/
 │   └── templates/            # Templates dos documentos
 ├── backend/
 │   ├── requirements.txt
+│   ├── requirements-dev.txt      # CR-035: pytest (deps de dev, fora da imagem de producao)
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   ├── env.py
@@ -273,6 +279,7 @@ Personal Finance/
 │       └── test_alerts.py                  # CR-033
 ├── frontend/
 │   ├── package.json
+│   ├── eslint.config.js      # CR-035: flat config — ts recommended + react-hooks
 │   ├── vite.config.ts        # Proxy /api -> :8000
 │   ├── index.html
 │   └── src/
@@ -333,6 +340,8 @@ Personal Finance/
 | Graficos       | recharts                    | 3.x       |
 | Icones         | lucide-react                | 0.5x      |
 | Datas          | date-fns                    | 4.x       |
+| Lint (FE)      | ESLint + typescript-eslint + react-hooks | 10.x / 8.x / 7.x |
+| CI             | GitHub Actions              | —         |
 | HTTP Client    | fetch nativo                | —         |
 | Backend        | Python + FastAPI            | 0.115     |
 | Auth (BE)      | python-jose + passlib/bcrypt| 3.3/1.7   |
@@ -405,9 +414,10 @@ Não existe `.env.example` no repositório — os nomes abaixo são a referênci
 - CR-032: Análise Financeira por IA (F06) — endpoint /api/analysis com API Claude, diagnóstico, alertas, recomendações mescladas com score F04, metas, gastos recorrentes disfarçados, mensagem motivacional, cache mensal, graceful degradation (concluido)
 - CR-033: Alertas e Notificações Inteligentes (F05) — 8 tipos de alertas (A1-A8), motor on-demand com 7 checkers, 3 pontos de exibição (AlertsCard no Dashboard, AlertBadge no ViewSelector, AlertBanner inline), ciclo de vida ativo/visto/dispensado/resolvido, configurações do usuário (8 toggles + limiares), 5 endpoints REST, 26 testes backend (concluido)
 - CR-034: Fix Rules of Hooks no MonthlyView — tela branca após login causada por useAlerts() chamado após early returns condicionais (concluido)
+- CR-035: ESLint (react-hooks) + CI GitHub Actions — flat config com preset completo (rules-of-hooks: error), hook de commit tsc+eslint, workflow CI com pytest backend e tsc/eslint frontend, requirements-dev.txt (concluido)
 
 ### Última Tarefa Implementada
-- CR-034: Fix Rules of Hooks no MonthlyView — tela branca após login (concluido)
+- CR-035: ESLint (react-hooks) + CI GitHub Actions (concluido)
 
 ---
 
@@ -421,7 +431,7 @@ Não existe `.env.example` no repositório — os nomes abaixo são a referênci
 - **Docs sempre sincronizados.** Ao concluir uma feature ou CR, atualize TODOS os documentos relacionados na mesma sessão (Implementation Plan, PRD, Spec, CR). A tarefa só está completa quando os docs estão atualizados.
 - **Não fabrique ferramentas.** Nunca invente ou adivinhe a existência de plugins, comandos CLI ou ferramentas. Se não tiver certeza, verifique a documentação primeiro. Se um comando falhar, reconheça o erro imediatamente.
 - **Planeje antes de codar.** Em tarefas complexas (3+ etapas), crie um plano TodoWrite detalhado antes de escrever qualquer código. Inclua: CR, arquivos a modificar, verificação de build, atualizações de docs, commit.
-- **Hook TypeScript ativo.** O hook `.claude/hooks/check-typescript.js` intercepta `git commit` e executa `tsc --noEmit` automaticamente. Se o commit for bloqueado, corrija os erros TypeScript antes de tentar novamente — não use `--no-verify`.
+- **Hook de frontend ativo.** O hook `.claude/hooks/check-frontend.js` intercepta `git commit` e executa `tsc --noEmit` + `eslint src` automaticamente (CR-035). Se o commit for bloqueado, corrija os erros antes de tentar novamente — não use `--no-verify`. Atenção: o hook dispara em qualquer comando Bash contendo a substring `git commit` (inclusive dentro de echo/printf).
 - **Use `/sdd-pipeline` para novas features/CRs.** A skill `/sdd-pipeline` automatiza todo o pipeline SDD: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/sdd-pipeline` no início de qualquer implementação.
 
 ---

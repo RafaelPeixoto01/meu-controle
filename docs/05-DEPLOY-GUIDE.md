@@ -130,7 +130,9 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 - [ ] Branch do CR mergeada em `master` e push feito (`git push origin master`)
 - [ ] App roda localmente sem erros (`uvicorn app.main:app --reload`)
 - [ ] Frontend compila sem erros (`npm run build`)
+- [ ] Lint frontend passando (`npm run lint`) — CR-035
 - [ ] Testes backend passando (`pytest`)
+- [ ] CI verde no GitHub apos o push (`gh run watch`) — CR-035
 - [ ] Nenhum `.env`, credencial ou segredo incluido no commit
 
 ### 3.2 Para deploys com migration de banco
@@ -317,9 +319,39 @@ railway variables -s Postgres | grep DATABASE_PUBLIC_URL
 
 ---
 
+## 9. Integracao Continua (CR-035)
+
+### 9.1 O que roda
+
+O workflow `.github/workflows/ci.yml` executa em cada push em `master` e em cada PR, com 2 jobs paralelos:
+
+| Job      | Ambiente | Passos |
+|----------|----------|--------|
+| backend  | Ubuntu, Python 3.12 | `pip install -r requirements-dev.txt` → `python -m pytest tests/ -v` (com `SECRET_KEY` de teste) |
+| frontend | Ubuntu, Node 22 | `npm ci` → `npx tsc --noEmit -p tsconfig.app.json` → `npm run lint` |
+
+Acompanhar: `gh run watch` ou aba Actions no GitHub.
+
+### 9.2 Wait for CI (recomendado, passo manual)
+
+Por padrao o Railway deploya no push, **antes** do CI terminar — o CI e uma rede de deteccao, nao um gate. Para transformar em gate real:
+
+1. Railway Dashboard → servico `meu-controle` → Settings → seção Deploy/Source
+2. Habilitar **"Wait for CI"** — o deploy passa a aguardar os checks do GitHub ficarem verdes
+3. Com isso, um teste quebrado ou erro de lint **impede** o deploy em producao
+
+### 9.3 CI falhou apos push — o que fazer
+
+- Deploy ja saiu (sem Wait for CI): avaliar rollback (secao 4) ou corrigir e push imediato
+- `gh run view --log-failed` mostra apenas os passos que falharam
+- Falha so no CI (passa local): verificar diferenca de ambiente — versao Node/Python, dependencia nao pinada, arquivo nao commitado
+
+---
+
 ## Changelog
 
 | Data | Autor | Descricao |
 |------|-------|-----------|
 | 2026-02-11 | Rafael | Documento criado (v1.0) |
 | 2026-03-17 | Claude | Adicionada secao 8: Seed de Dados Demo (CR-031) |
+| 2026-07-08 | Claude | Adicionada secao 9: Integracao Continua + checklist 3.1 com lint e CI (CR-035) |
