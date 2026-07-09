@@ -103,6 +103,7 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 **Obrigatórios:**
 - [ ] Funcionalidade implementada conforme descrito na tarefa
 - [ ] App roda localmente sem erros (backend + frontend)
+- [ ] Fluxo afetado exercitado em runtime antes do merge — Playwright para UI, chamada HTTP para endpoints — com registro no CR do que foi validado; ou justificativa de N/A no CR (CR-037)
 - [ ] Testes existentes continuam passando (regressão)
 - [ ] Novos testes cobrem a funcionalidade adicionada/alterada
 - [ ] Commit segue Conventional Commits e referencia o ID da tarefa
@@ -416,14 +417,16 @@ Não existe `.env.example` no repositório — os nomes abaixo são a referênci
 - CR-034: Fix Rules of Hooks no MonthlyView — tela branca após login causada por useAlerts() chamado após early returns condicionais (concluido)
 - CR-035: ESLint (react-hooks) + CI GitHub Actions — flat config com preset completo (rules-of-hooks: error), hook de commit tsc+eslint, workflow CI com pytest backend e tsc/eslint frontend, requirements-dev.txt (concluido)
 - CR-036: npm audit fix — 7 vulnerabilidades corrigidas via lockfile (react-router-dom 7.13.0→7.18.1 com advisory HIGH de RCE, vite 6.4.3, rollup, babel, postcss, picomatch); validacao runtime via Playwright (concluido)
+- CR-037: Validacao Runtime obrigatoria no pipeline SDD — Passo 6 da skill exige exercitar o fluxo afetado antes do merge (Playwright/HTTP) com registro no CR; regra de conclusao proibe status Concluido com checkbox aberto (concluido)
 
 ### Última Tarefa Implementada
-- CR-036: npm audit fix — vulnerabilidades de dependências frontend (concluido)
+- CR-037: Validacao Runtime obrigatoria no pipeline SDD (concluido)
 
 ---
 
 ## Lembretes Importantes
 
+- **CR só é "Concluído" com todos os checkboxes fechados.** Nenhum CR pode receber Status "Concluído" com critérios de aceite desmarcados — cada um deve estar `[x]` ou riscado com justificativa. Critério pendente de evento posterior (ex: CI verde) mantém o CR "Em Implementação" até o follow-up (CR-037).
 - **Pergunte antes de assumir.** Se algo não está claro na spec, pergunte.
 - **Não corrija o que não foi pedido.** Foque apenas no escopo da tarefa.
 - **Testes são obrigatórios.** Toda funcionalidade precisa de cobertura.
