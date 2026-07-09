@@ -118,7 +118,7 @@ N/A — nenhuma alteração no banco. Migration não necessária.
 - [x] Uma violação deliberada de `rules-of-hooks` (hook após early return) faz `npm run lint` falhar E o hook de commit bloquear — verificado com arquivo de prova temporário `__lint_proof__.tsx` (exit 2 no hook)
 - [x] `tsc --noEmit -p tsconfig.app.json` continua passando
 - [x] `python -m pytest tests/ -v` passa localmente (90 testes, regressão OK)
-- [ ] CI executa e fica verde no GitHub após o push do merge (jobs backend e frontend) — *verificado no Passo 8*
+- [x] CI executa e fica verde no GitHub após o push do merge (jobs backend e frontend) — run 28988518561: Backend (pytest) ✅ e Frontend (tsc + eslint) ✅ em ~36s
 - [x] Testes existentes continuam passando (regressão)
 - [x] Documentos afetados foram atualizados
 
@@ -185,3 +185,4 @@ N/A — sem migration.
 |------------|--------|------------------------------|
 | 2026-07-08 | Claude | CR criado e implementação iniciada |
 | 2026-07-08 | Claude | Implementação concluída — validação local ✅ (lint 0 erros, tsc OK, 90 testes, prova rules-of-hooks bloqueando commit); CI verificado no push |
+| 2026-07-08 | Claude | Validação final ✅ — primeira execução do CI verde (run 28988518561, jobs backend e frontend) |
