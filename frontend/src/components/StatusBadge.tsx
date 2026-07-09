@@ -1,7 +1,9 @@
 import type { ExpenseStatus } from "../types";
 
 interface StatusBadgeProps {
-  status: ExpenseStatus;
+  // ExpenseStatus recebe estilo colorido; outros valores (ex: status_geral
+  // "Em andamento"/"Concluído" do InstallmentsView) renderizam sem cor
+  status: ExpenseStatus | string;
   onClick?: () => void;
 }
 
@@ -11,6 +13,10 @@ const statusStyles: Record<ExpenseStatus, string> = {
   Atrasado: "bg-atrasado-bg text-atrasado border border-atrasado/30",
 };
 
+function isExpenseStatus(status: string): status is ExpenseStatus {
+  return status in statusStyles;
+}
+
 export default function StatusBadge({ status, onClick }: StatusBadgeProps) {
   return (
     <button
@@ -19,7 +25,7 @@ export default function StatusBadge({ status, onClick }: StatusBadgeProps) {
       className={`rounded-full px-3.5 py-1 text-xs font-bold cursor-pointer
         transition-all duration-150 hover:shadow-md hover:scale-105
         active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/30
-        ${statusStyles[status]}`}
+        ${isExpenseStatus(status) ? statusStyles[status] : ""}`}
     >
       {status}
     </button>
