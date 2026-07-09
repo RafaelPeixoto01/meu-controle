@@ -1,8 +1,8 @@
 # Change Request — CR-037: Validação Runtime obrigatória no pipeline SDD
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-07-08
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Claude (P1-C da análise do fluxo SDD, aprovado por Rafael)
 **Prioridade:** Alta
 
@@ -108,7 +108,7 @@ N/A — nenhuma alteração no banco.
 - [x] CLAUDE.md: Done When Universal contém o item de validação runtime; Lembretes contêm a regra de conclusão
 - [x] Template de CR: §8 com critério fixo de runtime + nota da regra de conclusão; §5 com linha CLAUDE.md
 - [x] Teste retroativo documentado (ver §8.1)
-- [ ] Testes existentes continuam passando (regressão — CI verde) — *pendente do push; CR permanece "Em Implementação" até o follow-up, conforme a própria regra 6.2*
+- [x] Testes existentes continuam passando (regressão — CI verde, run 28989589349, 33s)
 - [x] Fluxo afetado exercitado em runtime — **N/A justificado**: mudança exclusivamente de processo/documentação, sem superfície de runtime
 - [x] Documentos afetados foram atualizados
 
@@ -144,3 +144,4 @@ N/A — nenhuma alteração no banco.
 | Data       | Autor  | Descrição                    |
 |------------|--------|------------------------------|
 | 2026-07-08 | Claude | CR criado e implementação iniciada |
+| 2026-07-08 | Claude | Validação ✅ — todos os critérios fechados após CI verde (run 28989589349); primeiro CR concluído sob a própria regra 6.2 |
