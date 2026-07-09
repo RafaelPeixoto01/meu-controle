@@ -1,8 +1,8 @@
 # Change Request — CR-038: Dividir 03-SPEC.md em specs por feature + enxugar CLAUDE.md
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-07-09
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Claude (P2-A da análise do fluxo SDD, aprovado por Rafael)
 **Prioridade:** Média
 
@@ -110,7 +110,7 @@ N/A — nenhuma alteração no banco.
 - [x] Cada header `## ` do SPEC original aparece em exatamente 1 arquivo de docs/specs/ (diff de headers: idênticos e na mesma ordem)
 - [x] Todos os arquivos referenciados no novo índice e no CLAUDE.md existem (verificado por script)
 - [x] docs/changes/INDEX.md contém as 37 entradas antes presentes no CLAUDE.md (+ CR-038)
-- [ ] Testes existentes continuam passando (regressão — CI verde) — *pendente do push; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] Testes existentes continuam passando (regressão — CI verde, run 28992033808, 34s)
 - [x] Fluxo afetado exercitado em runtime — **N/A: mudança exclusivamente de documentação, sem superfície de runtime (regra CR-037)**
 - [x] Documentos afetados foram atualizados
 
@@ -145,3 +145,4 @@ N/A — nenhuma alteração no banco.
 | Data       | Autor  | Descrição                    |
 |------------|--------|------------------------------|
 | 2026-07-09 | Claude | CR criado e implementação iniciada |
+| 2026-07-09 | Claude | Validação ✅ — todos os critérios fechados após CI verde (run 28992033808) |
