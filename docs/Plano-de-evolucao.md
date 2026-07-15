@@ -1,7 +1,7 @@
 # Plano de Evolucao — Meu Controle
 
-**Versao:** 1.2
-**Data:** 2026-07-08
+**Versao:** 1.3
+**Data:** 2026-07-09
 **Autor:** Rafael
 
 ---
@@ -119,6 +119,14 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | Descricao | Definir politica de pinning (exato vs range), auditoria periodica (`pip audit`, `npm audit`), processo de atualizacao |
 | Documento afetado | `02-ARCHITECTURE.md` (Secao 10: Gestao de Dependencias) |
 
+### P2-3: Testes de Frontend com Vitest (CR-039)
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Descricao | Vitest + jsdom com 26 testes cobrindo utils/date.ts (viradas de ano), utils/format.ts (BRL, parcelas, datas) e services/api.ts (auth header, interceptor 401 com refresh/retry, erros, 204). Passo `npm test` no job frontend do CI. Primeiro conjunto de testes do frontend — antes, "testes obrigatorios" so valia para o backend. |
+| Documentos afetados | `CLAUDE.md`, `02-ARCHITECTURE.md` (stack v2.10), `05-DEPLOY-GUIDE.md` (§9.1), `docs/Plano-de-melhorias-Fable.md` |
+
 ---
 
 ## P3 — Futuro
@@ -150,3 +158,4 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | 2026-02-26 | Rafael | P1-3 concluido (Revisao de Seguranca como Fase do Fluxo SDD — CLAUDE.md + skill /feature) |
 | 2026-07-08 | Claude | v1.1 — P1-4 e P1-5 adicionados e concluidos (ESLint react-hooks + CI GitHub Actions, CR-035); referencia da skill /feature corrigida para /sdd-pipeline |
 | 2026-07-08 | Claude | v1.2 — P1-6 adicionado e concluido (Validacao Runtime obrigatoria no pipeline, CR-037). Fecha as 3 recomendacoes P1 da analise do fluxo SDD |
+| 2026-07-09 | Claude | v1.3 — P2-3 adicionado e concluido (Testes de Frontend com Vitest, CR-039) |

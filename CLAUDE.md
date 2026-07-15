@@ -16,6 +16,7 @@
 | Backend (dev) | `cd backend && alembic upgrade head && python -m uvicorn app.main:app --reload` (porta 8000) |
 | Frontend (dev) | `cd frontend && npm run dev` (porta 5173, proxy `/api` → 8000) |
 | Testes backend | `cd backend && python -m pytest tests/ -v` |
+| Testes frontend | `cd frontend && npm test` (Vitest, CR-039) |
 | Build check TS | `cd frontend && npx tsc --noEmit -p tsconfig.app.json` |
 | Lint frontend | `cd frontend && npm run lint` (ESLint: erros bloqueiam commit e CI) |
 | Migrations | `cd backend && alembic upgrade head` (aplicar) / `alembic downgrade -1` (reverter) |
@@ -282,6 +283,7 @@ Personal Finance/
 ├── frontend/
 │   ├── package.json
 │   ├── eslint.config.js      # CR-035: flat config — ts recommended + react-hooks
+│   ├── vitest.config.ts      # CR-039: environment jsdom; testes co-localizados (src/**/*.test.ts)
 │   ├── vite.config.ts        # Proxy /api -> :8000
 │   ├── index.html
 │   └── src/
@@ -343,6 +345,7 @@ Personal Finance/
 | Icones         | lucide-react                | 0.5x      |
 | Datas          | date-fns                    | 4.x       |
 | Lint (FE)      | ESLint + typescript-eslint + react-hooks | 10.x / 8.x / 7.x |
+| Testes (FE)    | Vitest + jsdom              | 4.x       |
 | CI             | GitHub Actions              | —         |
 | HTTP Client    | fetch nativo                | —         |
 | Backend        | Python + FastAPI            | 0.115     |
@@ -383,16 +386,16 @@ Não existe `.env.example` no repositório — os nomes abaixo são a referênci
 - [x] Referência de Categorias (`/docs/categorias_gastos.md`) — CR-005
 
 ### Change Requests
-> **Histórico completo (CR-001..CR-033) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
+> **Histórico completo (CR-001..CR-034) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-034: Fix Rules of Hooks no MonthlyView — tela branca após login causada por useAlerts() chamado após early returns condicionais (concluido)
 - CR-035: ESLint (react-hooks) + CI GitHub Actions — flat config com preset completo (rules-of-hooks: error), hook de commit tsc+eslint, workflow CI com pytest backend e tsc/eslint frontend, requirements-dev.txt (concluido)
 - CR-036: npm audit fix — 7 vulnerabilidades corrigidas via lockfile (react-router-dom 7.13.0→7.18.1 com advisory HIGH de RCE, vite 6.4.3, rollup, babel, postcss, picomatch); validacao runtime via Playwright (concluido)
 - CR-037: Validacao Runtime obrigatoria no pipeline SDD — Passo 6 da skill exige exercitar o fluxo afetado antes do merge (Playwright/HTTP) com registro no CR; regra de conclusao proibe status Concluido com checkbox aberto (concluido)
 - CR-038: Dividir 03-SPEC.md em specs por feature — 03-SPEC.md vira índice, conteúdo em docs/specs/ (8 arquivos); histórico de CRs movido para docs/changes/INDEX.md (concluido)
+- CR-039: Testes de frontend com Vitest — 26 testes (utils/date, utils/format, services/api com interceptor 401) + passo no job frontend do CI (concluido)
 
 ### Última Tarefa Implementada
-- CR-038: Dividir 03-SPEC.md em specs por feature (concluido)
+- CR-039: Testes de frontend com Vitest (concluido)
 
 ---
 

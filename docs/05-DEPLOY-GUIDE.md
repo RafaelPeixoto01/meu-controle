@@ -328,7 +328,7 @@ O workflow `.github/workflows/ci.yml` executa em cada push em `master` e em cada
 | Job      | Ambiente | Passos |
 |----------|----------|--------|
 | backend  | Ubuntu, Python 3.12 | `pip install -r requirements-dev.txt` → `python -m pytest tests/ -v` (com `SECRET_KEY` de teste) |
-| frontend | Ubuntu, Node 22 | `npm ci` → `npx tsc --noEmit -p tsconfig.app.json` → `npm run lint` |
+| frontend | Ubuntu, Node 22 | `npm ci` → `npx tsc --noEmit -p tsconfig.app.json` → `npm run lint` → `npm test` (vitest, CR-039) |
 
 Acompanhar: `gh run watch` ou aba Actions no GitHub.
 
@@ -355,3 +355,4 @@ Por padrao o Railway deploya no push, **antes** do CI terminar — o CI e uma re
 | 2026-02-11 | Rafael | Documento criado (v1.0) |
 | 2026-03-17 | Claude | Adicionada secao 8: Seed de Dados Demo (CR-031) |
 | 2026-07-08 | Claude | Adicionada secao 9: Integracao Continua + checklist 3.1 com lint e CI (CR-035) |
+| 2026-07-09 | Claude | Job frontend do CI ganha passo de testes unitarios vitest (CR-039) |

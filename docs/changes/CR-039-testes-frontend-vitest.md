@@ -104,13 +104,13 @@ N/A — nenhuma alteração no banco.
 
 ## 8. Critérios de Aceite
 
-- [ ] `npm test` (vitest run) passa localmente com os 3 arquivos de teste
-- [ ] Testes cobrem: viradas de ano (prev/next), formatBRL/parcela/datas, auth header, 401→refresh→retry com token novo, refresh falho (token removido + erro), erro com detail, resposta 204
-- [ ] `npx tsc --noEmit` e `npm run lint` continuam passando (testes incluídos no lint)
-- [ ] CI executa vitest no job frontend e fica verde
-- [ ] Testes existentes continuam passando (regressão — pytest backend)
-- [ ] Fluxo afetado exercitado em runtime — **N/A: CR adiciona apenas testes e config de CI; nenhum código de produto alterado, sem superfície de runtime nova (regra CR-037). Os próprios testes exercitam o código.**
-- [ ] Documentos afetados foram atualizados
+- [x] `npm test` (vitest run) passa localmente — 3 arquivos, 26 testes verdes
+- [x] Testes cobrem: viradas de ano (prev/next), formatBRL/parcela/datas, auth header, 401→refresh→retry com token novo, refresh falho (token removido + erro), erro com detail, resposta 204
+- [x] `npx tsc --noEmit` e `npm run lint` continuam passando (0 erros; 8 warnings pré-existentes do CR-035)
+- [ ] CI executa vitest no job frontend e fica verde — *pendente do push; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] Testes existentes continuam passando (regressão — 90 testes pytest)
+- [x] Fluxo afetado exercitado em runtime — **N/A: CR adiciona apenas testes e config de CI; nenhum código de produto alterado, sem superfície de runtime nova (regra CR-037). Os próprios testes exercitam o código.**
+- [x] Documentos afetados foram atualizados
 
 > **Regra de conclusão (CR-037):** Status "Concluído" só com todos os critérios `[x]` ou riscados com justificativa.
 
