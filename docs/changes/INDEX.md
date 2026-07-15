@@ -44,3 +44,4 @@
 - CR-039: Testes de frontend com Vitest — 26 testes (utils/date, utils/format, services/api com interceptor 401) + passo no job frontend do CI (concluido)
 - CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge (concluido)
 - CR-041: Housekeeping — queryClient em módulo próprio, favicon, pip-audit no CI, .env.example, .claude/ versionado, spec F06, artefatos .js removidos (concluido)
+- CR-042: Update deps backend — python-jose 3.5, fastapi 0.139/starlette 1.3, python-dotenv 1.2, pytest 9; corrige 15 advisories do pip-audit (concluido)
