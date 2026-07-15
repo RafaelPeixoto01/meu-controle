@@ -1,8 +1,8 @@
 # Change Request — CR-042: Atualizar dependências backend com vulnerabilidades
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-07-15
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Claude (follow-up do achado do pip-audit no CI, CR-041 §8.2; aprovado por Rafael)
 **Prioridade:** Alta
 
@@ -116,9 +116,9 @@ N/A — nenhuma alteração no banco. Migration não necessária.
 - [x] 90 testes pytest verdes após CADA bump (4 commits separados por dependência, §10.3 da Arquitetura)
 - [x] Validação runtime do fluxo de auth completo — ver §8.1
 - [x] Login por email/senha funciona (usuário pré-existente com hash bcrypt antigo; pin bcrypt==4.0.* intacto)
-- [ ] pip-audit do CI pós-merge reporta apenas ecdsa — *pendente do push (verificado no follow-up)*
+- [x] pip-audit do CI pós-merge reporta apenas ecdsa — run 29447458128: "Found 1 known vulnerability in 1 package" (era 16 em 5)
 - [x] Revisão de código pré-merge executada — ver §8.3
-- [ ] CI verde após push — *pendente; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] CI verde após push (run 29447458128, 36s)
 - [x] Documentos afetados foram atualizados
 
 ## 8.1 Registro da Validação Runtime (CR-037)
@@ -184,3 +184,4 @@ Nenhuma variável alterada.
 | Data       | Autor  | Descrição                    |
 |------------|--------|------------------------------|
 | 2026-07-15 | Claude | CR criado e implementação iniciada |
+| 2026-07-15 | Claude | Validação ✅ — todos os critérios fechados; pip-audit do CI: 16 vulns → 1 (ecdsa, risco aceito §8.4) |
