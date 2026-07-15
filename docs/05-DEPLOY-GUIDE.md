@@ -73,6 +73,8 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 
 ## 2. Variaveis de Ambiente
 
+> Template pronto em `backend/.env.example` (CR-041) — copie para `backend/.env` e preencha.
+
 ### 2.1 Desenvolvimento (Local)
 
 | Variavel | Obrigatoria | Default | Onde definir |
@@ -356,3 +358,4 @@ Por padrao o Railway deploya no push, **antes** do CI terminar — o CI e uma re
 | 2026-03-17 | Claude | Adicionada secao 8: Seed de Dados Demo (CR-031) |
 | 2026-07-08 | Claude | Adicionada secao 9: Integracao Continua + checklist 3.1 com lint e CI (CR-035) |
 | 2026-07-09 | Claude | Job frontend do CI ganha passo de testes unitarios vitest (CR-039) |
+| 2026-07-15 | Claude | Referencia ao backend/.env.example na secao 2; pip-audit informativo no job backend do CI (CR-041) |

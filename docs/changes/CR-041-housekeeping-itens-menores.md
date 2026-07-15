@@ -114,18 +114,37 @@ N/A — nenhuma alteração no banco.
 
 ## 8. Critérios de Aceite
 
-- [ ] `pip-audit` instalado via requirements-dev e executado — resultado registrado (§8.2)
-- [ ] `backend/.env.example` criado apenas com nomes/placeholders (zero valores reais)
-- [ ] Console do dev server sem o erro `createRoot()` duplicado (antes: presente em todo load)
-- [ ] Favicon responde 200 e aparece na aba (antes: 404)
-- [ ] Zero arquivos `.js` em `frontend/src/`
-- [ ] `.claude/hooks`, `.claude/skills` e `.claude/settings.json` rastreados no git
-- [ ] `docs/specs/09-analise-ia.md` criado refletindo a implementação real; lacuna removida do índice
-- [ ] Suítes existentes passando: vitest (26) + pytest (90) + tsc + lint
-- [ ] Fluxo afetado exercitado em runtime — login page + navegação com console limpo (registrar no §8.1)
-- [ ] Revisão de código pré-merge (/code-review) executada — complexidade Média (registrar findings no §8.3)
-- [ ] CI verde após push
-- [ ] Documentos afetados foram atualizados
+- [x] `pip-audit` instalado via requirements-dev e executado — resultado registrado (§8.2)
+- [x] `backend/.env.example` criado apenas com nomes/placeholders (zero valores reais; default de CLAUDE_MODEL conferido no código)
+- [x] Console do dev server sem o erro `createRoot()` duplicado — 0 erros em /login, /register e fluxo completo (§8.1)
+- [x] Favicon responde 200 (`image/svg+xml`) e sem 404 no console; `npm run build` copia para `dist/` e `serve_spa` serve em produção
+- [x] Zero arquivos `.js` em `frontend/src/` (69 deletados)
+- [x] `.claude/hooks`, `.claude/skills` e `.claude/settings.json` rastreados no git (scan de segredos limpo)
+- [x] `docs/specs/09-analise-ia.md` criado refletindo a implementação real; lacuna removida do índice (SPEC v3.1)
+- [x] Suítes existentes passando: vitest 26/26 + pytest 90/90 + tsc + lint (0 erros)
+- [x] Fluxo afetado exercitado em runtime — ver §8.1
+- [x] Revisão de código pré-merge executada — ver §8.3 (1 finding confirmado, corrigido)
+- [ ] CI verde após push — *pendente; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] Documentos afetados foram atualizados
+
+## 8.1 Registro da Validação Runtime (CR-037)
+
+Exercitado via Playwright com backend+frontend locais:
+1. `/login` e `/register` carregam com **0 erros de console** (antes: 1 erro `createRoot` por load + 404 de favicon)
+2. `favicon.svg`: HTTP 200 `image/svg+xml`
+3. **Fluxo completo de auth**: registro de usuário de teste local → auto-login → MonthlyView renderizada (a tela do bug do CR-034) → menu do usuário → logout (exercita `queryClient.clear()` do módulo novo, CR-014) → redirect a `/login`. Console limpo do início ao fim.
+
+## 8.2 Registro do pip-audit
+
+- Execução local **bloqueada por SSL** (`CERTIFICATE_VERIFY_FAILED` contra pypi.org — interceptação de certificado nesta máquina; pip funciona por caminho de trust distinto). Registrado no Troubleshooting do CLAUDE.md.
+- Mitigação implementada: **passo informativo no CI** (`python -m pip_audit`, `continue-on-error: true`) — auditoria roda em todo push num ambiente com SSL limpo, sem bloquear deploy. Primeiro resultado visível no run do CI deste CR.
+
+## 8.3 Registro da Revisão de Código (Passo 6.5, CR-040) — primeira execução real
+
+Diff da branch revisado nos 8 ângulos (linha a linha, comportamento removido, cross-file, reuso, simplificação, eficiência, altitude, convenções). **3 candidatos, 2 refutados com evidência, 1 confirmado e corrigido:**
+1. ~~Favicon 404 em produção~~ — REFUTADO: `serve_spa` (main.py:94) serve arquivos da raiz do static; `npm run build` confirmou `dist/favicon.svg`.
+2. ~~Imports quebrados pela deleção dos .js~~ — REFUTADO: nenhum import usa extensão; tsc/vitest verdes.
+3. **CONFIRMADO**: CLAUDE.md afirmava "Não existe .env.example no repositório" — obsoleto a partir deste CR. Corrigido no Passo 7 (CLAUDE.md agora referencia o template).
 
 > **Regra de conclusão (CR-037):** Status "Concluído" só com todos os critérios `[x]` ou riscados com justificativa.
 

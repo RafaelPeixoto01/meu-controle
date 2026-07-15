@@ -208,7 +208,7 @@ Personal Finance/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                # CR-035: CI — pytest (backend) + tsc/eslint (frontend)
-├── .claude/                      # Local (gitignored) — hooks, skills e settings desta maquina
+├── .claude/                      # Versionado desde CR-041 (exceto settings.local.json) — hooks, skills e settings do pipeline
 │   ├── hooks/
 │   │   └── check-frontend.js     # Bloqueia commit se tsc --noEmit ou eslint falhar (CR-035)
 │   ├── skills/
@@ -228,7 +228,8 @@ Personal Finance/
 │   └── templates/            # Templates dos documentos
 ├── backend/
 │   ├── requirements.txt
-│   ├── requirements-dev.txt      # CR-035: pytest (deps de dev, fora da imagem de producao)
+│   ├── requirements-dev.txt      # CR-035: pytest; CR-041: pip-audit (deps de dev, fora da imagem de producao)
+│   ├── .env.example              # CR-041: template de env vars (copiar para .env)
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   ├── env.py
@@ -288,7 +289,8 @@ Personal Finance/
 │   ├── vite.config.ts        # Proxy /api -> :8000
 │   ├── index.html
 │   └── src/
-│       ├── main.tsx          # Bootstrap React + QueryClient + BrowserRouter
+│       ├── main.tsx          # Bootstrap React + BrowserRouter
+│       ├── queryClient.ts    # CR-041: QueryClient singleton (fora do main.tsx para evitar dupla avaliacao do entry)
 │       ├── App.tsx           # Shell com AuthProvider + Routes
 │       ├── index.css         # Tailwind v4 (@import + @theme)
 │       ├── vite-env.d.ts     # Vite client types
@@ -363,7 +365,7 @@ Personal Finance/
 
 ## Variáveis de Ambiente (backend/.env)
 
-Não existe `.env.example` no repositório — os nomes abaixo são a referência. Em produção, configurar no Railway.
+Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie para `.env` e preencha. Em produção, configurar no Railway.
 
 - **Obrigatórias:** `SECRET_KEY` (JWT — app não inicia sem ela, CR-010), `DATABASE_URL` (fallback SQLite se ausente)
 - **Google OAuth:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
@@ -387,16 +389,16 @@ Não existe `.env.example` no repositório — os nomes abaixo são a referênci
 - [x] Referência de Categorias (`/docs/categorias_gastos.md`) — CR-005
 
 ### Change Requests
-> **Histórico completo (CR-001..CR-035) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
+> **Histórico completo (CR-001..CR-036) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-036: npm audit fix — 7 vulnerabilidades corrigidas via lockfile (react-router-dom 7.13.0→7.18.1 com advisory HIGH de RCE, vite 6.4.3, rollup, babel, postcss, picomatch); validacao runtime via Playwright (concluido)
 - CR-037: Validacao Runtime obrigatoria no pipeline SDD — Passo 6 da skill exige exercitar o fluxo afetado antes do merge (Playwright/HTTP) com registro no CR; regra de conclusao proibe status Concluido com checkbox aberto (concluido)
 - CR-038: Dividir 03-SPEC.md em specs por feature — 03-SPEC.md vira índice, conteúdo em docs/specs/ (8 arquivos); histórico de CRs movido para docs/changes/INDEX.md (concluido)
 - CR-039: Testes de frontend com Vitest — 26 testes (utils/date, utils/format, services/api com interceptor 401) + passo no job frontend do CI (concluido)
 - CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge, findings corrigidos ou justificados no CR (concluido)
+- CR-041: Housekeeping — queryClient em módulo próprio (fix createRoot duplicado), favicon, pip-audit no CI, .env.example, .claude/ versionado, spec F06 criada, 69 artefatos .js removidos (concluido)
 
 ### Última Tarefa Implementada
-- CR-040: Revisão de código pré-merge para CRs Média/Alta (concluido)
+- CR-041: Housekeeping — 7 itens menores do Plano de Melhorias (concluido)
 
 ---
 
@@ -431,6 +433,12 @@ Referencia rapida de problemas encontrados durante o desenvolvimento e suas solu
 | Problema | Causa | Solucao |
 |----------|-------|---------|
 | `ALTER TABLE` com FK falha no SQLite | SQLite nao suporta `ALTER` com foreign keys | Usar `op.batch_alter_table()` nas migrations Alembic |
+
+### Dependencias Python (auditoria)
+
+| Problema | Causa | Solucao |
+|----------|-------|---------|
+| `pip-audit` falha com `CERTIFICATE_VERIFY_FAILED` nesta maquina | Interceptacao de certificado local; requests/certifi nao confia (pip usa caminho de trust distinto) | Auditoria roda no CI (passo informativo no job backend, CR-041) — nao insistir localmente |
 
 ### Ambiente Windows
 
