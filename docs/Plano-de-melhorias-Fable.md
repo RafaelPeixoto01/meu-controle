@@ -52,13 +52,14 @@ Análise do fluxo Spec-Driven Development do projeto identificou que a documenta
 | `favicon.ico` 404 | `public/favicon.svg` + link no index.html; servido também em produção via serve_spa | CR-036 §8.2 | ✅ Concluído (CR-041) |
 | Versionar `.claude/` | hooks/, skills/ e settings.json versionados; settings.local.json ignorado; scan de segredos limpo | CR-035 §8.2 | ✅ Concluído (CR-041) |
 | `.env.example` no backend | Criado com nomes/placeholders; referenciado no CLAUDE.md e Deploy Guide | Auditoria CLAUDE.md 2026-07-08 | ✅ Concluído (CR-041) |
+| Vulnerabilidades pip (backend) | 1º pip-audit do CI: 16 vulns em 5 pacotes — **python-jose 3.3.0** (JWT, fix 3.4.0) e **starlette 0.46.2** (7 advisories, condicionado ao fastapi) rodam em produção. CR dedicado de update de deps backend | pip-audit CI (CR-041) | ⬜ Pendente |
 
 ---
 
 ## Resumo
 
-- **Concluído:** todas as recomendações P1 e P2 + Wait for CI + todos os 12 follow-ups (CR-035 a CR-041)
-- **Pendente:** apenas P3-A (staging no Railway — aguarda escala de usuários)
+- **Concluído:** todas as recomendações P1 e P2 + Wait for CI + os 12 follow-ups originais (CR-035 a CR-041)
+- **Pendente:** P3-A (staging no Railway — aguarda escala) + vulnerabilidades pip do backend (achado novo do próprio pip-audit, CR dedicado)
 
 ## Changelog
 
