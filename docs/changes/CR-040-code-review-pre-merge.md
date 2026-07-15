@@ -1,8 +1,8 @@
 # Change Request — CR-040: Revisão de Código pré-merge para CRs Média/Alta
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-07-15
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Claude (P2-C do Plano de Melhorias Fable, aprovado por Rafael)
 **Prioridade:** Média
 
@@ -106,7 +106,7 @@ N/A — nenhuma alteração no banco.
 - [x] CLAUDE.md: item de code review no "Se aplicável" do Done When Universal
 - [x] Template de CR §8: critério se-aplicável de code review
 - [x] Consistência semântica entre skill, CLAUDE.md e template (verificado por grep — mesma regra nos 3 lugares)
-- [ ] Testes existentes continuam passando (regressão — CI verde) — *pendente do push; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] Testes existentes continuam passando (regressão — CI verde, run 29443624511, 36s)
 - [x] Fluxo afetado exercitado em runtime — **N/A: mudança exclusivamente de processo/documentação (regra CR-037)**
 - [x] Revisão de código deste CR — **N/A pela própria regra: complexidade Baixa (docs-only)**
 - [x] Documentos afetados foram atualizados
@@ -137,3 +137,4 @@ N/A — nenhuma alteração no banco.
 | Data       | Autor  | Descrição                    |
 |------------|--------|------------------------------|
 | 2026-07-15 | Claude | CR criado e implementação iniciada |
+| 2026-07-15 | Claude | Validação ✅ — todos os critérios fechados após CI verde (run 29443624511) |
