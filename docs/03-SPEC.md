@@ -1,7 +1,7 @@
 # Especificacao Tecnica — Meu Controle (Índice)
 
-**Versao:** 3.0
-**Data:** 2026-07-09
+**Versao:** 3.1
+**Data:** 2026-07-15
 **PRD Ref:** 01-PRD v2.3
 **Arquitetura Ref:** 02-ARCHITECTURE v2.9
 **CR Ref:** CR-002, CR-003, CR-005, CR-007, CR-010, CR-011, CR-012, CR-016, CR-019, CR-021, CR-026, CR-033, CR-038
@@ -24,10 +24,7 @@
 | [specs/06-projecao-parcelas.md](specs/06-projecao-parcelas.md) | Endpoint de projeção, schemas, regras de datas reais de vencimento, componentes | F03 (CR-021, CR-022..024, CR-028) |
 | [specs/07-score-saude.md](specs/07-score-saude.md) | Endpoints de score, cálculo determinístico (D1–D4), cenário conservador, ações, persistência | F04 (CR-026) |
 | [specs/08-alertas.md](specs/08-alertas.md) | Motor de alertas on-demand, 8 tipos (A1–A8), ciclo de vida, endpoints, configurações | F05 (CR-033) |
-
-### Lacuna conhecida
-
-- **F06 — Análise Financeira por IA (CR-032):** nunca ganhou seção neste SPEC. A especificação detalhada está em [changes/CR-032-analise-financeira-ia.md](changes/CR-032-analise-financeira-ia.md). Candidato a CR futuro: consolidar em `specs/09-analise-ia.md`.
+| [specs/09-analise-ia.md](specs/09-analise-ia.md) | Endpoint /api/analysis, arquitetura real (ai_analysis.py), regras (mês fechado, cache mensal, mesclagem F04, graceful degradation), env vars | F06 (CR-032; criada no CR-041) |
 
 ---
 
@@ -44,3 +41,4 @@
 |------|-------|-----------|
 | 2026-02-08 | Rafael | SPEC monolítico criado (v1.0) e evoluído por CR-002..CR-033 até v2.9 |
 | 2026-07-09 | Claude | v3.0 — CR-038: dividido em docs/specs/ por feature; este arquivo vira índice |
+| 2026-07-15 | Claude | v3.1 — CR-041: criada specs/09-analise-ia.md (F06); lacuna eliminada |

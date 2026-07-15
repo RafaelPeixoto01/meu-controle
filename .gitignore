@@ -32,7 +32,7 @@ Thumbs.db
 # Logs
 *.json.log
 logs.*.json
-.claude/
+.claude/settings.local.json
 
 # Playwright MCP logs
 .playwright-mcp/

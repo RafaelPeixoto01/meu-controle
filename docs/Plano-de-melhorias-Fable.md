@@ -45,20 +45,20 @@ Análise do fluxo Spec-Driven Development do projeto identificou que a documenta
 | `as any` no InstallmentsView | Escondia `className="undefined"` no StatusBadge — corrigido com type guard | Baseline do ESLint (CR-035) | ✅ Concluído (CR-035) |
 | Referência obsoleta à skill `/feature` | Plano de Evolução P1-3 apontava para skill renomeada (`/sdd-pipeline`) | Análise SDD | ✅ Concluído (CR-035) |
 | Linha `CLAUDE.md` no template de CR | Tabela de impacto (§5) não tinha a linha; cada CR adicionava à mão | Análise SDD | ✅ Concluído (CR-037) |
-| Spec da F06 ausente | Análise IA (CR-032) nunca ganhou seção no SPEC — criar `docs/specs/09-analise-ia.md` a partir do CR-032 | CR-038 §8.1 | ⬜ Pendente |
-| `pip-audit` não instalado | Política de auditoria (02-ARCHITECTURE §10.2) referencia a ferramenta, que não existe no ambiente — adicionar a `requirements-dev.txt` | CR-036 §8.2 | ⬜ Pendente |
-| `createRoot()` duplicado no console (dev) | Pré-existente (A/B confirmou); causa provável: `main.tsx` exporta `queryClient` importado por outros módulos — mover para módulo próprio | CR-036 §8.2 | ⬜ Pendente |
-| Artefatos `.js` compilados em `frontend/src/` | Não rastreados no git; ignorados pelo lint, mas podem confundir imports — deletar | Análise SDD | ⬜ Pendente |
-| `favicon.ico` 404 | Cosmético | CR-036 §8.2 | ⬜ Pendente |
-| Versionar `.claude/` | Hooks, skills e settings são locais desta máquina (gitignored) — avaliar versionar `.claude/hooks/` e `.claude/skills/` | CR-035 §8.2 | ⬜ Pendente |
-| `.env.example` no backend | Não existe; nomes das env vars documentados só no CLAUDE.md | Auditoria CLAUDE.md 2026-07-08 | ⬜ Pendente |
+| Spec da F06 ausente | `docs/specs/09-analise-ia.md` criada refletindo a implementação real; lacuna eliminada do índice (SPEC v3.1) | CR-038 §8.1 | ✅ Concluído (CR-041) |
+| `pip-audit` não instalado | Em `requirements-dev.txt` + passo informativo no CI (SSL local impede execução nesta máquina) | CR-036 §8.2 | ✅ Concluído (CR-041) |
+| `createRoot()` duplicado no console (dev) | `queryClient` movido para `src/queryClient.ts` — console dev com 0 erros (validado via Playwright) | CR-036 §8.2 | ✅ Concluído (CR-041) |
+| Artefatos `.js` compilados em `frontend/src/` | 69 arquivos deletados | Análise SDD | ✅ Concluído (CR-041) |
+| `favicon.ico` 404 | `public/favicon.svg` + link no index.html; servido também em produção via serve_spa | CR-036 §8.2 | ✅ Concluído (CR-041) |
+| Versionar `.claude/` | hooks/, skills/ e settings.json versionados; settings.local.json ignorado; scan de segredos limpo | CR-035 §8.2 | ✅ Concluído (CR-041) |
+| `.env.example` no backend | Criado com nomes/placeholders; referenciado no CLAUDE.md e Deploy Guide | Auditoria CLAUDE.md 2026-07-08 | ✅ Concluído (CR-041) |
 
 ---
 
 ## Resumo
 
-- **Concluído:** todas as recomendações P1 e P2 + Wait for CI + 5 follow-ups (CR-035 a CR-040)
-- **Pendente:** P3-A (staging) + 7 follow-ups menores
+- **Concluído:** todas as recomendações P1 e P2 + Wait for CI + todos os 12 follow-ups (CR-035 a CR-041)
+- **Pendente:** apenas P3-A (staging no Railway — aguarda escala de usuários)
 
 ## Changelog
 
@@ -67,3 +67,4 @@ Análise do fluxo Spec-Driven Development do projeto identificou que a documenta
 | 2026-07-09 | Claude | Documento criado consolidando as melhorias da análise SDD e seus status |
 | 2026-07-09 | Claude | P2-B marcado Concluído (CR-039: Vitest, 26 testes, passo no CI) |
 | 2026-07-15 | Claude | P2-C marcado Concluído (CR-040: /code-review pré-merge para Média/Alta) — todos os itens P1 e P2 fechados |
+| 2026-07-15 | Claude | 7 follow-ups menores concluídos (CR-041: housekeeping) — resta apenas P3-A |

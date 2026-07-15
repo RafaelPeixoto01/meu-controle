@@ -2,7 +2,7 @@ import { createContext, useState, useEffect, useCallback, type ReactNode } from 
 import { jwtDecode } from "jwt-decode";
 import type { User, LoginCredentials, RegisterData } from "../types";
 import * as authApi from "../services/authApi";
-import { queryClient } from "../main";
+import { queryClient } from "../queryClient";  // CR-041: movido de main.tsx
 
 interface AuthContextType {
   user: User | null;
