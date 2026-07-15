@@ -112,14 +112,35 @@ N/A — nenhuma alteração no banco. Migration não necessária.
 
 ## 8. Critérios de Aceite
 
-- [ ] Pins atualizados; `pip install -r requirements-dev.txt` resolve sem conflitos
-- [ ] 90 testes pytest verdes após CADA bump (commits separados por dependência, §10.3 da Arquitetura)
-- [ ] Validação runtime do fluxo de auth completo (registro → login → sessão → logout) — python-jose valida os tokens; registrar no §8.1
-- [ ] Login por email/senha funciona (pin bcrypt==4.0.* intacto)
-- [ ] pip-audit do CI pós-merge reporta apenas ecdsa (risco aceito: JWT HS256 não usa ECDSA)
-- [ ] Revisão de código pré-merge executada — complexidade Alta (§8.3)
-- [ ] CI verde após push
-- [ ] Documentos afetados foram atualizados
+- [x] Pins atualizados; instalação resolve sem conflitos (compatibilidade fastapi 0.139 + starlette 1.3.1 verificada por dry-run antes)
+- [x] 90 testes pytest verdes após CADA bump (4 commits separados por dependência, §10.3 da Arquitetura)
+- [x] Validação runtime do fluxo de auth completo — ver §8.1
+- [x] Login por email/senha funciona (usuário pré-existente com hash bcrypt antigo; pin bcrypt==4.0.* intacto)
+- [ ] pip-audit do CI pós-merge reporta apenas ecdsa — *pendente do push (verificado no follow-up)*
+- [x] Revisão de código pré-merge executada — ver §8.3
+- [ ] CI verde após push — *pendente; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] Documentos afetados foram atualizados
+
+## 8.1 Registro da Validação Runtime (CR-037)
+
+Backend bootado no fastapi 0.139/starlette 1.3.1 + frontend, exercitado via Playwright e HTTP:
+1. **Boot limpo** — startup sem erros; `SecurityHeadersMiddleware` funcionando no starlette 1.3 (verificado por HTTP: `x-content-type-options: nosniff`, `x-frame-options: DENY`, `referrer-policy` presentes)
+2. **Login por email/senha** com usuário pré-existente (`teste.cr041@example.com`, criado no CR-041) — hash bcrypt antigo verificado, JWT emitido pelo python-jose 3.5
+3. **Páginas autenticadas**: MonthlyView e Dashboard carregaram com dados das APIs — cada request validou o JWT na cadeia nova
+4. **Logout** → redirect a /login
+5. Console: **0 erros** (2 warnings pré-existentes do recharts em charts sem dados, não relacionadas)
+
+## 8.3 Registro da Revisão de Código (Passo 6.5, CR-040)
+
+Diff de pins revisado nos 8 ângulos. **2 findings confirmados (staleness de docs), ambos corrigidos no Passo 7:**
+1. CLAUDE.md stack citava FastAPI 0.115 e python-jose 3.3 → atualizado (0.139 / 3.5)
+2. 02-ARCHITECTURE §1 idem → atualizado (v2.12)
+
+Sem findings de código (diff é exclusivamente de pins; formato consistente com a política §10.1; bcrypt intacto; convenção §10.3 de um dep por commit seguida — 4 commits).
+
+## 8.4 Risco aceito — ecdsa (PYSEC-2026-1325)
+
+`ecdsa` permanece como dependência obrigatória do python-jose (inclusive 3.5.0, verificado por dry-run) e **não tem versão corrigida publicada**. Aceito porque o projeto assina JWTs com **HS256 (HMAC simétrico)** — o código de curvas elípticas do pacote ecdsa não participa do fluxo de auth. Reavaliar se o projeto adotar RS256/ES256 ou quando houver fix.
 
 > **Regra de conclusão (CR-037):** Status "Concluído" só com todos os critérios `[x]` ou riscados com justificativa.
 

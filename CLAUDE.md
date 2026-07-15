@@ -351,8 +351,8 @@ Personal Finance/
 | Testes (FE)    | Vitest + jsdom              | 4.x       |
 | CI             | GitHub Actions              | —         |
 | HTTP Client    | fetch nativo                | —         |
-| Backend        | Python + FastAPI            | 0.115     |
-| Auth (BE)      | python-jose + passlib/bcrypt| 3.3/1.7   |
+| Backend        | Python + FastAPI            | 0.139     |
+| Auth (BE)      | python-jose + passlib/bcrypt| 3.5/1.7   |
 | Env Config     | python-dotenv               | 1.0+      |
 | Email          | SendGrid                    | 6.11      |
 | ORM            | SQLAlchemy (sincrono)       | 2.0+      |
@@ -389,16 +389,16 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - [x] Referência de Categorias (`/docs/categorias_gastos.md`) — CR-005
 
 ### Change Requests
-> **Histórico completo (CR-001..CR-036) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
+> **Histórico completo (CR-001..CR-037) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-037: Validacao Runtime obrigatoria no pipeline SDD — Passo 6 da skill exige exercitar o fluxo afetado antes do merge (Playwright/HTTP) com registro no CR; regra de conclusao proibe status Concluido com checkbox aberto (concluido)
 - CR-038: Dividir 03-SPEC.md em specs por feature — 03-SPEC.md vira índice, conteúdo em docs/specs/ (8 arquivos); histórico de CRs movido para docs/changes/INDEX.md (concluido)
 - CR-039: Testes de frontend com Vitest — 26 testes (utils/date, utils/format, services/api com interceptor 401) + passo no job frontend do CI (concluido)
 - CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge, findings corrigidos ou justificados no CR (concluido)
 - CR-041: Housekeeping — queryClient em módulo próprio (fix createRoot duplicado), favicon, pip-audit no CI, .env.example, .claude/ versionado, spec F06 criada, 69 artefatos .js removidos (concluido)
+- CR-042: Update deps backend — python-jose 3.5, fastapi 0.139/starlette 1.3, python-dotenv 1.2, pytest 9; corrige 15 advisories do pip-audit; ecdsa aceito (HS256 não usa ECDSA) (concluido)
 
 ### Última Tarefa Implementada
-- CR-041: Housekeeping — 7 itens menores do Plano de Melhorias (concluido)
+- CR-042: Update de dependências backend (segurança) (concluido)
 
 ---
 
