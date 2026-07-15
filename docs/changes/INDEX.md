@@ -42,3 +42,4 @@
 - CR-037: Validacao Runtime obrigatoria no pipeline SDD — Passo 6 da skill exige exercitar o fluxo afetado antes do merge (Playwright/HTTP) com registro no CR; regra de conclusao proibe status Concluido com checkbox aberto (concluido)
 - CR-038: Dividir 03-SPEC.md em specs por feature (docs/specs/) + historico de CRs movido para este INDEX.md (concluido)
 - CR-039: Testes de frontend com Vitest — 26 testes (utils/date, utils/format, services/api com interceptor 401) + passo no job frontend do CI (concluido)
+- CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge (concluido)
