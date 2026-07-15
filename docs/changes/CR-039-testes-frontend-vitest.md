@@ -1,8 +1,8 @@
 # Change Request — CR-039: Testes de Frontend com Vitest
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-07-09
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Claude (P2-B do Plano de Melhorias Fable, aprovado por Rafael)
 **Prioridade:** Média
 
@@ -107,7 +107,7 @@ N/A — nenhuma alteração no banco.
 - [x] `npm test` (vitest run) passa localmente — 3 arquivos, 26 testes verdes
 - [x] Testes cobrem: viradas de ano (prev/next), formatBRL/parcela/datas, auth header, 401→refresh→retry com token novo, refresh falho (token removido + erro), erro com detail, resposta 204
 - [x] `npx tsc --noEmit` e `npm run lint` continuam passando (0 erros; 8 warnings pré-existentes do CR-035)
-- [ ] CI executa vitest no job frontend e fica verde — *pendente do push; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] CI executa vitest no job frontend e fica verde (run 29441061423, 32s)
 - [x] Testes existentes continuam passando (regressão — 90 testes pytest)
 - [x] Fluxo afetado exercitado em runtime — **N/A: CR adiciona apenas testes e config de CI; nenhum código de produto alterado, sem superfície de runtime nova (regra CR-037). Os próprios testes exercitam o código.**
 - [x] Documentos afetados foram atualizados
@@ -140,3 +140,4 @@ N/A — nenhuma alteração no banco.
 | Data       | Autor  | Descrição                    |
 |------------|--------|------------------------------|
 | 2026-07-09 | Claude | CR criado e implementação iniciada |
+| 2026-07-15 | Claude | Validação ✅ — todos os critérios fechados após CI verde (run 29441061423) |
