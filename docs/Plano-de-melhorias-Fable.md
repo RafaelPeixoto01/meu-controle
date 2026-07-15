@@ -28,7 +28,7 @@ Análise do fluxo Spec-Driven Development do projeto identificou que a documenta
 |------|-----------|----|--------|
 | P2-A | Dividir `03-SPEC.md` (4.449 linhas / ~47k tokens) em specs por feature (`docs/specs/`, 8 arquivos) com índice enxuto no mesmo caminho; histórico de CRs do CLAUDE.md movido para `docs/changes/INDEX.md` (mantém os 5 mais recentes) | CR-038 | ✅ Concluído |
 | P2-B | Testes de frontend (Vitest) para lógica crítica: `utils/date.ts`, `utils/format.ts`, `services/api.ts` (auth header, interceptor 401) + passo no job frontend do CI | CR-039 | ✅ Concluído |
-| P2-C | `/code-review` antes do merge para CRs de complexidade Média/Alta (passo na skill `/sdd-pipeline` + CLAUDE.md) | — | ⬜ Pendente |
+| P2-C | `/code-review` antes do merge para CRs de complexidade Média/Alta (passo na skill `/sdd-pipeline` + CLAUDE.md) | CR-040 | ✅ Concluído |
 
 ## P3 — Dependente de escala
 
@@ -57,8 +57,8 @@ Análise do fluxo Spec-Driven Development do projeto identificou que a documenta
 
 ## Resumo
 
-- **Concluído:** todas as 3 recomendações P1 + Wait for CI + P2-A + P2-B + 5 follow-ups (CR-035 a CR-039)
-- **Pendente:** P2-C (/code-review pré-merge), P3-A (staging) + 7 follow-ups menores
+- **Concluído:** todas as recomendações P1 e P2 + Wait for CI + 5 follow-ups (CR-035 a CR-040)
+- **Pendente:** P3-A (staging) + 7 follow-ups menores
 
 ## Changelog
 
@@ -66,3 +66,4 @@ Análise do fluxo Spec-Driven Development do projeto identificou que a documenta
 |------|-------|-----------|
 | 2026-07-09 | Claude | Documento criado consolidando as melhorias da análise SDD e seus status |
 | 2026-07-09 | Claude | P2-B marcado Concluído (CR-039: Vitest, 26 testes, passo no CI) |
+| 2026-07-15 | Claude | P2-C marcado Concluído (CR-040: /code-review pré-merge para Média/Alta) — todos os itens P1 e P2 fechados |

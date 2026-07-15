@@ -110,6 +110,7 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 - [ ] Commit segue Conventional Commits e referencia o ID da tarefa
 
 **Se aplicável:**
+- [ ] Revisão de código pré-merge executada (`/code-review` no diff da branch) para CRs de complexidade Média/Alta, com findings corrigidos ou justificados no CR (CR-040)
 - [ ] Migration testada: `alembic upgrade head` + `alembic downgrade -1`
 - [ ] Endpoints respondem com status codes corretos
 - [ ] Documentos afetados atualizados (Spec, Architecture, CLAUDE.md)
@@ -386,16 +387,16 @@ Não existe `.env.example` no repositório — os nomes abaixo são a referênci
 - [x] Referência de Categorias (`/docs/categorias_gastos.md`) — CR-005
 
 ### Change Requests
-> **Histórico completo (CR-001..CR-034) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
+> **Histórico completo (CR-001..CR-035) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-035: ESLint (react-hooks) + CI GitHub Actions — flat config com preset completo (rules-of-hooks: error), hook de commit tsc+eslint, workflow CI com pytest backend e tsc/eslint frontend, requirements-dev.txt (concluido)
 - CR-036: npm audit fix — 7 vulnerabilidades corrigidas via lockfile (react-router-dom 7.13.0→7.18.1 com advisory HIGH de RCE, vite 6.4.3, rollup, babel, postcss, picomatch); validacao runtime via Playwright (concluido)
 - CR-037: Validacao Runtime obrigatoria no pipeline SDD — Passo 6 da skill exige exercitar o fluxo afetado antes do merge (Playwright/HTTP) com registro no CR; regra de conclusao proibe status Concluido com checkbox aberto (concluido)
 - CR-038: Dividir 03-SPEC.md em specs por feature — 03-SPEC.md vira índice, conteúdo em docs/specs/ (8 arquivos); histórico de CRs movido para docs/changes/INDEX.md (concluido)
 - CR-039: Testes de frontend com Vitest — 26 testes (utils/date, utils/format, services/api com interceptor 401) + passo no job frontend do CI (concluido)
+- CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge, findings corrigidos ou justificados no CR (concluido)
 
 ### Última Tarefa Implementada
-- CR-039: Testes de frontend com Vitest (concluido)
+- CR-040: Revisão de código pré-merge para CRs Média/Alta (concluido)
 
 ---
 

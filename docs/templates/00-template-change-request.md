@@ -113,6 +113,7 @@ ALTER TABLE ...;
 - [ ] Testes existentes continuam passando (regressão)
 - [ ] Novos testes cobrem a mudança
 - [ ] Fluxo afetado exercitado em runtime antes do merge — descrever O QUE foi validado e o resultado (Playwright para UI, chamada HTTP para endpoints); ou "N/A — [justificativa]" (CR-037)
+- [ ] [Se complexidade Média/Alta] Revisão de código pré-merge (`/code-review` no diff da branch) executada — registrar findings corrigidos/justificados; ou "N/A — complexidade Baixa" (CR-040)
 - [ ] Documentos afetados foram atualizados
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.

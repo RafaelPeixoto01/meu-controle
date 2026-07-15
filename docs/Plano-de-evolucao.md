@@ -1,7 +1,7 @@
 # Plano de Evolucao — Meu Controle
 
-**Versao:** 1.3
-**Data:** 2026-07-09
+**Versao:** 1.4
+**Data:** 2026-07-15
 **Autor:** Rafael
 
 ---
@@ -127,6 +127,14 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | Descricao | Vitest + jsdom com 26 testes cobrindo utils/date.ts (viradas de ano), utils/format.ts (BRL, parcelas, datas) e services/api.ts (auth header, interceptor 401 com refresh/retry, erros, 204). Passo `npm test` no job frontend do CI. Primeiro conjunto de testes do frontend — antes, "testes obrigatorios" so valia para o backend. |
 | Documentos afetados | `CLAUDE.md`, `02-ARCHITECTURE.md` (stack v2.10), `05-DEPLOY-GUIDE.md` (§9.1), `docs/Plano-de-melhorias-Fable.md` |
 
+### P2-4: Revisao de Codigo pre-merge (CR-040)
+
+| Campo | Valor |
+|-------|-------|
+| Status | ✅ Concluido |
+| Descricao | Passo 6.5 da skill `/sdd-pipeline`: CRs de complexidade Media/Alta executam `/code-review` sobre o diff da branch antes do merge; findings sao corrigidos ou justificados por escrito no CR, com resultado registrado. Complexidade Baixa pula com registro. Complementa o P3-2 (design review pre-implementacao, ainda pendente) atacando o lado pos-implementacao. |
+| Documentos afetados | `.claude/skills/sdd-pipeline/SKILL.md` (local), `CLAUDE.md` (Done When "se aplicavel"), `docs/templates/00-template-change-request.md` (§8) |
+
 ---
 
 ## P3 — Futuro
@@ -159,3 +167,4 @@ Os itens estao organizados por prioridade (P0 a P3), onde P0 representa riscos c
 | 2026-07-08 | Claude | v1.1 — P1-4 e P1-5 adicionados e concluidos (ESLint react-hooks + CI GitHub Actions, CR-035); referencia da skill /feature corrigida para /sdd-pipeline |
 | 2026-07-08 | Claude | v1.2 — P1-6 adicionado e concluido (Validacao Runtime obrigatoria no pipeline, CR-037). Fecha as 3 recomendacoes P1 da analise do fluxo SDD |
 | 2026-07-09 | Claude | v1.3 — P2-3 adicionado e concluido (Testes de Frontend com Vitest, CR-039) |
+| 2026-07-15 | Claude | v1.4 — P2-4 adicionado e concluido (Revisao de Codigo pre-merge, CR-040) |
