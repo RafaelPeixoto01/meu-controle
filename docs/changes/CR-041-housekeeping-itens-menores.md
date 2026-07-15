@@ -1,8 +1,8 @@
 # Change Request — CR-041: Housekeeping — 7 itens menores do Plano de Melhorias
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-07-15
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Claude (follow-ups do Plano de Melhorias Fable, aprovado por Rafael)
 **Prioridade:** Média
 
@@ -124,7 +124,7 @@ N/A — nenhuma alteração no banco.
 - [x] Suítes existentes passando: vitest 26/26 + pytest 90/90 + tsc + lint (0 erros)
 - [x] Fluxo afetado exercitado em runtime — ver §8.1
 - [x] Revisão de código pré-merge executada — ver §8.3 (1 finding confirmado, corrigido)
-- [ ] CI verde após push — *pendente; CR permanece "Em Implementação" até o follow-up (regra 6.2)*
+- [x] CI verde após push (run 29446450818, 42s — pip-audit informativo executou e reportou; passo não-bloqueante conforme desenho)
 - [x] Documentos afetados foram atualizados
 
 ## 8.1 Registro da Validação Runtime (CR-037)
@@ -137,7 +137,8 @@ Exercitado via Playwright com backend+frontend locais:
 ## 8.2 Registro do pip-audit
 
 - Execução local **bloqueada por SSL** (`CERTIFICATE_VERIFY_FAILED` contra pypi.org — interceptação de certificado nesta máquina; pip funciona por caminho de trust distinto). Registrado no Troubleshooting do CLAUDE.md.
-- Mitigação implementada: **passo informativo no CI** (`python -m pip_audit`, `continue-on-error: true`) — auditoria roda em todo push num ambiente com SSL limpo, sem bloquear deploy. Primeiro resultado visível no run do CI deste CR.
+- Mitigação implementada: **passo informativo no CI** (`python -m pip_audit`, `continue-on-error: true`) — auditoria roda em todo push num ambiente com SSL limpo, sem bloquear deploy.
+- **Primeiro resultado (run 29446450818): 16 vulnerabilidades em 5 pacotes.** Relevantes em produção: `python-jose 3.3.0` (PYSEC-2024-232/233 + PYSEC-2025-185; fix 3.4.0 — biblioteca do JWT) e `starlette 0.46.2` (7 advisories; fixes 0.47.2+ — base do FastAPI, bump condicionado à compatibilidade com fastapi). Menores: ecdsa (sem fix publicado), python-dotenv, pytest (dev-only). **Follow-up: CR dedicado de atualização de dependências backend** (análogo ao CR-036), registrado no Plano de Melhorias.
 
 ## 8.3 Registro da Revisão de Código (Passo 6.5, CR-040) — primeira execução real
 
@@ -172,3 +173,4 @@ Diff da branch revisado nos 8 ângulos (linha a linha, comportamento removido, c
 | Data       | Autor  | Descrição                    |
 |------------|--------|------------------------------|
 | 2026-07-15 | Claude | CR criado e implementação iniciada |
+| 2026-07-15 | Claude | Validação ✅ — todos os critérios fechados após CI verde (run 29446450818); pip-audit do CI revelou 16 vulns backend → follow-up registrado |
