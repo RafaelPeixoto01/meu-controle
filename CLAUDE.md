@@ -205,7 +205,7 @@ Personal Finance/
 ├── .github/workflows/ci.yml   # CI: pytest (backend) + tsc/eslint (frontend) — CR-035
 ├── .claude/                    # Versionado desde CR-041 (exceto settings.local.json)
 │   ├── hooks/check-frontend.js #   Bloqueia git commit se tsc --noEmit ou eslint falhar
-│   ├── skills/                 #   /sdd-pipeline, /deploy-railway, /seed-demo
+│   ├── skills/                 #   /deploy-railway, /seed-demo (/sdd-pipeline é global — CR-045)
 │   └── settings.json           #   Hook PreToolUse para git commit
 ├── docs/                       # PRD, Arquitetura, Spec (03-SPEC.md é índice; detalhe em specs/),
 │   ├── changes/                #   Change Requests CR-XXX + INDEX.md (histórico completo)
@@ -311,13 +311,13 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - [x] Referência de Categorias (`/docs/categorias_gastos.md`) — CR-005
 
 ### Change Requests
-> **Histórico completo (CR-001..CR-037) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
+> **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge, findings corrigidos ou justificados no CR (concluido)
 - CR-041: Housekeeping — queryClient em módulo próprio (fix createRoot duplicado), favicon, pip-audit no CI, .env.example, .claude/ versionado, spec F06 criada, 69 artefatos .js removidos (concluido)
 - CR-042: Update deps backend — python-jose 3.5, fastapi 0.139/starlette 1.3, python-dotenv 1.2, pytest 9; corrige 15 advisories do pip-audit; ecdsa aceito (HS256 não usa ECDSA) (concluido)
 - CR-043: Hotfix segurança — path traversal no fallback do SPA (main.py serve_spa); payloads percent-encoded (`/..%2f.env`) vazavam backend/.env; corrigido com contenção de path (`resolve_static_file` + is_relative_to) + 9 testes de regressão (concluido)
 - CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
+- CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (em implementação)
 
 ---
 
@@ -333,7 +333,7 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - **Não fabrique ferramentas.** Nunca invente ou adivinhe a existência de plugins, comandos CLI ou ferramentas. Se não tiver certeza, verifique a documentação primeiro. Se um comando falhar, reconheça o erro imediatamente.
 - **Planeje antes de codar.** Em tarefas complexas (3+ etapas), crie um plano TodoWrite detalhado antes de escrever qualquer código. Inclua: CR, arquivos a modificar, verificação de build, atualizações de docs, commit.
 - **Hook de frontend ativo.** O hook `.claude/hooks/check-frontend.js` intercepta `git commit` e executa `tsc --noEmit` + `eslint src` automaticamente (CR-035). Se o commit for bloqueado, corrija os erros antes de tentar novamente — não use `--no-verify`. Atenção: o hook dispara em qualquer comando Bash contendo a substring `git commit` (inclusive dentro de echo/printf).
-- **Use `/sdd-pipeline` para novas features/CRs.** A skill `/sdd-pipeline` automatiza todo o pipeline SDD: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/sdd-pipeline` no início de qualquer implementação.
+- **Use `/sdd-pipeline` para novas features/CRs.** A skill `/sdd-pipeline` automatiza todo o pipeline SDD: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/sdd-pipeline` no início de qualquer implementação. A skill é **global** (`C:\Users\Rafael\.claude\skills\sdd-pipeline\` — CR-045): melhorias no pipeline devem ser feitas lá, não em cópia local.
 
 ---
 
