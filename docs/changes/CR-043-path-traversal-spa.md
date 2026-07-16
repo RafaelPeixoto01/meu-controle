@@ -1,8 +1,8 @@
 # Change Request — CR-043: Corrigir path traversal no fallback do SPA
 
-**Versão:** 1.1
+**Versão:** 1.2
 **Data:** 2026-07-15
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude / auditoria transversal)
 **Prioridade:** Crítica
 
@@ -143,7 +143,7 @@ Qualquer caminho que resolva para fora de `STATIC_DIR` é tratado como rota de S
 - [x] Novos testes cobrem a mudança — `backend/tests/test_static_spa.py` (9 casos: helper + integração HTTP)
 - [x] Fluxo afetado exercitado em runtime antes do merge — ver §8.1
 - [x] Revisão de código pré-merge executada — ver §8.2
-- [ ] CI verde após push (`gh run watch`) — pendente de evento posterior (mantém CR em "Em Implementação" até o follow-up, CR-037)
+- [x] CI verde após push — run 29463607322: Backend (pytest) ✅ + Frontend (tsc + eslint) ✅
 - [x] Documentos afetados foram atualizados (este CR, `CLAUDE.md`, memory de segurança)
 
 ### 8.1 Validação Runtime
@@ -222,3 +222,4 @@ Revisão estruturada do diff (8 ângulos: correção linha-a-linha, comportament
 | 2026-07-15 | Claude | CR criado                    |
 | 2026-07-15 | Claude | Implementação iniciada       |
 | 2026-07-15 | Claude | Implementação concluída — helper `resolve_static_file` + 9 testes de regressão; validação runtime (payloads de traversal caem no fallback); code review 0 findings; docs atualizados. Aguardando CI verde pós-push para fechar. |
+| 2026-07-15 | Claude | Validação realizada — status: ✅ CI verde (run 29463607322, Backend + Frontend). CR **Concluído**. |
