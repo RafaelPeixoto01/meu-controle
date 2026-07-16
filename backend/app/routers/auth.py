@@ -19,6 +19,7 @@ from app.schemas import (
 )
 from app import crud
 from app.email_service import send_password_reset_email
+from app.rate_limit import limiter  # CR-044
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -82,7 +83,8 @@ def register(data: UserCreate, response: Response, db: Session = Depends(get_db)
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, response: Response, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")  # CR-044: anti-brute-force
+def login(request: Request, data: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """RF-09: Login com email e senha."""
     user = crud.get_user_by_email(db, data.email)
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
@@ -202,7 +204,8 @@ def logout(
 
 
 @router.post("/forgot-password")
-def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+@limiter.limit("3/minute")  # CR-044: anti-abuso de envio de email
+def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """RF-11: Solicitar email de recuperação de senha (RN-016)."""
     # Sempre retorna 200 por segurança (não revela se email existe)
     user = crud.get_user_by_email(db, data.email)

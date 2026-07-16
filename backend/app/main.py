@@ -10,8 +10,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi import _rate_limit_exceeded_handler  # CR-044
+from slowapi.errors import RateLimitExceeded  # CR-044
 
+from app.rate_limit import limiter  # CR-044
 from app.routers import expenses, incomes, months, auth, users, daily_expenses, dashboard, score, ai_analysis, alerts  # CR-002: auth, users; CR-005: daily_expenses; CR-019: dashboard; CR-026: score; CR-032: ai_analysis; CR-033: alerts
+
+_IS_PRODUCTION = os.environ.get("ENVIRONMENT", "development").lower() != "development"
+
+# CR-044: CSP restritivo com as exceções mínimas necessárias (ver CR-044 §3):
+# - img-src googleusercontent: avatares de login Google
+# - style-src 'unsafe-inline': estilos inline do recharts
+# - style-src/font-src fonts.g*: fonte Outfit (@import em index.css)
+_CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "object-src 'none'; "
+    "frame-ancestors 'none'; "
+    "script-src 'self'; "
+    "img-src 'self' data: https://*.googleusercontent.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "connect-src 'self'"
+)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -21,6 +42,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = _CSP  # CR-044
+        if _IS_PRODUCTION:  # CR-044: HSTS só faz sentido sob HTTPS (produção)
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
         return response
 
 
@@ -43,6 +67,10 @@ app = FastAPI(
     version="2.0.0",  # CR-002
     lifespan=lifespan,
 )
+
+# CR-044: registrar rate limiter e handler de 429
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(SecurityHeadersMiddleware)
 
