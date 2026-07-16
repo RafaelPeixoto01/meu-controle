@@ -74,6 +74,7 @@ Ao criar qualquer documento do fluxo, **use obrigatoriamente o template correspo
 | Arquitetura | `/docs/templates/02-template-architecture.md` |
 | Spec Técnica | `/docs/templates/03-template-spec.md` |
 | Plano de Implementação | `/docs/templates/04-template-implementation-plan.md` |
+| CLAUDE.md | `/docs/templates/CLAUDE-template.md` |
 
 ---
 
@@ -175,17 +176,11 @@ Pular com justificativa explícita apenas se o CR for exclusivamente: mudança d
 
 ## Regras para Alterações e Correções
 
-Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que já existe:
+Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que já existe, **use a skill `/sdd-pipeline`**, que automatiza o fluxo completo:
 
-1. **Crie um Change Request (CR)** usando o template em `/docs/templates/00-template-change-request.md` e **crie a branch**: `git checkout -b feat/CR-[XXX]-[slug]`
-2. **Salve** em `/docs/changes/CR-[XXX]-[slug].md` (numere sequencialmente)
-3. **Avalie o impacto** nos documentos existentes (PRD, Arquitetura, Spec, Plano)
-4. **Atualize os documentos afetados** antes de implementar
-5. **Implemente** seguindo as tarefas do CR
-6. **Execute a revisão de segurança** (checklist OWASP — ver seção "Revisão de Segurança")
-7. **Valide** os critérios de aceite do CR + checklist "Done When Universal"
-8. **Verifique o build** TypeScript: `cd frontend && npx tsc --noEmit -p tsconfig.app.json`
-9. **Merge e push** da branch em `master`: `git checkout master && git merge feat/CR-XXX-slug --no-ff && git branch -d feat/CR-XXX-slug && git push origin master`
+> CR (template + numeração sequencial em `/docs/changes/`) → branch `feat/CR-XXX-slug` → avaliação de impacto e atualização dos docs afetados → implementação → revisão de segurança (checklist OWASP) → validação (critérios de aceite + Done When Universal) → build TS + lint → merge `--no-ff` em `master` + push.
+
+Os detalhes de cada etapa estão nas seções "Fluxo de Desenvolvimento", "Regras de Implementação" e "Fluxo de Branches" acima.
 
 **Nunca faça alterações direto no código sem antes documentar o CR.**
 
@@ -203,111 +198,37 @@ Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que j
 
 ## Estrutura de Pastas do Projeto
 
+Visão de alto nível — o detalhe arquivo-a-arquivo vive no `/docs/02-ARCHITECTURE.md` (§3, fonte da verdade da estrutura). Para o estado atual real, liste o filesystem (Glob) em vez de confiar em árvores documentadas.
+
 ```
 Personal Finance/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                # CR-035: CI — pytest (backend) + tsc/eslint (frontend)
-├── .claude/                      # Versionado desde CR-041 (exceto settings.local.json) — hooks, skills e settings do pipeline
-│   ├── hooks/
-│   │   └── check-frontend.js     # Bloqueia commit se tsc --noEmit ou eslint falhar (CR-035)
-│   ├── skills/
-│   │   ├── deploy-railway/       # Skill /deploy-railway: deploy manual no Railway
-│   │   ├── sdd-pipeline/         # Skill /sdd-pipeline: pipeline SDD completo (CR → commit)
-│   │   └── seed-demo/            # Skill /seed-demo: popular conta demo com dados ficticios
-│   └── settings.json             # Hook PreToolUse para git commit
-├── docs/
-│   ├── 01-PRD.md
-│   ├── 02-ARCHITECTURE.md
-│   ├── 03-SPEC.md
-│   ├── 04-IMPLEMENTATION-PLAN.md
-│   ├── 05-DEPLOY-GUIDE.md           # Guia de deploy, rollback e verificacao
-│   ├── specs/                # CR-038: specs por feature (01-core..08-alertas); 03-SPEC.md e o indice
-│   ├── Plano-de-evolucao.md          # Roadmap de melhorias de processo/infra
-│   ├── changes/              # Change Requests (CR-XXX) + INDEX.md (historico completo, CR-038)
-│   └── templates/            # Templates dos documentos
+├── .github/workflows/ci.yml   # CI: pytest (backend) + tsc/eslint (frontend) — CR-035
+├── .claude/                    # Versionado desde CR-041 (exceto settings.local.json)
+│   ├── hooks/check-frontend.js #   Bloqueia git commit se tsc --noEmit ou eslint falhar
+│   ├── skills/                 #   /deploy-railway, /seed-demo (/sdd-pipeline é global — CR-045)
+│   └── settings.json           #   Hook PreToolUse para git commit
+├── docs/                       # PRD, Arquitetura, Spec (03-SPEC.md é índice; detalhe em specs/),
+│   ├── changes/                #   Change Requests CR-XXX + INDEX.md (histórico completo)
+│   └── templates/              #   Templates obrigatórios dos documentos
 ├── backend/
-│   ├── requirements.txt
-│   ├── requirements-dev.txt      # CR-035: pytest; CR-041: pip-audit (deps de dev, fora da imagem de producao)
-│   ├── .env.example              # CR-041: template de env vars (copiar para .env)
-│   ├── alembic.ini
-│   ├── alembic/
-│   │   ├── env.py
-│   │   ├── script.py.mako
-│   │   └── versions/
-│   │       ├── 001_initial_schema.py
-│   │       ├── 002_add_users_and_auth.py  # CR-002
-│   │       ├── 003_add_origem_id.py       # RF-06
-│       ├── 004_add_daily_expenses.py  # CR-005
-│       ├── 005_add_expense_categories.py  # CR-016
-│       ├── 006_add_score_historico.py     # CR-026
-│       ├── 007_add_analise_financeira.py  # CR-032
-│       └── 008_add_alertas_tables.py     # CR-033
-│   ├── prompts/
-│       ├── financial_analysis_system.txt  # CR-032: system prompt IA
-│       └── financial_analysis_user.txt    # CR-032: user prompt template
-│   └── app/
-│       ├── __init__.py
-│       ├── main.py           # Entry point FastAPI + lifespan
-│       ├── database.py       # Engine SQLAlchemy + SessionLocal
-│       ├── models.py         # ORM: User, Expense, Income, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas
-│       ├── schemas.py        # Pydantic: request/response + auth + daily expense + dashboard + health score + AI analysis + alerts schemas
-│       ├── crud.py           # Acesso a dados + User/RefreshToken/DailyExpense CRUD + dashboard aggregates + score historico + analise financeira + alertas
-│       ├── services.py       # Logica: transicao de mes, auto-status, daily expenses summary, dashboard data, installment projection (CR-021)
-│       ├── utils.py          # Helpers de data (add_months com ajuste de fim de mes)
-│       ├── health_score.py   # CR-026: calculo deterministico score 0-100, 4 dimensoes, acoes, cenario conservador
-│       ├── ai_analysis.py    # CR-032: coletor de dados, prompt builder, cliente Anthropic, merger de acoes
-│       ├── alerts.py         # CR-033: AlertEngine + 7 checkers (A1-A8), motor de alertas on-demand
-│       ├── categories.py     # EXPENSE_CATEGORIES compartilhadas (CR-005, CR-016) + metodos de pagamento
-│       ├── auth.py           # CR-002: JWT + bcrypt auth module
-│       ├── email_service.py  # CR-002: SendGrid email (password reset)
-│       └── routers/
-│           ├── auth.py       # CR-002: register, login, Google OAuth, refresh, logout, forgot/reset password
-│           ├── users.py      # CR-002: GET/PATCH /me, change password
-│           ├── expenses.py   # CRUD + duplicate (auth required)
-│           ├── incomes.py    # CRUD (auth required)
-│           ├── months.py     # GET visao mensal (auth required)
-│           ├── daily_expenses.py  # CR-005: CRUD gastos diarios + categories (auth required)
-│           ├── dashboard.py      # CR-019: GET /api/dashboard/{year}/{month} (auth required)
-│           ├── score.py          # CR-026: GET /api/score, GET /api/score/history (auth required)
-│           ├── ai_analysis.py    # CR-032: GET /api/analysis (auth required)
-│           └── alerts.py        # CR-033: GET /api/alerts, PATCH seen/dismiss, GET/PUT config (auth required)
-│   ├── scripts/
-│       ├── seed_demo.py                    # CR-031: seed dados demo (idempotente, 6 meses)
-│       └── propagate_categories_mar2026.py # CR-016: script one-off
-│   └── tests/
-│       ├── conftest.py
-│       ├── test_services.py                # Transicao de mes, auto-status
-│       ├── test_installment_projection.py  # CR-021
-│       ├── test_health_score.py            # CR-026
-│       ├── test_ai_analysis.py             # CR-032
-│       └── test_alerts.py                  # CR-033
+│   ├── alembic/versions/       # Migrations 001..008 (aplicar antes de rodar o backend)
+│   ├── prompts/                # System/user prompts da análise IA (CR-032)
+│   ├── app/                    # main, database, models, schemas, crud, services, utils, auth,
+│   │   │                       #   rate_limit (CR-044), health_score, ai_analysis, alerts,
+│   │   │                       #   categories, email_service
+│   │   └── routers/            # auth, users, expenses, incomes, months, daily_expenses,
+│   │                           #   dashboard, score, ai_analysis, alerts (todos exigem auth)
+│   ├── scripts/                # seed_demo.py (idempotente) + scripts one-off
+│   └── tests/                  # pytest: services, installment_projection, health_score,
+│                               #   ai_analysis, alerts, security_headers, static_spa
 ├── frontend/
-│   ├── package.json
-│   ├── eslint.config.js      # CR-035: flat config — ts recommended + react-hooks
-│   ├── vitest.config.ts      # CR-039: environment jsdom; testes co-localizados (src/**/*.test.ts)
-│   ├── vite.config.ts        # Proxy /api -> :8000
-│   ├── index.html
-│   └── src/
-│       ├── main.tsx          # Bootstrap React + BrowserRouter
-│       ├── queryClient.ts    # CR-041: QueryClient singleton (fora do main.tsx para evitar dupla avaliacao do entry)
-│       ├── App.tsx           # Shell com AuthProvider + Routes
-│       ├── index.css         # Tailwind v4 (@import + @theme)
-│       ├── vite-env.d.ts     # Vite client types
-│       ├── types.ts          # Tipos + Auth types (CR-002) + DailyExpense types (CR-005) + Dashboard types (CR-019) + InstallmentProjection types (CR-021) + HealthScore types (CR-026) + AiAnalysis types (CR-032) + Alerts types (CR-033)
-│       ├── utils/            # format.ts (formatBRL, formatDateFull), date.ts
-│       ├── services/
-│       │   ├── api.ts        # HTTP client com auth header + 401 interceptor + daily expenses + dashboard + score + AI analysis + alerts API
-│       │   └── authApi.ts    # CR-002: auth API functions
-│       ├── contexts/
-│       │   └── AuthContext.tsx  # CR-002: auth state management
-│       ├── hooks/            # useExpenses, useIncomes, useMonthTransition, useAuth, useDailyExpenses, useDashboard, useInstallmentProjection, useHealthScore, useAiAnalysis, useAlerts
-│       ├── components/       # MonthNavigator, Tables, Forms, Modals, ProtectedRoute, UserMenu, ViewSelector, dashboard/, installments/, score/
-│       │   ├── installments/    # CR-021: ProjectionSummaryCards, ProjectionStackedChart, ProjectionGantt, ProjectionChartToggle
-│       │   ├── score/           # CR-026: ScoreGauge, ScoreDimensionBreakdown, ScoreHistoryChart, ScoreActions, ScoreConservativeNote
-│       │   ├── analysis/        # CR-032: DiagnosticoCard, AlertasList, BonsComportamentos, MetasSugeridas, GastosRecorrentes, MensagemMotivacional, AnalysisPlaceholder, AnalysisFooter
-│       │   └── alerts/          # CR-033: AlertItem, AlertBadge, AlertBanner, AlertsCard, AlertsModal, AlertsSettings
-│       └── pages/            # MonthlyView, DailyExpensesView, DashboardView, InstallmentsView, ScoreDetailView, LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage, ProfilePage
+│   └── src/                    # main.tsx, App.tsx, queryClient.ts, types.ts, index.css
+│       ├── services/           # api.ts (client + 401 interceptor), authApi.ts
+│       ├── contexts/           # AuthContext
+│       ├── hooks/              # useXxx por domínio (expenses, incomes, dashboard, score, alerts...)
+│       ├── components/         # + subpastas dashboard/, installments/, score/, analysis/, alerts/
+│       ├── pages/              # Views + páginas de auth
+│       └── utils/              # format.ts, date.ts
 ├── CLAUDE.md
 └── .gitignore
 ```
@@ -390,16 +311,13 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - [x] Referência de Categorias (`/docs/categorias_gastos.md`) — CR-005
 
 ### Change Requests
-> **Histórico completo (CR-001..CR-037) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
+> **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge, findings corrigidos ou justificados no CR (concluido)
 - CR-041: Housekeeping — queryClient em módulo próprio (fix createRoot duplicado), favicon, pip-audit no CI, .env.example, .claude/ versionado, spec F06 criada, 69 artefatos .js removidos (concluido)
 - CR-042: Update deps backend — python-jose 3.5, fastapi 0.139/starlette 1.3, python-dotenv 1.2, pytest 9; corrige 15 advisories do pip-audit; ecdsa aceito (HS256 não usa ECDSA) (concluido)
 - CR-043: Hotfix segurança — path traversal no fallback do SPA (main.py serve_spa); payloads percent-encoded (`/..%2f.env`) vazavam backend/.env; corrigido com contenção de path (`resolve_static_file` + is_relative_to) + 9 testes de regressão (concluido)
 - CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
-
-### Última Tarefa Implementada
-- CR-044: Hardening de segurança — rate limiting + CSP/HSTS (concluido)
+- CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (em implementação)
 
 ---
 
@@ -415,7 +333,7 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - **Não fabrique ferramentas.** Nunca invente ou adivinhe a existência de plugins, comandos CLI ou ferramentas. Se não tiver certeza, verifique a documentação primeiro. Se um comando falhar, reconheça o erro imediatamente.
 - **Planeje antes de codar.** Em tarefas complexas (3+ etapas), crie um plano TodoWrite detalhado antes de escrever qualquer código. Inclua: CR, arquivos a modificar, verificação de build, atualizações de docs, commit.
 - **Hook de frontend ativo.** O hook `.claude/hooks/check-frontend.js` intercepta `git commit` e executa `tsc --noEmit` + `eslint src` automaticamente (CR-035). Se o commit for bloqueado, corrija os erros antes de tentar novamente — não use `--no-verify`. Atenção: o hook dispara em qualquer comando Bash contendo a substring `git commit` (inclusive dentro de echo/printf).
-- **Use `/sdd-pipeline` para novas features/CRs.** A skill `/sdd-pipeline` automatiza todo o pipeline SDD: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/sdd-pipeline` no início de qualquer implementação.
+- **Use `/sdd-pipeline` para novas features/CRs.** A skill `/sdd-pipeline` automatiza todo o pipeline SDD: CR → avaliação de impacto em docs → implementação → build → atualização de docs → commit. Invoque com `/sdd-pipeline` no início de qualquer implementação. A skill é **global** (`C:\Users\Rafael\.claude\skills\sdd-pipeline\` — CR-045): melhorias no pipeline devem ser feitas lá, não em cópia local.
 
 ---
 
@@ -440,6 +358,12 @@ Referencia rapida de problemas encontrados durante o desenvolvimento e suas solu
 | Problema | Causa | Solucao |
 |----------|-------|---------|
 | `pip-audit` falha com `CERTIFICATE_VERIFY_FAILED` nesta maquina | Interceptacao de certificado local; requests/certifi nao confia (pip usa caminho de trust distinto) | Auditoria roda no CI (passo informativo no job backend, CR-041) — nao insistir localmente |
+
+### Frontend
+
+| Problema | Causa | Solucao |
+|----------|-------|---------|
+| Arquivos `.js` duplicando os `.tsx` em `frontend/src/` | Alguem rodou `tsc` sem `--noEmit`, emitindo JS ao lado dos fontes (removidos no CR-041, mas podem reaparecer) | Estao ignorados via `.gitignore` (`frontend/src/**/*.js`) e nao vao para o repo. **Sempre editar o `.tsx`/`.ts`** — nunca o `.js`. Pode deletar os `.js` com seguranca |
 
 ### Ambiente Windows
 
