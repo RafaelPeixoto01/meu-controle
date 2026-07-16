@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 2026-07-15
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael Peixoto (via Claude)
 **Prioridade:** Baixa
 
@@ -108,7 +108,7 @@ Só a versão global existe; o projeto a consome como qualquer outro. Melhorias 
 - [x] Fluxo afetado exercitado em runtime antes do merge — N/A: sem superfície de runtime da aplicação; validação aplicável é a resolução da skill (critério 2), já exercitada nesta sessão (CR-037)
 - [x] Revisão de código pré-merge — N/A: complexidade Baixa (CR-040)
 - [x] Revisão de segurança — N/A: sem endpoint, auth, dados de usuário ou dependência nova (remoção de arquivo de tooling)
-- [ ] CI verde após push em master
+- [x] CI verde após push em master (run 29466952520)
 - [x] Documentos afetados foram atualizados (CLAUDE.md; INDEX.md sem mudança — CR-040 já constava)
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.
@@ -160,3 +160,4 @@ Só a versão global existe; o projeto a consome como qualquer outro. Melhorias 
 |------------|--------|------------------------------------------------------------------|
 | 2026-07-15 | Claude | CR criado; skill global já promovida na mesma data (pré-requisito) |
 | 2026-07-15 | Claude | Implementação: remoção da pasta, CLAUDE.md atualizado (INDEX.md já continha CR-040) |
+| 2026-07-15 | Claude | CI verde (run 29466952520) — validação realizada, status: ✅ Concluído |
