@@ -64,10 +64,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=frontend-build /app/frontend/dist ./static
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*"]
 ```
 
 > **Nota:** O `ARG VITE_GOOGLE_CLIENT_ID` e legado. O frontend busca o Google Client ID em runtime via `GET /api/config`. O ARG pode ser removido em futura limpeza.
+
+> **Nota (CR-044):** `--proxy-headers --forwarded-allow-ips=*` faz o uvicorn derivar o IP real do cliente do header `X-Forwarded-For` (setado pelo proxy do Railway). Sem isso, o rate limiting por IP (CR-044) veria o IP do proxy e trataria todos os usuarios como um so. Como o container so e acessivel via proxy do Railway, confiar no peer imediato (`*`) e seguro.
 
 ---
 

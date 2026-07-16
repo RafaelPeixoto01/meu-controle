@@ -31,6 +31,7 @@
 | HTTP Client (back)  | httpx                            | 0.27+         | Chamadas backend→Google para OAuth2 token exchange (CR-002, ADR-016) |
 | Email               | SendGrid (sendgrid)              | 6.11+         | Envio de emails de recuperacao de senha (CR-002) |
 | Form Data           | python-multipart                 | 0.0.9+        | Parsing de form data para OAuth2PasswordBearer do FastAPI (CR-002) |
+| Rate Limiting       | slowapi                          | 0.1+          | Limite de requisições em endpoints de auth (login, forgot-password) — storage em memória, chave por IP (CR-044) |
 | Env Loading         | python-dotenv                    | 1.0+          | Carrega variaveis de `.env` no backend para desenvolvimento local |
 | Arquitetura         | Monorepo                         | —             | Frontend e backend no mesmo repositorio, deploy simplificado |
 

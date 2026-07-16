@@ -22,4 +22,8 @@ COPY --from=frontend-build /app/frontend/dist ./static
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# --proxy-headers + --forwarded-allow-ips: no Railway o app fica atras de um proxy;
+# sem isso request.client.host seria o IP do proxy e o rate limiting (CR-044) trataria
+# todos os usuarios como um so. O container so e acessivel via proxy do Railway, entao
+# confiar no peer imediato ("*") e seguro.
+CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=*"]
