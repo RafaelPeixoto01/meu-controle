@@ -1,8 +1,8 @@
 # Change Request — CR-044: Hardening — rate limiting em auth + CSP/HSTS
 
-**Versão:** 1.1
+**Versão:** 1.2
 **Data:** 2026-07-15
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude / auditoria transversal)
 **Prioridade:** Alta
 
@@ -148,7 +148,7 @@ segurança (2026-07-15), complementando o CR-043:
 - [x] Fluxo afetado exercitado em runtime antes do merge — ver §8.1
 - [x] Revisão de código pré-merge executada — ver §8.2
 - [x] Nova dependência `slowapi` auditada — ver §8.3
-- [ ] CI verde após push — pendente de evento posterior (mantém CR "Em Implementação")
+- [x] CI verde após push — run 29464403234: Backend (pytest) ✅ + Frontend (tsc + eslint) ✅ (pip-audit informativo passou, sem advisories bloqueantes)
 - [x] Documentos afetados foram atualizados (este CR, `CLAUDE.md`, `02-ARCHITECTURE.md`, `05-DEPLOY-GUIDE.md`, memory)
 
 ### 8.1 Validação Runtime
@@ -218,3 +218,4 @@ Revisão estruturada do diff completo (8 ângulos). **1 finding encontrado e cor
 | 2026-07-15 | Claude | CR criado                    |
 | 2026-07-15 | Claude | Implementação iniciada       |
 | 2026-07-15 | Claude | Implementação concluída — slowapi (5/min login, 3/min forgot-password), CSP + HSTS, proxy-headers no Dockerfile; 5 testes novos (104 total); validação runtime (429 + headers + CSP na UI via Playwright, 0 violações); code review 1 finding corrigido (proxy-headers); docs atualizados. Aguardando CI verde pós-push. |
+| 2026-07-15 | Claude | Validação realizada — status: ✅ CI verde (run 29464403234, Backend + Frontend). CR **Concluído**. |
