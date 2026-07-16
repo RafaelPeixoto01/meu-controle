@@ -391,14 +391,14 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 ### Change Requests
 > **Histórico completo (CR-001..CR-037) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-038: Dividir 03-SPEC.md em specs por feature — 03-SPEC.md vira índice, conteúdo em docs/specs/ (8 arquivos); histórico de CRs movido para docs/changes/INDEX.md (concluido)
 - CR-039: Testes de frontend com Vitest — 26 testes (utils/date, utils/format, services/api com interceptor 401) + passo no job frontend do CI (concluido)
 - CR-040: Revisão de código pré-merge — CRs de complexidade Média/Alta rodam /code-review no diff da branch antes do merge, findings corrigidos ou justificados no CR (concluido)
 - CR-041: Housekeeping — queryClient em módulo próprio (fix createRoot duplicado), favicon, pip-audit no CI, .env.example, .claude/ versionado, spec F06 criada, 69 artefatos .js removidos (concluido)
 - CR-042: Update deps backend — python-jose 3.5, fastapi 0.139/starlette 1.3, python-dotenv 1.2, pytest 9; corrige 15 advisories do pip-audit; ecdsa aceito (HS256 não usa ECDSA) (concluido)
+- CR-043: Hotfix segurança — path traversal no fallback do SPA (main.py serve_spa); payloads percent-encoded (`/..%2f.env`) vazavam backend/.env; corrigido com contenção de path (`resolve_static_file` + is_relative_to) + 9 testes de regressão (em implementação, aguardando CI)
 
 ### Última Tarefa Implementada
-- CR-042: Update de dependências backend (segurança) (concluido)
+- CR-043: Hotfix de segurança — path traversal no fallback do SPA (em implementação, aguardando CI verde pós-push)
 
 ---
 
