@@ -84,13 +84,31 @@ def get_public_config():
 
 # Serve frontend static files in production
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+def resolve_static_file(base_dir: Path, full_path: str) -> Path | None:
+    """
+    Resolve full_path (vindo da URL) para um arquivo dentro de base_dir.
+
+    Retorna o Path do arquivo apenas se ele existir E estiver contido em base_dir.
+    Retorna None caso contrario (rota de SPA, arquivo inexistente, ou tentativa de
+    path traversal — inclusive percent-encoded como '..%2f', que o Starlette entrega
+    ja decodificado em full_path). Previne leitura arbitraria de arquivos (CWE-22, CR-043).
+    """
+    base = base_dir.resolve()
+    candidate = (base / full_path).resolve()
+    if candidate.is_file() and candidate.is_relative_to(base):
+        return candidate
+    return None
+
+
 if STATIC_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve index.html for all non-API routes (SPA fallback)."""
-        file_path = STATIC_DIR / full_path
-        if file_path.is_file():
+        file_path = resolve_static_file(STATIC_DIR, full_path)
+        if file_path is not None:
             return FileResponse(file_path)
         return FileResponse(STATIC_DIR / "index.html")
