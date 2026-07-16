@@ -31,8 +31,9 @@ Este projeto segue um fluxo de desenvolvimento baseado em documentação. **Nunc
 | 3 | Spec Técnica | `/docs/03-SPEC.md` | Detalhamento técnico de cada feature |
 | 4 | Plano de Implementação | `/docs/04-IMPLEMENTATION-PLAN.md` | Ordem e dependências das tarefas |
 | 5 | Implementação | Código-fonte | Construção efetiva |
-| 6 | Validação | Checklist "Done When" | Verificar critérios de aceite antes do deploy |
-| 7 | Deploy e Release | `/docs/05-DEPLOY-GUIDE.md` | Procedimentos de deploy, rollback e verificação |
+| 6 | Revisão de Segurança | Checklist OWASP | Novos endpoints, auth, CRUD com dados de usuário, novas dependências |
+| 7 | Validação | Checklist "Done When" | Verificar critérios de aceite antes do deploy |
+| 8 | Deploy e Release | `/docs/05-DEPLOY-GUIDE.md` | Procedimentos de deploy, rollback e verificação |
 
 ### Regra de Ouro
 
@@ -65,6 +66,7 @@ Ao criar qualquer documento do fluxo, **use obrigatoriamente o template correspo
 | Arquitetura | `/docs/templates/02-template-architecture.md` |
 | Spec Técnica | `/docs/templates/03-template-spec.md` |
 | Plano de Implementação | `/docs/templates/04-template-implementation-plan.md` |
+| CLAUDE.md | `/docs/templates/CLAUDE-template.md` |
 
 ---
 
@@ -95,15 +97,38 @@ Toda tarefa (CR-T-XX, T-XXX) só é considerada concluída quando:
 **Obrigatórios:**
 - [ ] Funcionalidade implementada conforme descrito na tarefa
 - [ ] App roda localmente sem erros (backend + frontend)
+- [ ] Fluxo afetado exercitado em runtime antes do merge — teste de UI ou chamada HTTP real ao endpoint — com registro no CR do que foi validado; ou justificativa de N/A no CR
 - [ ] Testes existentes continuam passando (regressão)
 - [ ] Novos testes cobrem a funcionalidade adicionada/alterada
 - [ ] Commit segue Conventional Commits e referencia o ID da tarefa
 
 **Se aplicável:**
+- [ ] Revisão de código pré-merge executada no diff da branch para CRs de complexidade Média/Alta, com findings corrigidos ou justificados no CR
 - [ ] Migration testada: upgrade + downgrade
 - [ ] Endpoints respondem com status codes corretos
 - [ ] Documentos afetados atualizados (Spec, Architecture, CLAUDE.md)
 - [ ] Sem erros/warnings no console do browser (frontend)
+- [ ] Revisão de segurança realizada (checklist OWASP — ver seção "Revisão de Segurança")
+
+### Revisão de Segurança
+
+**Quando executar** — obrigatório se a tarefa/CR envolver:
+- Novo endpoint ou mudança em endpoint existente
+- Autenticação, tokens, cookies ou sessões
+- CRUD com dados de outros usuários (verificação de ownership)
+- Nova dependência (biblioteca externa)
+
+Pular com justificativa explícita apenas se a mudança for exclusivamente: UI sem novos endpoints, atualização de documentação, ou refactoring interno sem alteração de contrato.
+
+**Checklist OWASP (adapte à stack do projeto):**
+- [ ] Sem segredos hardcoded no código (chaves, API keys, tokens)
+- [ ] Inputs do usuário validados no backend antes de uso no banco
+- [ ] Tokens sensíveis não armazenados em `localStorage` (preferir cookie HttpOnly)
+- [ ] Endpoints de dados verificam ownership (usuário acessa só seus próprios recursos)
+- [ ] Queries usam ORM parametrizado — sem concatenação de SQL raw
+- [ ] CORS: origins e headers explícitos; credenciais exigem origins não-wildcard
+- [ ] Headers de segurança HTTP presentes
+- [ ] Novas dependências auditadas (ex: `pip audit` / `npm audit`)
 
 ### Fluxo de Branches
 
@@ -247,6 +272,7 @@ Quando eu pedir uma alteração, correção ou nova funcionalidade em algo que j
 
 ## Lembretes Importantes
 
+- **CR só é "Concluído" com todos os checkboxes fechados.** Nenhum CR pode receber Status "Concluído" com critérios de aceite desmarcados — cada um deve estar `[x]` ou riscado com justificativa. Critério pendente de evento posterior (ex: CI verde) mantém o CR "Em Implementação" até o follow-up.
 - **Pergunte antes de assumir.** Se algo não está claro na spec, pergunte.
 - **Não corrija o que não foi pedido.** Foque apenas no escopo da tarefa.
 - **Testes são obrigatórios.** Toda funcionalidade precisa de cobertura.

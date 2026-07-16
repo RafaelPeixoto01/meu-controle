@@ -114,6 +114,7 @@ ALTER TABLE ...;
 - [ ] Novos testes cobrem a mudança
 - [ ] Fluxo afetado exercitado em runtime antes do merge — descrever O QUE foi validado e o resultado (Playwright para UI, chamada HTTP para endpoints); ou "N/A — [justificativa]" (CR-037)
 - [ ] [Se complexidade Média/Alta] Revisão de código pré-merge (`/code-review` no diff da branch) executada — registrar findings corrigidos/justificados; ou "N/A — complexidade Baixa" (CR-040)
+- [ ] Revisão de segurança (checklist OWASP do CLAUDE.md) executada — obrigatória se o CR envolver endpoint novo/alterado, auth/tokens/cookies, CRUD com dados de usuário ou nova dependência; ou "N/A — [justificativa: só UI sem endpoints / só docs / refactoring sem mudança de contrato]"
 - [ ] Documentos afetados foram atualizados
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.

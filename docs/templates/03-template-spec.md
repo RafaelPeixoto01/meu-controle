@@ -6,6 +6,8 @@
 **Arquitetura Ref:** 02-ARCHITECTURE v1.0
 **CR Ref:** — *(preencher quando atualizado por Change Requests)*
 
+> **Estrutura de specs (CR-038):** `/docs/03-SPEC.md` é apenas o **índice** das features — o detalhamento de cada uma vive em arquivo próprio em `/docs/specs/` (ex: `/docs/specs/05-dashboard.md`, numeração sequencial + slug), usando este template. Ao criar a spec de uma feature nova: criar o arquivo em `/docs/specs/` e adicionar a entrada correspondente no índice `03-SPEC.md`. Não carregar todas as specs para ler uma feature — abrir só a spec afetada.
+
 ---
 
 ## 1. Resumo das Mudanças
