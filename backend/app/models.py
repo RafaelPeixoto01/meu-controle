@@ -39,6 +39,7 @@ class User(Base):
     analises_financeiras = relationship("AnaliseFinanceira", back_populates="user", cascade="all, delete-orphan")  # CR-032
     alertas = relationship("AlertaEstado", back_populates="user", cascade="all, delete-orphan")  # CR-033
     configuracao_alertas = relationship("ConfiguracaoAlertas", back_populates="user", uselist=False, cascade="all, delete-orphan")  # CR-033
+    import_batches = relationship("ImportBatch", back_populates="user", cascade="all, delete-orphan")  # CR-046
 
 
 class Expense(Base):
@@ -202,6 +203,87 @@ class AnaliseFinanceira(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
     user = relationship("User", back_populates="analises_financeiras")
+
+
+class ImportBatch(Base):
+    """CR-046 (F07): Lote de importacao de extrato/fatura em staging.
+
+    O PDF nunca e persistido (RN-043) — apenas metadados e as transacoes extraidas.
+    """
+    __tablename__ = "import_batches"
+    __table_args__ = (
+        Index("ix_import_batches_user_status", "user_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    banco_detectado: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    tipo_documento: Mapped[str | None] = mapped_column(String(20), nullable=True)  # extrato | fatura
+    status: Mapped[str] = mapped_column(
+        String(20), default="pendente_revisao", nullable=False
+    )  # pendente_revisao | confirmado | descartado
+    tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    modelo: Mapped[str] = mapped_column(String(50), nullable=False)
+    tempo_processamento_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=datetime.now, onupdate=datetime.now
+    )
+
+    user = relationship("User", back_populates="import_batches")
+    transacoes = relationship(
+        "ImportTransaction",
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        order_by="ImportTransaction.data",
+    )
+
+
+class ImportTransaction(Base):
+    """CR-046 (F07): Transacao extraida de um extrato/fatura, aguardando revisao."""
+    __tablename__ = "import_transactions"
+    __table_args__ = (
+        Index("ix_import_tx_user_fingerprint", "user_id", "fingerprint"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    batch_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("import_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    data: Mapped[date] = mapped_column(Date, nullable=False)
+    descricao: Mapped[str] = mapped_column(String(255), nullable=False)
+    valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    classificacao: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # gasto_diario | match_planejado | ignorar
+    motivo_ignorar: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expense_id_sugerido: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    categoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subcategoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    metodo_pagamento: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256 hex (RN-042)
+    status: Mapped[str] = mapped_column(
+        String(20), default="pendente", nullable=False
+    )  # pendente | confirmada | descartada | duplicada
+    daily_expense_id_criado: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    expense_id_atualizado: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=datetime.now, onupdate=datetime.now
+    )
+
+    batch = relationship("ImportBatch", back_populates="transacoes")
 
 
 class AlertaEstado(Base):

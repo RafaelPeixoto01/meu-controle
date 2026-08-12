@@ -1,0 +1,14 @@
+Extraia e classifique todas as transações do documento PDF anexado.
+
+Data de hoje: {{data_hoje}}
+
+CATEGORIAS E SUBCATEGORIAS VÁLIDAS (use exatamente estes nomes; a subcategoria deve pertencer à categoria):
+{{categorias}}
+
+MÉTODOS DE PAGAMENTO VÁLIDOS:
+{{metodos_pagamento}}
+
+GASTOS PLANEJADOS EM ABERTO DO USUÁRIO (candidatos a "match_planejado" — use o id exato):
+{{gastos_planejados}}
+
+Responda apenas com o JSON no formato especificado.
