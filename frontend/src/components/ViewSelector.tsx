@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import AlertBadge from "./alerts/AlertBadge";
 import { useAlerts } from "../hooks/useAlerts";
 
-type ViewId = "dashboard" | "planejados" | "diarios" | "parcelas" | "score";
+type ViewId = "dashboard" | "planejados" | "diarios" | "parcelas" | "score" | "importar";
 
 const VIEWS: { id: ViewId; label: string; path: string }[] = [
   { id: "dashboard", label: "Dashboard", path: "/dashboard" },
@@ -10,6 +10,7 @@ const VIEWS: { id: ViewId; label: string; path: string }[] = [
   { id: "diarios", label: "Gastos Diários", path: "/daily-expenses" },
   { id: "parcelas", label: "Parcelas", path: "/installments" },
   { id: "score", label: "Score", path: "/score" },
+  { id: "importar", label: "Importar", path: "/import" },
 ];
 
 function getActiveView(pathname: string): ViewId {
@@ -17,6 +18,7 @@ function getActiveView(pathname: string): ViewId {
   if (pathname === "/daily-expenses") return "diarios";
   if (pathname === "/installments") return "parcelas";
   if (pathname === "/score") return "score";
+  if (pathname === "/import") return "importar";
   return "planejados";
 }
 

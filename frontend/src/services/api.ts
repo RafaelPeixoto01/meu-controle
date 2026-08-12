@@ -19,6 +19,11 @@ import type {
   AiAnalysisResponse,
   AlertasResponse,
   ConfiguracaoAlertas,
+  ImportBatch,
+  ImportBatchSummary,
+  ImportConfirmRequest,
+  ImportConfirmResponse,
+  ImportUploadResponse,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -75,6 +80,61 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
   if (response.status === 204) return undefined as T;
+  return response.json();
+}
+
+// CR-047: caminho multipart — o browser define o Content-Type (com boundary);
+// seta-lo manualmente quebraria o parse do FormData no backend
+async function requestMultipart<T>(url: string, formData: FormData): Promise<T> {
+  const token = localStorage.getItem("access_token");
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${BASE_URL}${url}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  // Mesmo interceptor de refresh do request() JSON (CR-002)
+  if (response.status === 401 && token) {
+    let newToken: string | null = null;
+    try {
+      const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (refreshResponse.ok) {
+        const tokens = await refreshResponse.json();
+        newToken = tokens.access_token;
+      }
+    } catch {
+      // Refresh falhou — tratado abaixo
+    }
+    if (newToken) {
+      localStorage.setItem("access_token", newToken);
+      const retryResponse = await fetch(`${BASE_URL}${url}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${newToken}` },
+        body: formData,
+      });
+      if (!retryResponse.ok) {
+        const error = await retryResponse.json().catch(() => ({}));
+        throw new Error(error.detail || `HTTP ${retryResponse.status}`);
+      }
+      return retryResponse.json();
+    }
+    localStorage.removeItem("access_token");
+    window.location.href = "/login";
+    throw new Error("Sessão expirada");
+  }
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
   return response.json();
 }
 
@@ -218,6 +278,36 @@ export function fetchScoreHistory(months = 12): Promise<ScoreHistoryData> {
 
 export function fetchAiAnalysis(): Promise<AiAnalysisResponse> {
   return request<AiAnalysisResponse>("/analysis");
+}
+
+// ========== Imports (CR-047, F07) ==========
+
+export function uploadImport(file: File): Promise<ImportUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestMultipart<ImportUploadResponse>("/imports", formData);
+}
+
+export function fetchPendingImports(): Promise<ImportBatchSummary[]> {
+  return request<ImportBatchSummary[]>("/imports/pending");
+}
+
+export function fetchImportBatch(batchId: string): Promise<ImportBatch> {
+  return request<ImportBatch>(`/imports/${batchId}`);
+}
+
+export function confirmImport(
+  batchId: string,
+  data: ImportConfirmRequest
+): Promise<ImportConfirmResponse> {
+  return request<ImportConfirmResponse>(`/imports/${batchId}/confirm`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteImportBatch(batchId: string): Promise<void> {
+  return request<void>(`/imports/${batchId}`, { method: "DELETE" });
 }
 
 // ========== Alerts (CR-033) ==========

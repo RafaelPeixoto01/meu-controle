@@ -468,6 +468,68 @@ export interface ConfiguracaoAlertas {
   alerta_ia: boolean;
 }
 
+// ========== Import Types (CR-047, F07) ==========
+
+export type ImportClassificacao = "gasto_diario" | "match_planejado" | "ignorar";
+export type ImportTransactionStatus = "pendente" | "confirmada" | "descartada" | "duplicada";
+export type ImportBatchStatus = "pendente_revisao" | "confirmado" | "descartado";
+export type ImportAcao = "criar_gasto_diario" | "atualizar_planejado" | "descartar";
+
+export interface ImportTransaction {
+  id: string;
+  data: string;
+  descricao: string;
+  valor: number;
+  classificacao: ImportClassificacao;
+  motivo_ignorar: string | null;
+  expense_id_sugerido: string | null;
+  categoria: string | null;
+  subcategoria: string | null;
+  metodo_pagamento: string | null;
+  status: ImportTransactionStatus;
+}
+
+export interface ImportBatchSummary {
+  id: string;
+  filename: string;
+  banco_detectado: string | null;
+  tipo_documento: "extrato" | "fatura" | null;
+  status: ImportBatchStatus;
+  created_at: string;
+}
+
+export interface ImportBatch extends ImportBatchSummary {
+  transacoes: ImportTransaction[];
+}
+
+export interface ImportUploadResponse {
+  status: "disponivel" | "indisponivel" | "erro";
+  reason: string | null;
+  batch: ImportBatch | null;
+}
+
+export interface ImportConfirmDecision {
+  id: string;
+  acao: ImportAcao;
+  descricao?: string;
+  valor?: number;
+  data?: string;
+  categoria?: string;
+  subcategoria?: string;
+  metodo_pagamento?: string;
+  expense_id?: string;
+}
+
+export interface ImportConfirmRequest {
+  transacoes: ImportConfirmDecision[];
+}
+
+export interface ImportConfirmResponse {
+  gastos_diarios_criados: number;
+  planejados_atualizados: number;
+  descartadas: number;
+}
+
 // ========== Auth Types (CR-002) ==========
 
 export interface User {
