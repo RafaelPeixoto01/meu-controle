@@ -1,8 +1,8 @@
 # Change Request — CR-048: Migrar os serviços de IA para Claude Opus 5
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-08-12
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -254,3 +254,4 @@ O CR não cria endpoint, não mexe em auth/tokens/ownership e não adiciona depe
 | 2026-08-12 | Claude | Implementação concluída: 2 serviços migrados, `extract_response_text` + `AiRefusalError` compartilhados, 11 testes novos (149 backend / 47 frontend verdes) |
 | 2026-08-12 | Claude | Validação runtime ✅ (8.1, com limitação registrada), code review ✅ (8.2: 0 bugs, 1 observação acatada — max_tokens da análise para 16000), revisão de segurança ✅ (8.3) |
 | 2026-08-12 | Claude | Docs sincronizados (ADR-019, specs 09/10, Deploy Guide, .env.example, Plano, CLAUDE.md, INDEX). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |
+| 2026-08-12 | Claude | Merge --no-ff em master + push; CI verde (run 31649508898). Status → Concluído. Validação ✅ |
