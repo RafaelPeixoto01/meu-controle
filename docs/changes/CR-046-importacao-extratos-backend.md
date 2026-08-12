@@ -1,8 +1,8 @@
 # Change Request — CR-046: Importação de Extratos e Faturas em PDF via IA (Backend — F07)
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-08-12
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -280,3 +280,4 @@ Executado sobre `git diff master...HEAD` (agentes de revisão: bugs + aderência
 | 2026-08-12 | Claude | Implementação concluída: modelos + migration 009 (up/down testados), import_service, router /api/imports, 34 testes (suíte 138 verde) |
 | 2026-08-12 | Claude | Validação runtime via HTTP ✅ (seção 8.1), revisão de segurança ✅ (8.3), code review pré-merge ✅ (8.2: 3 fixes + testes) |
 | 2026-08-12 | Claude | Docs sincronizados (PRD v3.1, Spec v3.2, Arquitetura v3.0/ADR-018, Plano v3.0, Deploy Guide, CLAUDE.md). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |
+| 2026-08-12 | Claude | Merge --no-ff em master + push; CI verde (run 31645159244). Status → Concluído. Validação ✅ |

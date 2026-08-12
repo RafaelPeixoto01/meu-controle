@@ -318,7 +318,7 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - CR-043: Hotfix segurança — path traversal no fallback do SPA (main.py serve_spa); payloads percent-encoded (`/..%2f.env`) vazavam backend/.env; corrigido com contenção de path (`resolve_static_file` + is_relative_to) + 9 testes de regressão (concluido)
 - CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
 - CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (concluido)
-- CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (em implementação — aguardando CI)
+- CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (concluido)
 
 ---
 
