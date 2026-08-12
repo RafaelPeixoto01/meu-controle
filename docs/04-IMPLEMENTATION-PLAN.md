@@ -5,7 +5,7 @@
 **PRD Ref:** 01-PRD v3.1
 **Arquitetura Ref:** 02-ARCHITECTURE v2.9
 **Spec Ref:** 03-SPEC v3.2
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046 (Importacao de Extratos — backend F07)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046 (Importacao de Extratos — backend F07), CR-047 (Importacao de Extratos — frontend F07)
 
 ---
 
@@ -41,6 +41,7 @@
 | CR-028 | Fix badge "Encerrando" duplicado em parcelas com mesmo nome                | CR28-T-01 a CR28-T-05 | Concluido |
 | CR-033 | Alertas e Notificacoes Inteligentes (F05)                                      | CR33-T-01 a CR33-T-31 | Concluido |
 | CR-046 | Importacao de Extratos/Faturas PDF via IA — backend (F07; tarefas no CR)        | CR-T-01 a CR-T-09     | Concluido |
+| CR-047 | Importacao de Extratos/Faturas — frontend (F07; tarefas no CR)                   | CR-T-01 a CR-T-08     | Concluido |
 
 ---
 

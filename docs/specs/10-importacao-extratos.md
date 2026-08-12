@@ -1,4 +1,4 @@
-# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046/CR-047)
+# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend)
 
 **PRD Ref:** RF-21, US-29, RN-038..RN-043
 
@@ -140,12 +140,16 @@ Sem alteração nas tabelas existentes.
 - Ownership: get/confirm/delete de lote de outro usuário → 404
 - PDF não persistido (nenhum arquivo escrito)
 
-## Frontend (CR-047 — resumo; detalhar no CR)
+## Frontend (CR-047)
 
-- Rota `/import` (ProtectedRoute) + aba "Importar" no ViewSelector
-- Stepper: upload (drag&drop) → processando → revisão (grupos: novos gastos / matches / ignoradas / duplicadas, edição inline) → resultado
-- `services/api.ts`: caminho para `FormData` (sem Content-Type manual, mantendo refresh-401)
-- `hooks/useImports.ts`: mutations de upload/confirm/delete + query de pending; confirm invalida `daily-expenses-summary` e queries de expenses
+- Rota `/import` (ProtectedRoute) + aba "Importar" no ViewSelector (6ª aba)
+- `pages/ImportView.tsx` — máquina de estados do fluxo: `upload` → (processando via mutation) → `review` → `result`; oferece retomada de lotes `pendente_revisao` ao entrar
+- `components/imports/ImportUpload.tsx` — seleção de PDF com validação client-side (extensão + 10MB), estado "processando" (aviso de até ~90s), banner de lotes pendentes (retomar/descartar), exibição de `indisponivel`/`erro` sem quebrar
+- `components/imports/ImportReview.tsx` — grupos (novos gastos / conciliações / ignoradas / duplicadas), checkbox por transação (ignoradas e duplicadas nascem desmarcadas), edição inline (destino, valor, data, descrição, categoria+subcategoria em cascata, método), validação por linha antes do confirm (inclui guarda contra pagar o mesmo planejado 2x — espelho da regra do backend); conciliação mostra o planejado alvo (nome, parcela, valor, status, vencimento)
+- `components/imports/ImportResult.tsx` — contadores do resultado + navegação (Gastos Diários / Planejados / importar outro)
+- `utils/importReview.ts` — helpers puros testados: `groupTransactions`, `buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`, `monthsToFetchForMatches`
+- `hooks/useImports.ts` — `usePendingImports`, `useMatchTargets` (mapa expense_id→Expense dos meses das transações + atual/anterior), `useUploadImport`, `useConfirmImport` (invalida `imports-pending`, `daily-expenses-summary`, `monthly-summary`, `dashboard`, `installments`, `alerts`), `useDiscardImport`
+- `services/api.ts`: `requestMultipart` — FormData sem Content-Type manual, Bearer token e interceptor refresh-401 com retry (erro pós-refresh expõe o `detail` do backend)
 
 ## Referências
 

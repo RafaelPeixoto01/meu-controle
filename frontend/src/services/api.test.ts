@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchMonthlySummary, deleteExpense } from "./api";
+import { fetchMonthlySummary, deleteExpense, uploadImport } from "./api";
 
 // Response minima compativel com o que request() consome
 function makeResponse(status: number, body?: unknown): Response {
@@ -111,5 +111,64 @@ describe("request — tratamento de erros e respostas", () => {
     fetchMock.mockResolvedValueOnce(makeResponse(204));
 
     await expect(deleteExpense("exp-1")).resolves.toBeUndefined();
+  });
+});
+
+describe("requestMultipart — upload de importacao (CR-047)", () => {
+  const pdfFile = new File(["%PDF-1.4 fake"], "fatura.pdf", { type: "application/pdf" });
+
+  it("envia FormData com o arquivo, Bearer token e SEM Content-Type manual", async () => {
+    localStorage.setItem("access_token", "tok-123");
+    fetchMock.mockResolvedValueOnce(makeResponse(201, { status: "disponivel" }));
+
+    await uploadImport(pdfFile);
+
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/imports");
+    expect(options.method).toBe("POST");
+    expect(options.body).toBeInstanceOf(FormData);
+    expect((options.body as FormData).get("file")).toBe(pdfFile);
+    const headers = options.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer tok-123");
+    // O browser define o Content-Type com boundary; seta-lo quebraria o multipart
+    expect(headers["Content-Type"]).toBeUndefined();
+  });
+
+  it("em 401 faz refresh e refaz o upload com o token novo", async () => {
+    localStorage.setItem("access_token", "tok-velho");
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(401)) // upload original
+      .mockResolvedValueOnce(makeResponse(200, { access_token: "tok-novo" })) // refresh
+      .mockResolvedValueOnce(makeResponse(201, { status: "disponivel" })); // retry
+
+    const result = await uploadImport(pdfFile);
+
+    expect(result).toEqual({ status: "disponivel" });
+    expect(localStorage.getItem("access_token")).toBe("tok-novo");
+    const retryOptions = fetchMock.mock.calls[2][1];
+    expect((retryOptions.headers as Record<string, string>).Authorization).toBe(
+      "Bearer tok-novo"
+    );
+    expect(retryOptions.body).toBeInstanceOf(FormData);
+  });
+
+  it("erro do retry pos-refresh expoe o detail do backend (nao 'Sessão expirada')", async () => {
+    localStorage.setItem("access_token", "tok-velho");
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(401))
+      .mockResolvedValueOnce(makeResponse(200, { access_token: "tok-novo" }))
+      .mockResolvedValueOnce(makeResponse(422, { detail: "Apenas arquivos PDF são aceitos" }));
+
+    await expect(uploadImport(pdfFile)).rejects.toThrow("Apenas arquivos PDF são aceitos");
+  });
+
+  it("com refresh falho: remove o token e lanca 'Sessão expirada'", async () => {
+    localStorage.setItem("access_token", "tok-velho");
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(401))
+      .mockResolvedValueOnce(makeResponse(401)); // refresh nega
+
+    await expect(uploadImport(pdfFile)).rejects.toThrow("Sessão expirada");
+    expect(localStorage.getItem("access_token")).toBeNull();
   });
 });
