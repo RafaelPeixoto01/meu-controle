@@ -150,18 +150,53 @@ A recomendação oficial para reduzir custo é **manter o raciocínio ligado e b
 
 ## 8. Critérios de Aceite
 
-- [ ] Nenhuma chamada à API envia `temperature` (verificado nos kwargs do mock)
-- [ ] Default de `CLAUDE_MODEL` é `claude-opus-5` nos dois serviços
-- [ ] Resposta cujo primeiro bloco é `thinking` é lida corretamente (texto extraído do bloco certo)
-- [ ] Resposta com `stop_reason == "refusal"` falha imediatamente com mensagem clara, sem consumir os retries
-- [ ] `max_tokens` e timeouts ajustados conforme a seção 6.3
-- [ ] Importação envia `effort: low`; análise usa o padrão
-- [ ] Testes existentes continuam passando (regressão backend + frontend)
-- [ ] Novos testes cobrem a mudança
-- [ ] Fluxo afetado exercitado em runtime antes do merge — ou "N/A" com justificativa
-- [ ] Revisão de código pré-merge executada (complexidade Média)
-- [ ] Revisão de segurança executada ou justificada
-- [ ] Documentos afetados foram atualizados
+- [x] Nenhuma chamada à API envia `temperature` — `test_nao_envia_temperature` nos dois serviços (também verifica `top_p`/`top_k`)
+- [x] Default de `CLAUDE_MODEL` é `claude-opus-5` nos dois serviços — constante `DEFAULT_MODEL`, asserida nos testes
+- [x] Resposta cujo primeiro bloco é `thinking` é lida corretamente — `test_le_texto_apos_bloco_de_thinking` (2x) + `TestExtractResponseText`
+- [x] `stop_reason == "refusal"` falha imediatamente sem consumir retries — `test_recusa_nao_faz_retry` assere `call_count == 1`
+- [x] `max_tokens` e timeouts ajustados — 16000 nos dois (ver 8.2, finding do review); 120s/180s
+- [x] Importação envia `effort: low`; análise usa o padrão — asserido em `test_modelo_default_thinking_e_effort`
+- [x] Testes existentes continuam passando — backend **149 passed**; frontend Vitest 47/47, tsc limpo
+- [x] Novos testes cobrem a mudança — **11 novos** (7 em `test_ai_analysis.py`, 4 em `test_imports.py`)
+- [x] Fluxo afetado exercitado em runtime antes do merge — ver seção 8.1
+- [x] Revisão de código pré-merge executada — ver seção 8.2
+- [x] Revisão de segurança — ver seção 8.3
+- [x] Documentos afetados foram atualizados — ADR-019, specs 09 e 10, Deploy Guide, `.env.example`, Plano, CLAUDE.md, INDEX
+
+### 8.1 Validação Runtime (CR-037)
+
+Backend real (uvicorn :8000) com `ANTHROPIC_API_KEY` fictícia, exercitando os dois endpoints que passam pelo código migrado:
+
+| Fluxo | Resultado |
+|-------|-----------|
+| `GET /api/analysis` (usuário sem dados) | 200 `status=indisponivel` — barra por dados mínimos antes de chamar a API |
+| `GET /api/analysis` com 5 despesas + 1 receita semeadas em 07/2026 | 200 `status=erro` (`APIConnectionError`) — **chegou a montar e disparar a requisição**, degradou sem 5xx |
+| `POST /api/imports` com PDF válido | 200 `status=erro` (`APIConnectionError`) — idem |
+| Suíte de testes | 149 backend + 47 frontend, todos verdes |
+
+**O que isso prova:** o SDK instalado (anthropic 0.85.0) aceita `thinking={"type":"adaptive"}` e `output_config={"effort":"low"}` — se não aceitasse, a falha seria `TypeError` na construção da chamada, e não erro de conexão. A assinatura do SDK foi inspecionada diretamente antes da implementação para confirmar os dois parâmetros.
+
+**Limitação registrada:** não é possível validar localmente que a **API aceita** a requisição (ou seja, que o Opus 5 não devolve 400), porque esta máquina não tem `ANTHROPIC_API_KEY` e o TLS de saída é interceptado — o mesmo impedimento já documentado no CLAUDE.md para `pip-audit` e para o CLI do Railway. A validação ponta a ponta acontece no primeiro uso em produção. Mitigação: os dois serviços degradam com HTTP 200 + mensagem explicativa, então um eventual 400 aparece como feature indisponível, nunca como erro 5xx.
+
+### 8.2 Code Review Pré-merge (CR-040)
+
+Executado sobre `git diff master...HEAD`, com foco em: correção da nova extração de texto, propagação de `AiRefusalError`, ordem dos blocos `except` (armadilha do `json.JSONDecodeError` herdar de `ValueError`), regressão de callers, consistência entre os dois serviços, e validade dos testes novos.
+
+**Nenhum bug encontrado.** O revisor confirmou que o `except AiRefusalError` precede os demais nos dois loops, que os routers nunca transformam a recusa em 5xx, que não sobrou nenhum caller com o formato antigo, e que os testes novos falhariam se os bugs fossem reintroduzidos (não são tautológicos).
+
+**1 observação acatada:** a análise rodava com `effort` padrão (alto, mais raciocínio) e `max_tokens=8192`, contra `effort: low` e `max_tokens=16000` na importação — o serviço que gera mais raciocínio tinha metade do orçamento, com risco de truncar o JSON de 8 seções. **Corrigido:** análise subiu para 16000. Como `max_tokens` é um teto e não um consumo, a folga não tem custo. Testes re-executados após a correção (149 verdes).
+
+### 8.3 Revisão de Segurança
+
+O CR não cria endpoint, não mexe em auth/tokens/ownership e não adiciona dependência — mas altera o caminho que envia dados do usuário para um terceiro, então o checklist foi executado:
+
+- [x] Sem segredos hardcoded — `ANTHROPIC_API_KEY` segue apenas via env
+- [x] Nenhuma mudança no que é enviado à API: os prompts (`backend/prompts/*.txt`) e os dados coletados são idênticos ao que já ia antes; muda apenas o modelo que os processa
+- [x] Ownership, validação de input e queries ORM — inalterados
+- [x] CORS e headers de segurança — inalterados
+- [x] Nenhuma dependência nova (mesmo SDK `anthropic`, mesma versão)
+- [x] PDF continua sem ser persistido (RN-043) — o CR não toca nesse caminho
+- Nota: `AiRefusalError` expõe ao usuário apenas a mensagem genérica de política de conteúdo, sem vazar detalhes do classificador
 
 > **Regra de conclusão (CR-037):** Status só vai para "Concluído" com todos os critérios `[x]` ou riscados com justificativa.
 
@@ -216,3 +251,6 @@ A recomendação oficial para reduzir custo é **manter o raciocínio ligado e b
 | Data | Autor | Descrição |
 |------|-------|-----------|
 | 2026-08-12 | Claude | CR criado. Modelo escolhido pelo usuário (Opus 5 nos dois serviços); thinking sob medida por serviço. Registrados dois bugs latentes descobertos na análise (`content[0].text` e `max_tokens=2048`) |
+| 2026-08-12 | Claude | Implementação concluída: 2 serviços migrados, `extract_response_text` + `AiRefusalError` compartilhados, 11 testes novos (149 backend / 47 frontend verdes) |
+| 2026-08-12 | Claude | Validação runtime ✅ (8.1, com limitação registrada), code review ✅ (8.2: 0 bugs, 1 observação acatada — max_tokens da análise para 16000), revisão de segurança ✅ (8.3) |
+| 2026-08-12 | Claude | Docs sincronizados (ADR-019, specs 09/10, Deploy Guide, .env.example, Plano, CLAUDE.md, INDEX). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |

@@ -340,8 +340,9 @@ class TestModelMigration:
         kwargs = mock_client.messages.create.call_args.kwargs
         assert kwargs["model"] == DEFAULT_MODEL == "claude-opus-5"
         assert kwargs["thinking"] == {"type": "adaptive"}
-        # max_tokens cobre raciocinio + resposta somados
-        assert kwargs["max_tokens"] >= 8192
+        # max_tokens cobre raciocinio + resposta somados; effort padrao (alto)
+        # gera bastante raciocinio, entao o teto precisa ser folgado
+        assert kwargs["max_tokens"] >= 16000
 
     @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"})
     @patch("app.ai_analysis.anthropic_sdk")

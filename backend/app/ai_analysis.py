@@ -314,10 +314,12 @@ def call_anthropic_api(system_prompt: str, user_prompt: str) -> dict:
             # CR-048: sem `temperature` (rejeitado com 400 na geracao atual).
             # Thinking adaptativo eleva a qualidade do diagnostico a um custo
             # irrisorio aqui — a analise roda 1x por mes e fica em cache.
-            # max_tokens cobre raciocinio + resposta somados.
+            # max_tokens cobre raciocinio + resposta somados; como e um teto
+            # (so se paga o que for gerado), fica folgado para o effort padrao
+            # nao espremer o JSON de 8 secoes.
             response = client.messages.create(
                 model=model,
-                max_tokens=8192,
+                max_tokens=16000,
                 thinking={"type": "adaptive"},
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],

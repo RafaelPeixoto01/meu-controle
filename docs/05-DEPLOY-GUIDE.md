@@ -95,11 +95,11 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 | `ALLOWED_ORIGINS` | Nao | `http://localhost:5173` | `backend/.env` (CSV, ex: `http://localhost:5173,http://localhost:3000`) |
 | `ENVIRONMENT` | Nao | `development` | `backend/.env` (use `production` para habilitar Secure no cookie) |
 | `ANTHROPIC_API_KEY` | Nao | Análise IA desabilitada | `backend/.env` — chave da API Anthropic (CR-032) |
-| `CLAUDE_MODEL` | Nao | `claude-sonnet-4-20250514` | `backend/.env` — modelo Claude a usar (CR-032) |
+| `CLAUDE_MODEL` | Nao | `claude-opus-5` | `backend/.env` — modelo Claude compartilhado pelos 2 serviços de IA. **Exige geração 4.6+** (CR-048) |
 | `AI_ANALYSIS_ENABLED` | Nao | `true` | `backend/.env` — feature flag para desabilitar análise IA (CR-032) |
-| `AI_ANALYSIS_TIMEOUT_SECONDS` | Nao | `30` | `backend/.env` — timeout da chamada à API Anthropic (CR-032) |
+| `AI_ANALYSIS_TIMEOUT_SECONDS` | Nao | `120` | `backend/.env` — timeout da chamada à API Anthropic (CR-048; era 30) |
 | `IMPORT_ENABLED` | Nao | `true` | `backend/.env` — feature flag da importação de extratos/faturas (CR-046) |
-| `IMPORT_TIMEOUT_SECONDS` | Nao | `90` | `backend/.env` — timeout da chamada à IA na importação de PDF (CR-046) |
+| `IMPORT_TIMEOUT_SECONDS` | Nao | `180` | `backend/.env` — timeout da chamada à IA na importação de PDF (CR-048; era 90) |
 
 ### 2.2 Producao (Railway)
 
@@ -115,8 +115,8 @@ CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 
 | `FRONTEND_URL` | Sim | Manual | `https://<railway-domain>` |
 | `ALLOWED_ORIGINS` | Recomendado | Manual | CSV de origins permitidas no CORS. Default `http://localhost:5173` — **definir para dominio de producao** |
 | `ENVIRONMENT` | Recomendado | Manual | Definir como `production` para habilitar flag `Secure` no cookie de refresh token |
-| `ANTHROPIC_API_KEY` | Sim* | Manual | Chave da API Anthropic para análise financeira por IA (CR-032) |
-| `CLAUDE_MODEL` | Nao | — | Modelo Claude (default: `claude-sonnet-4-20250514`) |
+| `ANTHROPIC_API_KEY` | Sim* | Manual | Chave da API Anthropic — usada pela análise IA (CR-032) **e** pela importação de extratos (CR-046). Consome créditos da conta Anthropic |
+| `CLAUDE_MODEL` | Nao | — | Modelo Claude (default: `claude-opus-5`). ⚠️ **Se definida manualmente, precisa ser um modelo da geração 4.6+** — modelos anteriores não aceitam thinking adaptativo e os depreciados podem retornar 404 (CR-048) |
 | `AI_ANALYSIS_ENABLED` | Nao | — | Feature flag — definir `false` para desabilitar análise IA |
 | `IMPORT_ENABLED` | Nao | — | Feature flag — definir `false` para desabilitar importação de extratos (CR-046; compartilha `ANTHROPIC_API_KEY`) |
 | `IMPORT_TIMEOUT_SECONDS` | Nao | — | Timeout da chamada à IA na importação (default: `90`) |

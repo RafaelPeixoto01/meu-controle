@@ -41,7 +41,19 @@ Tabela `analise_financeira`: `mes_referencia`, `tipo` ('mensal'), `score_referen
 
 ## Variáveis de Ambiente
 
-`ANTHROPIC_API_KEY` (obrigatória p/ feature), `AI_ANALYSIS_ENABLED`, `CLAUDE_MODEL` (default `claude-sonnet-4-20250514`), `AI_ANALYSIS_TIMEOUT_SECONDS` (default 30). Ver `backend/.env.example`.
+`ANTHROPIC_API_KEY` (obrigatória p/ feature), `AI_ANALYSIS_ENABLED`, `CLAUDE_MODEL` (default `claude-opus-5` — CR-048; exige modelo da geração 4.6+), `AI_ANALYSIS_TIMEOUT_SECONDS` (default 120 — CR-048). Ver `backend/.env.example`.
+
+## Parâmetros da chamada (CR-048)
+
+| Parâmetro | Valor | Motivo |
+|-----------|-------|--------|
+| `model` | `DEFAULT_MODEL` (`claude-opus-5`), sobrescrito por `CLAUDE_MODEL` | Constante compartilhada com a F07 |
+| `thinking` | `{"type": "adaptive"}` | Tarefa de julgamento; roda 1x/mês com cache, então o custo extra é irrisório |
+| `effort` | padrão (alto) | Idem — qualidade do diagnóstico compensa |
+| `max_tokens` | 16000 | Teto cobre raciocínio + resposta somados; como é teto e não consumo, a folga é gratuita |
+| `temperature` | **ausente** | Rejeitado com 400 na geração atual |
+
+Leitura da resposta via `extract_response_text` (busca o bloco de tipo `text` — com thinking ligado o primeiro bloco é de raciocínio). `stop_reason == "refusal"` levanta `AiRefusalError`, que fica fora do retry por ser determinística. Ver [ADR-019](../02-ARCHITECTURE.md).
 
 ## Testes
 
