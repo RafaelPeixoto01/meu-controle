@@ -182,16 +182,19 @@ describe("buildConfirmPayload", () => {
 });
 
 describe("monthsToFetchForMatches", () => {
-  it("inclui mes atual, anterior e meses das transacoes match (sem duplicar)", () => {
+  it("inclui mes atual, anterior e meses de TODAS as transacoes (sem duplicar)", () => {
     const batch = makeBatch([
       makeTx({ id: "a", classificacao: "match_planejado", data: "2026-06-10", expense_id_sugerido: "e1" }),
       makeTx({ id: "b", classificacao: "match_planejado", data: "2026-06-20", expense_id_sugerido: "e2" }),
+      // gasto_diario tambem entra: o usuario pode reclassificar a linha
+      // para "Pagar gasto planejado" na revisao
       makeTx({ id: "c", classificacao: "gasto_diario", data: "2025-01-01" }),
     ]);
     const months = monthsToFetchForMatches(batch, new Date(2026, 7, 12)); // ago/2026
     expect(months).toContainEqual({ year: 2026, month: 8 });
     expect(months).toContainEqual({ year: 2026, month: 7 });
-    expect(months).toContainEqual({ year: 2026, month: 6 });
-    expect(months).toHaveLength(3); // jun nao duplica; mes de gasto_diario nao entra
+    expect(months).toContainEqual({ year: 2026, month: 6 }); // jun nao duplica
+    expect(months).toContainEqual({ year: 2025, month: 1 });
+    expect(months).toHaveLength(4);
   });
 });

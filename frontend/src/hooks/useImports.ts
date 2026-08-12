@@ -21,15 +21,6 @@ export function usePendingImports() {
   });
 }
 
-export function useImportBatch(batchId: string | null) {
-  const { user } = useAuth();
-  return useQuery<ImportBatch>({
-    queryKey: ["import-batch", user?.id, batchId],
-    queryFn: () => api.fetchImportBatch(batchId!),
-    enabled: !!user && !!batchId,
-  });
-}
-
 // Mapa expense_id -> Expense dos meses relevantes as conciliacoes do lote,
 // para exibir nome/valor do gasto planejado alvo na revisao.
 export function useMatchTargets(batch: ImportBatch | null) {

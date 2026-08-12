@@ -70,8 +70,9 @@ export default function ImportView() {
         }
       },
       onError: (error) => {
+        // Nao sair da revisao em caso de falha — preserva as edicoes do usuario;
+        // o erro aparece no rodape da revisao (ou no aviso do upload)
         setNotice(error.message || "Erro ao descartar a importação.");
-        setStage("upload");
       },
     });
   }
@@ -119,7 +120,9 @@ export default function ImportView() {
           batch={batch}
           matchTargets={matchTargetsQuery.data ?? {}}
           isConfirming={confirmMutation.isPending}
-          confirmError={confirmMutation.error?.message ?? null}
+          confirmError={
+            confirmMutation.error?.message ?? discardMutation.error?.message ?? null
+          }
           onConfirm={handleConfirm}
           onDiscard={() => handleDiscard(batch.id)}
           isDiscarding={discardMutation.isPending}

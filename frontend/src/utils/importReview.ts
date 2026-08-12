@@ -126,7 +126,8 @@ export function buildConfirmPayload(
 }
 
 // Meses (year, month) que precisam ser consultados para exibir os gastos
-// planejados alvo das conciliacoes: meses das transacoes match + mes atual e anterior.
+// planejados candidatos a conciliacao: meses de TODAS as transacoes (o usuario
+// pode reclassificar qualquer linha para "Pagar gasto planejado") + atual e anterior.
 export function monthsToFetchForMatches(
   batch: ImportBatch,
   today: Date = new Date()
@@ -139,7 +140,6 @@ export function monthsToFetchForMatches(
   add(prev.getFullYear(), prev.getMonth() + 1);
 
   for (const tx of batch.transacoes) {
-    if (tx.classificacao !== "match_planejado") continue;
     const [year, month] = tx.data.split("-").map(Number);
     if (year && month) add(year, month);
   }

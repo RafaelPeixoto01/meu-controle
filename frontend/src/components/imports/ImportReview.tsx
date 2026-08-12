@@ -55,15 +55,34 @@ export default function ImportReview({
 
   function updateDecision(txId: string, patch: Partial<ReviewDecision>) {
     setDecisions((prev) => ({ ...prev, [txId]: { ...prev[txId], ...patch } }));
+    // Editar a linha invalida a mensagem de erro anterior dela
+    setErrors((prev) => {
+      if (!(txId in prev)) return prev;
+      const next = { ...prev };
+      delete next[txId];
+      return next;
+    });
   }
 
   function handleConfirm() {
     const newErrors: Record<string, string> = {};
+    const expensesEscolhidos = new Set<string>();
     for (const tx of batch.transacoes) {
       const decision = decisions[tx.id];
       if (!decision?.incluida) continue;
       const error = validateDecision(decision, categorias);
-      if (error) newErrors[tx.id] = error;
+      if (error) {
+        newErrors[tx.id] = error;
+        continue;
+      }
+      // Espelha a regra do backend: um planejado so pode ser pago uma vez por lote
+      if (decision.acao === "atualizar_planejado") {
+        if (expensesEscolhidos.has(decision.expenseId)) {
+          newErrors[tx.id] = "Este gasto planejado já foi escolhido em outra transação";
+          continue;
+        }
+        expensesEscolhidos.add(decision.expenseId);
+      }
     }
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
