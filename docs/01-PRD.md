@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 3.0
-**Data:** 2026-03-18
+**Versao:** 3.1
+**Data:** 2026-08-12
 **Status:** Aprovado
-**Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033
+**Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046
 
 ---
 
@@ -246,6 +246,22 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - 5 endpoints REST: `GET /api/alerts`, `PATCH /api/alerts/{id}/seen`, `PATCH /api/alerts/{id}/dismiss`, `GET /api/alerts/config`, `PUT /api/alerts/config`.
 - Frontend: AlertItem, AlertBadge, AlertBanner, AlertsCard, AlertsModal, AlertsSettings.
 
+### Modulo: Importacao de Extratos e Faturas — F07 (CR-046 backend, CR-047 frontend)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-21 | Upload de extrato de conta ou fatura de cartao em PDF com interpretacao das transacoes por IA, revisao pelo usuario e gravacao como gastos diarios ou atualizacao de gastos planejados | Alta | Rafael |
+
+**RF-21 — Detalhamento:**
+- Upload de PDF (extrato de conta ou fatura de cartao — Nubank, Itau, Mercado Pago; sem parser fixo por banco) via `POST /api/imports` (multipart, max 10MB).
+- IA (API Claude, leitura nativa de PDF) extrai as transacoes e sugere para cada uma: novo gasto diario (com categoria/subcategoria/metodo), match com gasto planejado pendente/atrasado do usuario, ou ignorar (receitas, transferencias, pagamento de fatura — evita contagem dupla extrato+fatura).
+- Resultado fica em staging (lote `pendente_revisao`, tabelas `import_batches`/`import_transactions`) — retomavel se o usuario sair da pagina; nada e gravado nas tabelas finais sem confirmacao.
+- Deduplicacao por transacao: fingerprint sha256(usuario + data + valor + descricao normalizada); transacoes ja confirmadas em lotes anteriores nascem marcadas `duplicada`.
+- Confirmacao (`POST /api/imports/{id}/confirm`) aplica as decisoes revisadas: cria gastos diarios no mes da **data da compra** e/ou atualiza gastos planejados (status → Pago + valor real), gravando referencias de auditoria no lote.
+- O PDF e processado em memoria e **nunca persistido**; apenas as transacoes extraidas sao armazenadas.
+- Feature flag `IMPORT_ENABLED` + `ANTHROPIC_API_KEY`; indisponibilidade retorna resposta explicativa sem quebrar o app (padrao RF-19).
+- UI (CR-047): pagina propria "Importar" no ViewSelector com fluxo upload → processamento → revisao → confirmacao.
+
 ### Modulo: Autenticacao e Usuarios (CR-002)
 
 | ID    | Requisito | Prioridade | Persona |
@@ -431,6 +447,13 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
     - [ ] Posso marcar alertas como vistos ou dispensa-los.
     - [ ] Posso configurar quais tipos de alerta quero receber e ajustar limiares (saldo minimo, % comprometimento).
 
+- **US-29:** Como usuario, quero importar o PDF do meu extrato bancario ou fatura de cartao, para alimentar o sistema sem digitar transacao por transacao. (CR-046, CR-047)
+  - Criterios de aceite:
+    - [ ] Dado um PDF de extrato/fatura, quando o usuario faz upload, entao o sistema exibe as transacoes interpretadas com a classificacao sugerida (gasto diario, atualizacao de planejado ou ignorada).
+    - [ ] Dado que a revisao foi confirmada, entao os gastos diarios sao criados no mes da data da compra e os gastos planejados correspondentes ficam Pagos com o valor real.
+    - [ ] Dado um re-upload com transacoes ja importadas, entao elas aparecem marcadas como duplicadas e nao sao gravadas de novo por padrao.
+    - [ ] Nada e gravado nas tabelas finais sem confirmacao explicita do usuario.
+
 ---
 
 ## 7. Regras de Negocio
@@ -474,6 +497,12 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-035 | Cada tipo de alerta pode ser habilitado/desabilitado individualmente pelo usuario | Alertas (RF-20) |
 | RN-036 | Limiares dos alertas A3 (saldo minimo) e A6 (% comprometimento) sao configuraveis pelo usuario | Alertas (RF-20) |
 | RN-037 | Motor de alertas e on-demand (executado a cada requisicao GET /api/alerts), nao baseado em cron/scheduler | Alertas (RF-20) |
+| RN-038 | Transacoes importadas so sao gravadas nas tabelas finais apos confirmacao explicita do usuario (staging obrigatorio) | Importacao (RF-21) |
+| RN-039 | Gasto diario criado por importacao pertence ao mes da data da compra, nao ao mes de vencimento da fatura | Importacao (RF-21) |
+| RN-040 | Match de transacao com gasto planejado atualiza status para Pago e sobrescreve o valor com o valor real da transacao | Importacao (RF-21) |
+| RN-041 | Receitas, transferencias entre contas proprias e pagamento de fatura de cartao sao classificados como "ignorar" (evita contagem dupla), mas permanecem visiveis na revisao para resgate | Importacao (RF-21) |
+| RN-042 | Deduplicacao por fingerprint sha256(user_id + data + valor + descricao normalizada); fingerprint ja confirmado marca a transacao como duplicada | Importacao (RF-21) |
+| RN-043 | O PDF enviado e processado em memoria e nunca persistido em disco ou banco; apenas as transacoes extraidas sao armazenadas | Importacao (RF-21) |
 
 ---
 
@@ -486,9 +515,10 @@ Os itens abaixo **nao** estao no escopo atual:
 - ~~Graficos e dashboards de analise~~ — **Implementado via CR-019 (Dashboard Visual)**
 - ~~Notificacoes e alertas de vencimento~~ — **Implementado via CR-033 (Alertas Inteligentes)**
 - Exportacao de dados (PDF, CSV, Excel)
-- Contas bancarias e conciliacao
+- ~~Contas bancarias e conciliacao~~ — **Conciliacao manual via importacao de PDF implementada via CR-046/CR-047 (RF-21)**; gestao de contas bancarias segue fora de escopo
 - Metas de economia e orcamento por categoria
-- Integracao com bancos ou APIs externas (Open Finance)
+- Integracao com bancos ou APIs externas (Open Finance) — importacao e manual, via upload de PDF (RF-21)
+- Importacao de extratos em CSV/OFX ou por imagem/print (v1 do RF-21 e somente PDF)
 - Aplicativo mobile nativo
 - Modo offline / PWA
 - Contas compartilhadas (casal/familia)
@@ -504,7 +534,7 @@ Os itens abaixo **nao** estao no escopo atual:
 - PostgreSQL em producao (add-on Railway) para persistencia de dados entre deploys. SQLite para desenvolvimento local. (CR-001)
 - Google OAuth2 (Google Cloud Console) para login social com Google. (CR-002)
 - SendGrid para envio de emails de recuperacao de senha. (CR-002)
-- API Anthropic (Claude) para analise financeira por IA. Requer variavel de ambiente `ANTHROPIC_API_KEY`. (CR-032)
+- API Anthropic (Claude) para analise financeira por IA e interpretacao de extratos/faturas em PDF. Requer variavel de ambiente `ANTHROPIC_API_KEY`. (CR-032, CR-046)
 - recharts para graficos no Dashboard e projecao de parcelas. (CR-019, CR-021)
 
 ### Premissas
@@ -542,6 +572,9 @@ Os itens abaixo **nao** estao no escopo atual:
 | Alerta Inteligente | Notificacao automatica sobre condicoes financeiras que requerem atencao: vencimentos, atrasos, saldo baixo, score em queda, etc. (CR-033) |
 | AlertEngine | Motor on-demand que executa 7 checkers para detectar 8 tipos de alerta a cada requisicao (CR-033) |
 | Categoria (Despesa Planejada) | Classificacao de uma despesa planejada derivada automaticamente da subcategoria selecionada, compartilhando o mesmo sistema de categorias dos gastos diarios (CR-016) |
+| Lote de Importacao | Resultado do upload de um extrato/fatura: conjunto de transacoes interpretadas pela IA aguardando revisao e confirmacao do usuario (CR-046) |
+| Fingerprint | Impressao digital de uma transacao importada (hash de usuario + data + valor + descricao normalizada) usada para detectar duplicatas entre uploads (CR-046) |
+| Conciliacao | Vinculo entre uma transacao do extrato/fatura e um gasto planejado existente, confirmando o pagamento e o valor real (CR-046) |
 
 ---
 
@@ -574,9 +607,9 @@ Os itens abaixo **nao** estao no escopo atual:
 - Acompanhamento de metas de economia
 - Indicadores visuais de estouro de orcamento
 
-### Fase 7 — Integracoes
+### Fase 7 — Integracoes (parcialmente implementada via CR-046/CR-047)
 - Integracao com Open Finance para importacao automatica de transacoes
-- Conciliacao entre despesas planejadas e transacoes reais
+- ~~Conciliacao entre despesas planejadas e transacoes reais~~ — RF-21, via importacao de PDF (CR-046/CR-047)
 
 ### Fase 8 — Expansao (ver roadmap detalhado em `/docs/meucontrole-roadmap-funcionalidades.md`)
 - Copiloto financeiro via WhatsApp (F11)
@@ -592,3 +625,4 @@ Os itens abaixo **nao** estao no escopo atual:
 *Atualizado para v2.2 em 2026-02-17. RF-13: Gastos Diarios — CRUD, categorias fixas, visao mensal agrupada por dia (CR-005).*
 *Atualizado para v2.3 em 2026-03-16. RF-15: Score de Saude Financeira (CR-026).*
 *Atualizado para v3.0 em 2026-03-18. Sincronizacao massiva: RF-16 Categorizacao (CR-016), RF-17 Dashboard (CR-019), RF-18 Parcelas Futuras (CR-021), RF-19 Analise IA (CR-032), RF-20 Alertas (CR-033). Atualizados User Stories (US-24 a US-28), Regras de Negocio (RN-025 a RN-037), Fora de Escopo, Glossario e Roadmap.*
+*Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7.*

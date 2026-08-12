@@ -588,3 +588,69 @@ class ConfiguracaoAlertasUpdate(BaseModel):
     limiar_comprometimento: int | None = Field(None, ge=30, le=90)
     alerta_parcela_ativada: bool | None = None
     alerta_ia: bool | None = None
+
+
+# ========== Imports (CR-046, F07) ==========
+
+class ImportTransactionResponse(BaseModel):
+    model_config = {"from_attributes": True}
+    id: str
+    data: date
+    descricao: str
+    valor: float
+    classificacao: str  # gasto_diario | match_planejado | ignorar
+    motivo_ignorar: str | None = None
+    expense_id_sugerido: str | None = None
+    categoria: str | None = None
+    subcategoria: str | None = None
+    metodo_pagamento: str | None = None
+    status: str  # pendente | confirmada | descartada | duplicada
+
+
+class ImportBatchSummary(BaseModel):
+    model_config = {"from_attributes": True}
+    id: str
+    filename: str
+    banco_detectado: str | None = None
+    tipo_documento: str | None = None  # extrato | fatura
+    status: str  # pendente_revisao | confirmado | descartado
+    created_at: datetime
+
+
+class ImportBatchResponse(ImportBatchSummary):
+    transacoes: list[ImportTransactionResponse] = []
+
+
+class ImportUploadResponse(BaseModel):
+    status: str  # disponivel | indisponivel | erro
+    reason: str | None = None
+    batch: ImportBatchResponse | None = None
+
+
+class ImportConfirmDecision(BaseModel):
+    id: str
+    acao: str  # criar_gasto_diario | atualizar_planejado | descartar
+    descricao: str | None = Field(None, min_length=1, max_length=255)
+    valor: float | None = Field(None, gt=0)
+    data: date | None = None
+    categoria: str | None = None
+    subcategoria: str | None = None
+    metodo_pagamento: str | None = None
+    expense_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_acao(self):
+        acoes_validas = {"criar_gasto_diario", "atualizar_planejado", "descartar"}
+        if self.acao not in acoes_validas:
+            raise ValueError(f"Ação inválida: {self.acao}")
+        return self
+
+
+class ImportConfirmRequest(BaseModel):
+    transacoes: list[ImportConfirmDecision]
+
+
+class ImportConfirmResponse(BaseModel):
+    gastos_diarios_criados: int
+    planejados_atualizados: int
+    descartadas: int

@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from datetime import date
 
-from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira; CR-033: AlertaEstado, ConfiguracaoAlertas
+from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas, ImportBatch, ImportTransaction  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira; CR-033: AlertaEstado, ConfiguracaoAlertas; CR-046: ImportBatch, ImportTransaction
 
 
 # ========== Expenses ==========
@@ -636,3 +636,46 @@ def update_configuracao_alertas(db: Session, user_id: str, data: dict) -> Config
     db.refresh(config)
     return config
 
+
+# ========== Imports (CR-046, F07) ==========
+
+def get_import_batch_by_id(db: Session, batch_id: str, user_id: str) -> ImportBatch | None:
+    """Retorna um lote de importacao por ID se pertence ao usuario (ownership check)."""
+    stmt = (
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id, ImportBatch.user_id == user_id)
+    )
+    return db.scalars(stmt).first()
+
+
+def get_pending_import_batches(db: Session, user_id: str) -> list[ImportBatch]:
+    """Lotes pendentes de revisao do usuario, mais recentes primeiro (retomada)."""
+    stmt = (
+        select(ImportBatch)
+        .where(ImportBatch.user_id == user_id, ImportBatch.status == "pendente_revisao")
+        .order_by(ImportBatch.created_at.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def create_import_batch(db: Session, batch: ImportBatch) -> ImportBatch:
+    """Persiste um lote de importacao (com transacoes via relationship)."""
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+    return batch
+
+
+def get_confirmed_fingerprints(db: Session, user_id: str, fingerprints: list[str]) -> set[str]:
+    """Fingerprints do usuario ja confirmados em lotes anteriores (dedup RN-042)."""
+    if not fingerprints:
+        return set()
+    stmt = (
+        select(ImportTransaction.fingerprint)
+        .where(
+            ImportTransaction.user_id == user_id,
+            ImportTransaction.status == "confirmada",
+            ImportTransaction.fingerprint.in_(fingerprints),
+        )
+    )
+    return set(db.scalars(stmt).all())
