@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 2.9
-**Data:** 2026-03-18
-**PRD Ref:** 01-PRD v2.3
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes)
+**Versao:** 3.0
+**Data:** 2026-08-12
+**PRD Ref:** 01-PRD v3.1
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046 (Importacao de Extratos — F07, ADR-018)
 
 ---
 
@@ -121,7 +121,11 @@ Personal Finance/
 │   │   └── versions/
 │   │       ├── 001_initial_schema.py
 │   │       ├── 002_add_users_and_auth.py    # CR-002
-│   │       └── 004_add_daily_expenses.py    # CR-005
+│   │       ├── 004_add_daily_expenses.py    # CR-005
+│   │       └── 009_add_import_tables.py     # CR-046
+│   ├── prompts/                             # Prompts de IA (CR-032: analise; CR-046: importacao)
+│   │   ├── import_extraction_system.txt     # CR-046: system prompt da extracao de extratos/faturas
+│   │   └── import_extraction_user.txt       # CR-046: user prompt (placeholders: categorias, planejados)
 │   └── app/
 │       ├── __init__.py
 │       ├── main.py
@@ -134,6 +138,7 @@ Personal Finance/
 │       ├── alerts.py                        # CR-033: AlertEngine + 7 checkers (A1-A8), motor de alertas on-demand
 │       ├── categories.py                    # Categorias compartilhadas (EXPENSE_CATEGORIES) + metodos pagamento + helpers (CR-005, CR-016)
 │       ├── email_service.py                 # CR-002: SendGrid integration
+│       ├── import_service.py                # CR-046: importacao de extratos (prompts, PDF document block, fingerprint/dedup)
 │       └── routers/
 │           ├── __init__.py
 │           ├── expenses.py
@@ -143,7 +148,8 @@ Personal Finance/
 │           ├── users.py                     # CR-002: GET/PATCH /me, change password
 │           ├── daily_expenses.py            # CR-005: CRUD gastos diarios (5 endpoints)
 │           ├── dashboard.py                # CR-019: endpoints de agregacao para dashboard visual
-│           └── alerts.py                  # CR-033: GET /api/alerts, PATCH seen/dismiss, GET/PUT config
+│           ├── alerts.py                  # CR-033: GET /api/alerts, PATCH seen/dismiss, GET/PUT config
+│           └── imports.py                 # CR-046: upload/pending/get/confirm/delete de importacoes (F07)
 ├── frontend/
 │   ├── package.json
 │   ├── tsconfig.json
@@ -208,6 +214,8 @@ erDiagram
     USER ||--o{ SCORE_HISTORICO : "has many"
     USER ||--o{ ALERTA_ESTADO : "has many"
     USER ||--o| CONFIGURACAO_ALERTAS : "has one"
+    USER ||--o{ IMPORT_BATCH : "has many"
+    IMPORT_BATCH ||--o{ IMPORT_TRANSACTION : "has many"
 
     USER {
         string id PK
@@ -308,6 +316,40 @@ erDiagram
         int limiar_comprometimento
         bool alerta_parcela_ativada
         bool alerta_ia
+        datetime updated_at
+    }
+    IMPORT_BATCH {
+        string id PK
+        string user_id FK
+        string filename
+        string banco_detectado
+        string tipo_documento
+        string status
+        int tokens_input
+        int tokens_output
+        string modelo
+        int tempo_processamento_ms
+        datetime created_at
+        datetime updated_at
+    }
+    IMPORT_TRANSACTION {
+        string id PK
+        string batch_id FK
+        string user_id FK
+        date data
+        string descricao
+        decimal valor
+        string classificacao
+        string motivo_ignorar
+        string expense_id_sugerido
+        string categoria
+        string subcategoria
+        string metodo_pagamento
+        string fingerprint
+        string status
+        string daily_expense_id_criado
+        string expense_id_atualizado
+        datetime created_at
         datetime updated_at
     }
 ```
@@ -462,6 +504,46 @@ erDiagram
 
 > **Relacao 1:1:** Um registro por usuario. Criado com defaults na primeira consulta (lazy creation).
 
+#### ImportBatch (`import_batches`) — CR-046
+
+| Campo                  | Tipo        | Restricoes                      | Descricao                                          |
+|------------------------|-------------|---------------------------------|-----------------------------------------------------|
+| id                     | String(36)  | PK, UUID                        | Identificador unico                                 |
+| user_id                | String(36)  | NOT NULL, FK→users.id, CASCADE | Usuario dono do lote                                |
+| filename               | String(255) | NOT NULL                        | Nome do arquivo enviado (metadado; PDF nao persiste)|
+| banco_detectado        | String(50)  | Nullable                        | Banco identificado pela IA (Nubank, Itau...)        |
+| tipo_documento         | String(20)  | Nullable                        | `extrato` ou `fatura`                               |
+| status                 | String(20)  | NOT NULL, default pendente_revisao | pendente_revisao, confirmado, descartado         |
+| tokens_input/output    | Integer     | Nullable                        | Consumo da chamada IA                               |
+| modelo                 | String(50)  | NOT NULL                        | Modelo Claude usado                                 |
+| tempo_processamento_ms | Integer     | Nullable                        | Duracao da chamada IA                               |
+| created_at/updated_at  | DateTime    | NOT NULL, default now()         | Timestamps                                          |
+
+> **Index:** `ix_import_batches_user_status (user_id, status)`
+
+#### ImportTransaction (`import_transactions`) — CR-046
+
+| Campo                    | Tipo         | Restricoes                              | Descricao                                        |
+|--------------------------|--------------|------------------------------------------|---------------------------------------------------|
+| id                       | String(36)   | PK, UUID                                 | Identificador unico                               |
+| batch_id                 | String(36)   | NOT NULL, FK→import_batches.id, CASCADE | Lote de origem                                    |
+| user_id                  | String(36)   | NOT NULL, FK→users.id, CASCADE          | Usuario dono (isolamento)                         |
+| data                     | Date         | NOT NULL                                 | Data real da transacao/compra                     |
+| descricao                | String(255)  | NOT NULL                                 | Descricao extraida do documento                   |
+| valor                    | Numeric(10,2)| NOT NULL                                 | Valor da transacao                                |
+| classificacao            | String(20)   | NOT NULL                                 | gasto_diario, match_planejado, ignorar            |
+| motivo_ignorar           | String(255)  | Nullable                                 | Justificativa quando classificacao=ignorar        |
+| expense_id_sugerido      | String(36)   | Nullable                                 | Gasto planejado sugerido pela IA para conciliacao |
+| categoria/subcategoria   | String(50)   | Nullable                                 | Sugestao da IA (par validado no backend)          |
+| metodo_pagamento         | String(30)   | Nullable                                 | Sugestao da IA                                    |
+| fingerprint              | String(64)   | NOT NULL                                 | sha256 para dedup entre uploads (RN-042)          |
+| status                   | String(20)   | NOT NULL, default pendente               | pendente, confirmada, descartada, duplicada       |
+| daily_expense_id_criado  | String(36)   | Nullable                                 | Auditoria: DailyExpense criado na confirmacao     |
+| expense_id_atualizado    | String(36)   | Nullable                                 | Auditoria: Expense conciliado na confirmacao      |
+| created_at/updated_at    | DateTime     | NOT NULL, default now()                  | Timestamps                                        |
+
+> **Index:** `ix_import_tx_user_fingerprint (user_id, fingerprint)`, `ix_import_transactions_batch_id (batch_id)`
+
 ### Relacionamentos
 
 ```
@@ -472,6 +554,8 @@ Usuario (1) ---- possui ----> GastoDiario (N)
 Usuario (1) ---- possui ----> ScoreHistorico (N)
 Usuario (1) ---- possui ----> AlertaEstado (N)
 Usuario (1) ---- possui ----> ConfiguracaoAlertas (1)
+Usuario (1) ---- possui ----> ImportBatch (N)
+ImportBatch (1) ---- possui ----> ImportTransaction (N)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
 Receita (N) ---- pertence a ----> Mes de referencia (1)
 GastoDiario (N) ---- pertence a ----> Mes de referencia (1)
@@ -481,7 +565,7 @@ AlertaEstado (N) ---- pertence a ----> Mes de referencia (1)
 
 > **Isolamento de dados (CR-002):** Cada usuario so pode ver, criar, editar e deletar seus proprios dados. Todas as queries CRUD filtram por `user_id`. Operacoes de update/delete verificam ownership antes de executar.
 
-> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios, score historico, alertas, configuracoes de alertas e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
+> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios, score historico, alertas, configuracoes de alertas, lotes/transacoes de importacao e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
 
 ---
 
@@ -791,6 +875,13 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
 - **Consequencias:**
   - Positivas: URLs semanticas, deep-linking funcional, layout aninhado com `<Outlet />` e `ProtectedRoute`. SPA fallback do backend (`serve_spa` em `main.py`) ja funciona — serve `index.html` para todas rotas nao-API.
   - Negativas: Dependencia adicional (`react-router-dom`). Configuracao de rotas requer reestruturacao do `App.tsx`.
+
+### ADR-018: Importacao de extratos/faturas via IA, sem parser por banco (CR-046)
+
+- **Status:** Aceito
+- **Contexto:** A F07 precisa interpretar PDFs de extratos/faturas de multiplos bancos (Nubank, Itau, Mercado Pago), cujos layouts variam e mudam com o tempo. Parsers deterministicos por layout (pdfplumber + regex) exigiriam ~6 variantes fragies e manutencao continua.
+- **Decisao:** Enviar o PDF diretamente para a API Claude (document block base64) com prompt estruturado contendo as categorias validas e os gastos planejados em aberto do usuario. A IA extrai, classifica e sugere conciliacao; o backend faz validacao deterministica (`validate_ai_result`), deduplicacao por fingerprint sha256 (RN-042) e mantem tudo em staging (`import_batches`/`import_transactions`) ate confirmacao explicita do usuario (RN-038). O PDF nunca e persistido (RN-043). Reutiliza os padroes do CR-032 (retry/backoff, parse de JSON com reparo, feature flag, graceful degradation sem 5xx).
+- **Consequencias:** Funciona para qualquer banco sem codigo novo; custo por upload (mitigado por rate limit 5/min) e dependencia da API Anthropic (mitigada por flag `IMPORT_ENABLED` e revisao obrigatoria antes de gravar). Risco de prompt injection via PDF mitigado por sanitizacao da saida, matches restritos aos planejados do proprio usuario e revisao humana.
 
 ---
 

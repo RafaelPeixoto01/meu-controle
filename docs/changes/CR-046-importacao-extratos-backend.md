@@ -162,19 +162,63 @@ CREATE INDEX ix_import_batches_user_status ON import_batches (user_id, status);
 
 ## 8. Critérios de Aceite
 
-- [ ] Upload de PDF válido retorna 201 com lote `pendente_revisao` e transações classificadas (gasto_diario / match_planejado / ignorar)
-- [ ] Upload de arquivo não-PDF ou >10MB retorna 422/413 sem chamar a IA
-- [ ] Re-upload com transações já confirmadas marca-as como `duplicada`
-- [ ] Confirm cria `DailyExpense` no mês da data da compra e atualiza `Expense` (status Pago + valor real), gravando FKs de auditoria
-- [ ] Confirm/get/delete verificam ownership (404 para lote de outro usuário)
-- [ ] `IMPORT_ENABLED=false` ou `ANTHROPIC_API_KEY` ausente → resposta de indisponibilidade sem 5xx
-- [ ] PDF não é persistido em disco nem no banco
-- [ ] Testes existentes continuam passando (regressão)
-- [ ] Novos testes cobrem a mudança
-- [ ] Fluxo afetado exercitado em runtime antes do merge — descrever O QUE foi validado e o resultado (chamada HTTP aos endpoints)
-- [ ] Revisão de código pré-merge (`/code-review` no diff da branch) executada — registrar findings corrigidos/justificados
-- [ ] Revisão de segurança (checklist OWASP do CLAUDE.md) executada
-- [ ] Documentos afetados foram atualizados
+- [x] Upload de PDF válido retorna 201 com lote `pendente_revisao` e transações classificadas (gasto_diario / match_planejado / ignorar) — `test_upload_happy_path`
+- [x] Upload de arquivo não-PDF ou >10MB retorna 422/413 sem chamar a IA — testes + validação runtime (422 real via HTTP)
+- [x] Re-upload com transações já confirmadas marca-as como `duplicada` — `TestDedup`
+- [x] Confirm cria `DailyExpense` no mês da data da compra e atualiza `Expense` (status Pago + valor real), gravando FKs de auditoria — `TestConfirm`
+- [x] Confirm/get/delete verificam ownership (404 para lote de outro usuário) — `TestOwnershipAndLifecycle` + runtime (404 real)
+- [x] `IMPORT_ENABLED=false` ou `ANTHROPIC_API_KEY` ausente → resposta de indisponibilidade sem 5xx — testes + runtime
+- [x] PDF não é persistido em disco nem no banco — processamento 100% em memória (`pdf_bytes`), nada escrito em disco/log
+- [x] Testes existentes continuam passando (regressão) — suíte completa: **138 passed** (104 pré-existentes + 34 novos)
+- [x] Novos testes cobrem a mudança — `backend/tests/test_imports.py` (34 testes: unit fingerprint/validação + endpoints)
+- [x] Fluxo afetado exercitado em runtime antes do merge — ver seção 8.1
+- [x] Revisão de código pré-merge executada — ver seção 8.2 (6 findings: 3 corrigidos com testes de regressão, 1 justificado, 2 anotados)
+- [x] Revisão de segurança (checklist OWASP do CLAUDE.md) executada — ver seção 8.3
+- [x] Documentos afetados foram atualizados — PRD v3.1, Spec índice v3.2 + specs/10, Arquitetura v3.0 (ADR-018), Plano v3.0, Deploy Guide, CLAUDE.md
+
+### 8.1 Validação Runtime (CR-037)
+
+Backend real (`uvicorn`, porta 8000) exercitado via HTTP em 2026-08-12 (Invoke-RestMethod + curl.exe):
+
+| Chamada | Resultado |
+|---------|-----------|
+| `GET /api/health` | 200 ok |
+| `POST /api/auth/register` + Bearer token | 201, token emitido |
+| `GET /api/imports/pending` autenticado | 200 `[]` |
+| `GET /api/imports/{id}` inexistente | 404 |
+| `POST /api/imports` sem auth | 401 |
+| `POST /api/imports` sem `ANTHROPIC_API_KEY` | 200 `status=indisponivel` + reason |
+| `POST /api/imports` com `.csv` | 422 "Apenas arquivos PDF são aceitos" |
+| `POST /api/imports` com `.pdf` sem magic bytes | 422 "Arquivo não é um PDF válido" |
+| `POST /api/imports` PDF válido + key inválida | 200 `status=erro` graceful (APIConnectionError), **sem 5xx**, nenhum lote persistido |
+| Rate limit (uploads consecutivos) | 429 após o limite de 5/min |
+
+Caminho feliz com IA real: não exercitável localmente (sem `ANTHROPIC_API_KEY` no ambiente dev; TLS local interceptado — ver Troubleshooting do CLAUDE.md). Coberto por 34 testes com API mockada; validar em produção após o deploy (upload de fatura real).
+
+### 8.2 Code Review Pré-merge (CR-040)
+
+Executado sobre `git diff master...HEAD` (agentes de revisão: bugs + aderência CLAUDE.md). 6 findings:
+
+| # | Finding | Tratamento |
+|---|---------|-----------|
+| 1 | Duas decisões `atualizar_planejado` para o mesmo `expense_id` sobrescreviam silenciosamente (contador incorreto) | **Corrigido** — 422 na colisão + teste |
+| 2 | Transação `duplicada` ausente do payload virava `descartada` no confirm, mas ficava `duplicada` no DELETE (inconsistência de auditoria) | **Corrigido** — permanece `duplicada` + teste |
+| 3 | `descricao=" "` passava no `min_length=1` e virava vazia após `.strip()` | **Corrigido** — 422 + teste |
+| 4 | `mes_referencia` derivado da `data` do body no confirm (convenção diz "path parameter") | **Justificado** — por design: na revisão o usuário pode corrigir a data da compra, e o mês correto é o da data (RN-039); não existe mês no path deste endpoint. Staging + revisão explícita mitigam abuso |
+| 5 | `daily_expenses.py` deriva categoria só da subcategoria (ambígua p/ "Streaming", "Roupas" etc.) | **Fora de escopo** — bug pré-existente; follow-up sugerido em CR futuro |
+| 6 | Spec F07 com assinatura desatualizada de `build_import_prompts` | **Corrigido** na spec |
+
+### 8.3 Revisão de Segurança (checklist OWASP)
+
+- [x] Sem segredos hardcoded — `ANTHROPIC_API_KEY` só via env
+- [x] Inputs validados via Pydantic (`ImportConfirmRequest/Decision`) + upload validado (extensão, magic bytes `%PDF-`, máx 10MB com leitura limitada — sem exaustão de memória)
+- [x] Tokens sensíveis não em localStorage — N/A (sem mudança em auth)
+- [x] Ownership verificado em todos os endpoints (lote e expense; 404) — coberto por testes
+- [x] Queries via ORM parametrizado — sem SQL raw
+- [x] CORS inalterado
+- [x] Headers de segurança — middleware global cobre as rotas novas
+- [x] Dependências: **nenhuma nova** (`anthropic` e `python-multipart` já existentes; pip-audit roda no CI)
+- Específico da feature: risco de **prompt injection via PDF** mitigado por sanitização da saída da IA (`validate_ai_result`), matches restritos aos planejados do próprio usuário, staging + revisão obrigatória (RN-038) e ownership rechecado no confirm. PDF nunca persistido nem logado (RN-043).
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.
 
@@ -206,7 +250,7 @@ CREATE INDEX ix_import_batches_user_status ON import_batches (user_id, status);
 
 - **Migration afetada:** `009_add_import_tables.py`
 - **Comando de downgrade:** `alembic downgrade 008`
-- **Downgrade testado?** [ ] Sim / [ ] Nao
+- **Downgrade testado?** [x] Sim (upgrade → downgrade 008 → upgrade em PostgreSQL local, 2026-08-12)
 - **Downgrade e destrutivo?** [x] Sim (tabelas de import e seu histórico são removidas) — não afeta `expenses`/`daily_expenses`
 
 ### 10.3 Impacto em Dados
@@ -233,3 +277,6 @@ CREATE INDEX ix_import_batches_user_status ON import_batches (user_id, status);
 | Data       | Autor  | Descrição |
 |------------|--------|-----------|
 | 2026-08-12 | Claude | CR criado (design aprovado em brainstorming; entrega em 2 CRs: 046 backend, 047 frontend) |
+| 2026-08-12 | Claude | Implementação concluída: modelos + migration 009 (up/down testados), import_service, router /api/imports, 34 testes (suíte 138 verde) |
+| 2026-08-12 | Claude | Validação runtime via HTTP ✅ (seção 8.1), revisão de segurança ✅ (8.3), code review pré-merge ✅ (8.2: 3 fixes + testes) |
+| 2026-08-12 | Claude | Docs sincronizados (PRD v3.1, Spec v3.2, Arquitetura v3.0/ADR-018, Plano v3.0, Deploy Guide, CLAUDE.md). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |

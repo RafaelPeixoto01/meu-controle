@@ -211,16 +211,16 @@ Personal Finance/
 │   ├── changes/                #   Change Requests CR-XXX + INDEX.md (histórico completo)
 │   └── templates/              #   Templates obrigatórios dos documentos
 ├── backend/
-│   ├── alembic/versions/       # Migrations 001..008 (aplicar antes de rodar o backend)
-│   ├── prompts/                # System/user prompts da análise IA (CR-032)
+│   ├── alembic/versions/       # Migrations 001..009 (aplicar antes de rodar o backend)
+│   ├── prompts/                # System/user prompts da análise IA (CR-032) e importação (CR-046)
 │   ├── app/                    # main, database, models, schemas, crud, services, utils, auth,
 │   │   │                       #   rate_limit (CR-044), health_score, ai_analysis, alerts,
-│   │   │                       #   categories, email_service
+│   │   │                       #   categories, email_service, import_service (CR-046)
 │   │   └── routers/            # auth, users, expenses, incomes, months, daily_expenses,
-│   │                           #   dashboard, score, ai_analysis, alerts (todos exigem auth)
+│   │                           #   dashboard, score, ai_analysis, alerts, imports (todos exigem auth)
 │   ├── scripts/                # seed_demo.py (idempotente) + scripts one-off
 │   └── tests/                  # pytest: services, installment_projection, health_score,
-│                               #   ai_analysis, alerts, security_headers, static_spa
+│                               #   ai_analysis, alerts, imports, security_headers, static_spa
 ├── frontend/
 │   └── src/                    # main.tsx, App.tsx, queryClient.ts, types.ts, index.css
 │       ├── services/           # api.ts (client + 401 interceptor), authApi.ts
@@ -293,6 +293,7 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - **Google OAuth:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
 - **Email (SendGrid):** `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `FRONTEND_URL`
 - **Análise IA (CR-032):** `ANTHROPIC_API_KEY`, `AI_ANALYSIS_ENABLED`, `CLAUDE_MODEL`, `AI_ANALYSIS_TIMEOUT_SECONDS`
+- **Importação de extratos (CR-046):** `IMPORT_ENABLED` (default true), `IMPORT_TIMEOUT_SECONDS` (default 90) — compartilha `ANTHROPIC_API_KEY`/`CLAUDE_MODEL`
 - **Auth/CORS (com defaults):** `ALLOWED_ORIGINS`, `ENVIRONMENT`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`
 
 ---
@@ -313,11 +314,11 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 ### Change Requests
 > **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-041: Housekeeping — queryClient em módulo próprio (fix createRoot duplicado), favicon, pip-audit no CI, .env.example, .claude/ versionado, spec F06 criada, 69 artefatos .js removidos (concluido)
 - CR-042: Update deps backend — python-jose 3.5, fastapi 0.139/starlette 1.3, python-dotenv 1.2, pytest 9; corrige 15 advisories do pip-audit; ecdsa aceito (HS256 não usa ECDSA) (concluido)
 - CR-043: Hotfix segurança — path traversal no fallback do SPA (main.py serve_spa); payloads percent-encoded (`/..%2f.env`) vazavam backend/.env; corrigido com contenção de path (`resolve_static_file` + is_relative_to) + 9 testes de regressão (concluido)
 - CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
 - CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (concluido)
+- CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (em implementação — aguardando CI)
 
 ---
 
