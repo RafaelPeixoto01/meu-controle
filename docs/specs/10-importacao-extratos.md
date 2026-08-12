@@ -75,7 +75,8 @@ Todos exigem autenticação (Bearer) e verificam ownership (404 para recurso de 
 ```
 
 - Toda transação do payload deve pertencer ao lote; lote deve estar `pendente_revisao` (senão 409)
-- Transações do lote ausentes do payload são tratadas como `descartar`
+- Transações do lote ausentes do payload são tratadas como `descartar` — exceto as `duplicada`, que permanecem `duplicada` (auditoria consistente com o DELETE)
+- Duas decisões `atualizar_planejado` apontando para o mesmo `expense_id` no mesmo confirm → 422 (evita sobrescrita silenciosa)
 - `criar_gasto_diario`: valida par categoria+subcategoria (subcategoria deve pertencer à categoria informada — não deriva só da subcategoria, por causa de subcategorias repetidas) e método de pagamento; `mes_referencia = date(data.year, data.month, 1)` (RN-039)
 - `atualizar_planejado`: `expense_id` obrigatório; Expense do usuário (404 se não); status → `Pago`, valor → valor informado (RN-040)
 - Auditoria: transação confirmada grava `daily_expense_id_criado` ou `expense_id_atualizado`; status da transação → `confirmada`/`descartada`; lote → `confirmado`
@@ -93,7 +94,8 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 - `import_service.py`:
   - `normalize_description(texto)` — lowercase, espaços colapsados, trim
   - `compute_fingerprint(user_id, data, valor, descricao)` — sha256 de `user_id|YYYY-MM-DD|valor 2 casas|descricao normalizada`
-  - `build_import_prompts(db, user_id)` — interpola no template: categorias/subcategorias válidas (`categories.py`), métodos de pagamento, lista de gastos planejados Pendente/Atrasado do usuário (id, nome, valor, vencimento, mês)
+  - `collect_open_expenses(db, user_id)` — gastos planejados Pendente/Atrasado dos últimos 3 meses + mês seguinte (candidatos a match; também define os `expense_id` válidos para a validação)
+  - `build_import_prompts(open_expenses)` — interpola no template: categorias/subcategorias válidas (`categories.py`), métodos de pagamento e a lista de planejados em aberto (id, nome, parcela, valor, vencimento, status)
   - `call_import_api(pdf_bytes, system_prompt, user_prompt)` — `client.messages.create` com content blocks `[document(base64 pdf), text(user_prompt)]`, `max_tokens=8192`, retry/backoff e `_parse_ai_json` reutilizado do padrão F06; timeout `IMPORT_TIMEOUT_SECONDS` (default 90s)
   - `validate_ai_result(resultado)` — descarta/normaliza transações malformadas (data inválida, valor <= 0, classificação desconhecida vira `gasto_diario` sem categoria → pendente de revisão); par categoria/subcategoria inválido zera os campos (usuário define na revisão)
 - A IA devolve: `{"banco": str, "tipo_documento": "extrato"|"fatura", "transacoes": [{data, descricao, valor, classificacao, expense_id?, motivo_ignorar?, categoria?, subcategoria?, metodo_pagamento?}]}`

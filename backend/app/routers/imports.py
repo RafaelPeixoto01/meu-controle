@@ -141,7 +141,8 @@ def confirm_import(
     """
     Aplica as decisoes revisadas: cria gastos diarios (mes da data da compra, RN-039),
     atualiza gastos planejados (status Pago + valor real, RN-040) e descarta o resto.
-    Transacoes do lote ausentes do payload sao descartadas. Operacao atomica.
+    Transacoes do lote ausentes do payload sao descartadas, exceto as 'duplicada',
+    que permanecem assim para auditoria. Operacao atomica.
     """
     batch = crud.get_import_batch_by_id(db, batch_id, current_user.id)
     if not batch:
@@ -161,9 +162,12 @@ def confirm_import(
     criados = 0
     atualizados = 0
     descartadas = 0
+    expenses_ja_atualizados: set[str] = set()
 
     for tx in batch.transacoes:
         decision = decisions.get(tx.id)
+        if decision is None and tx.status == "duplicada":
+            continue  # duplicada nao resgatada permanece 'duplicada' (auditoria)
         acao = decision.acao if decision else "descartar"
 
         if acao == "descartar":
@@ -172,6 +176,10 @@ def confirm_import(
 
         elif acao == "criar_gasto_diario":
             descricao = (decision.descricao or tx.descricao).strip()
+            if not descricao:
+                raise HTTPException(
+                    status_code=422, detail=f"Transação {tx.id}: descrição vazia"
+                )
             valor = decision.valor if decision.valor is not None else float(tx.valor)
             data_tx = decision.data or tx.data
             categoria = decision.categoria or tx.categoria
@@ -220,6 +228,13 @@ def confirm_import(
             expense = crud.get_expense_by_id(db, expense_id, current_user.id)
             if not expense:
                 raise HTTPException(status_code=404, detail="Despesa planejada não encontrada")
+            if expense.id in expenses_ja_atualizados:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transação {tx.id}: gasto planejado {expense.id} já foi "
+                           "atualizado por outra transação deste lote",
+                )
+            expenses_ja_atualizados.add(expense.id)
 
             expense.status = ExpenseStatus.PAGO.value  # RN-040
             expense.valor = decision.valor if decision.valor is not None else float(tx.valor)

@@ -457,6 +457,41 @@ class TestConfirm:
         r2 = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": []})
         assert r2.status_code == 409
 
+    def test_confirm_same_expense_twice_returns_422(self, client, db, open_expense):
+        """Code review CR-046: duas decisoes atualizar_planejado para o mesmo expense_id."""
+        batch = self._upload_batch(client)
+        tx_gasto = self._tx_by_class(batch, "gasto_diario")
+        tx_match = self._tx_by_class(batch, "match_planejado")
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={
+                "transacoes": [
+                    {"id": tx_match["id"], "acao": "atualizar_planejado", "expense_id": "expense-luz", "valor": 100.00},
+                    {"id": tx_gasto["id"], "acao": "atualizar_planejado", "expense_id": "expense-luz", "valor": 90.00},
+                ]
+            },
+        )
+        assert r.status_code == 422
+        # Atomicidade: nada persistido
+        db.refresh(open_expense)
+        assert open_expense.status == ExpenseStatus.PENDENTE.value
+        assert float(open_expense.valor) == 200.00
+
+    def test_confirm_blank_descricao_returns_422(self, client, db, open_expense):
+        """Code review CR-046: descricao=' ' passa no min_length mas vira vazia apos strip."""
+        batch = self._upload_batch(client)
+        tx_gasto = self._tx_by_class(batch, "gasto_diario")
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={
+                "transacoes": [
+                    {"id": tx_gasto["id"], "acao": "criar_gasto_diario", "descricao": " "},
+                ]
+            },
+        )
+        assert r.status_code == 422
+        assert db.query(DailyExpense).count() == 0
+
     def test_confirm_expense_of_another_user_returns_404(self, client, db, open_expense, user_b):
         other_expense = Expense(
             id="expense-user-b",
@@ -503,6 +538,27 @@ class TestDedup:
         # As nao confirmadas (descartadas no 1o lote) continuam pendentes
         assert by_desc["CEMIG ENERGIA"]["status"] == "pendente"
         assert by_desc["PAGAMENTO RECEBIDO"]["status"] == "pendente"
+
+    def test_duplicada_absent_from_confirm_stays_duplicada(self, client, db, open_expense):
+        """Code review CR-046: duplicada nao resgatada permanece 'duplicada' (nao vira descartada)."""
+        batch1 = upload(client).json()["batch"]
+        tx_gasto = next(t for t in batch1["transacoes"] if t["classificacao"] == "gasto_diario")
+        client.post(
+            f"/api/imports/{batch1['id']}/confirm",
+            json={"transacoes": [{"id": tx_gasto["id"], "acao": "criar_gasto_diario"}]},
+        )
+
+        batch2 = upload(client).json()["batch"]
+        r = client.post(f"/api/imports/{batch2['id']}/confirm", json={"transacoes": []})
+        assert r.status_code == 200
+        assert r.json()["descartadas"] == 2  # duplicada nao conta como descartada
+
+        db_tx = (
+            db.query(ImportTransaction)
+            .filter_by(batch_id=batch2["id"], descricao="PADARIA STELLA")
+            .one()
+        )
+        assert db_tx.status == "duplicada"
 
 
 # ========== Ownership / pending / delete ==========
