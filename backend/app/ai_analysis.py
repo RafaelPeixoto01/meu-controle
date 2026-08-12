@@ -25,6 +25,19 @@ logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
+# CR-048: modelo default compartilhado pelos servicos de IA (analise e importacao).
+# Exige geracao 4.6+ — modelos anteriores nao aceitam thinking adaptativo, e os
+# atuais rejeitam os parametros de amostragem (temperature/top_p/top_k) com 400.
+DEFAULT_MODEL = "claude-opus-5"
+
+
+class AiRefusalError(Exception):
+    """CR-048: a IA recusou a requisicao (stop_reason=refusal).
+
+    A recusa e deterministica — reenviar a mesma requisicao produz a mesma
+    resposta —, entao esta excecao fica fora do retry para nao gastar chamadas.
+    """
+
 
 # ========== Data Collector ==========
 
@@ -287,8 +300,8 @@ def call_anthropic_api(system_prompt: str, user_prompt: str) -> dict:
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY não configurada")
 
-    model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-    timeout_seconds = int(os.getenv("AI_ANALYSIS_TIMEOUT_SECONDS", "30"))
+    model = os.getenv("CLAUDE_MODEL", DEFAULT_MODEL)
+    timeout_seconds = int(os.getenv("AI_ANALYSIS_TIMEOUT_SECONDS", "120"))
 
     client = anthropic_sdk.Anthropic(api_key=api_key, timeout=timeout_seconds)
 
@@ -298,20 +311,22 @@ def call_anthropic_api(system_prompt: str, user_prompt: str) -> dict:
 
     for attempt in range(max_retries + 1):
         try:
+            # CR-048: sem `temperature` (rejeitado com 400 na geracao atual).
+            # Thinking adaptativo eleva a qualidade do diagnostico a um custo
+            # irrisorio aqui — a analise roda 1x por mes e fica em cache.
+            # max_tokens cobre raciocinio + resposta somados; como e um teto
+            # (so se paga o que for gerado), fica folgado para o effort padrao
+            # nao espremer o JSON de 8 secoes.
             response = client.messages.create(
                 model=model,
-                max_tokens=2048,
-                temperature=0.3,
+                max_tokens=16000,
+                thinking={"type": "adaptive"},
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
             )
 
             elapsed_ms = int((time.time() - start_time) * 1000)
-
-            # Extrair texto da resposta
-            raw_text = response.content[0].text.strip()
-
-            # Tentar parsear JSON
+            raw_text = extract_response_text(response)
             resultado = _parse_ai_json(raw_text)
 
             return {
@@ -322,6 +337,9 @@ def call_anthropic_api(system_prompt: str, user_prompt: str) -> dict:
                 "tempo_processamento_ms": elapsed_ms,
                 "raw_response": raw_text,
             }
+
+        except AiRefusalError:
+            raise  # CR-048: recusa e deterministica — retry so gastaria chamadas
 
         except json.JSONDecodeError as e:
             last_error = e
@@ -340,6 +358,24 @@ def call_anthropic_api(system_prompt: str, user_prompt: str) -> dict:
             raise
 
     raise last_error  # Should not reach here, but safety net
+
+
+def extract_response_text(response) -> str:
+    """
+    CR-048: extrai o texto da resposta da API.
+
+    Com thinking ligado o primeiro bloco do `content` e um bloco de raciocinio,
+    entao o acesso posicional (`content[0].text`) le o bloco errado. Busca o
+    primeiro bloco de tipo `text`.
+    """
+    if getattr(response, "stop_reason", None) == "refusal":
+        raise AiRefusalError("A IA recusou a requisição por política de conteúdo")
+
+    for block in response.content:
+        if getattr(block, "type", None) == "text":
+            return block.text.strip()
+
+    raise ValueError("Resposta da IA não contém bloco de texto")
 
 
 def _parse_ai_json(raw_text: str) -> dict:

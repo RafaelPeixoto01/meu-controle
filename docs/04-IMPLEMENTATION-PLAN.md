@@ -42,6 +42,7 @@
 | CR-033 | Alertas e Notificacoes Inteligentes (F05)                                      | CR33-T-01 a CR33-T-31 | Concluido |
 | CR-046 | Importacao de Extratos/Faturas PDF via IA — backend (F07; tarefas no CR)        | CR-T-01 a CR-T-09     | Concluido |
 | CR-047 | Importacao de Extratos/Faturas — frontend (F07; tarefas no CR)                   | CR-T-01 a CR-T-08     | Concluido |
+| CR-048 | Migracao dos servicos de IA para Claude Opus 5 (F06 + F07; tarefas no CR)        | CR-T-01 a CR-T-08     | Concluido |
 
 ---
 

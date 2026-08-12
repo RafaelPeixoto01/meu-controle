@@ -125,9 +125,21 @@ Sem alteração nas tabelas existentes.
 | Variável | Default | Uso |
 |----------|---------|-----|
 | `IMPORT_ENABLED` | `true` | Feature flag do módulo |
-| `IMPORT_TIMEOUT_SECONDS` | `90` | Timeout da chamada à IA (PDFs demoram mais que a análise F06) |
+| `IMPORT_TIMEOUT_SECONDS` | `180` | Timeout da chamada à IA (PDF + raciocínio; era 90 antes do CR-048) |
 | `ANTHROPIC_API_KEY` | — | Obrigatória (compartilhada com F06) |
-| `CLAUDE_MODEL` | `claude-sonnet-4-20250514` | Compartilhada com F06 |
+| `CLAUDE_MODEL` | `claude-opus-5` | Compartilhada com F06 (CR-048; exige modelo da geração 4.6+) |
+
+### Parâmetros da chamada (CR-048)
+
+| Parâmetro | Valor | Motivo |
+|-----------|-------|--------|
+| `model` | `DEFAULT_MODEL` (`claude-opus-5`) | Conciliação com gastos planejados é tarefa de julgamento |
+| `thinking` | `{"type": "adaptive"}` | Desligar no Opus 5 pode vazar tags XML internas e quebrar o parse do JSON |
+| `output_config` | `{"effort": "low"}` | Extração é mecânica; baixar o effort é a forma recomendada de conter custo/latência |
+| `max_tokens` | 16000 | Cobre raciocínio + JSON de uma fatura grande (era 8192) |
+| `temperature` | **ausente** | Rejeitado com 400 na geração atual |
+
+Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop_reason == "refusal"` levanta `AiRefusalError` fora do retry — importante aqui porque cada tentativa reenviaria o PDF inteiro. Ver [ADR-019](../02-ARCHITECTURE.md).
 
 ## Testes
 

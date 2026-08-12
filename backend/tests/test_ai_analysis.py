@@ -9,12 +9,38 @@ from unittest.mock import patch, MagicMock
 
 from app.models import Expense, Income, DailyExpense, ExpenseStatus
 from app.ai_analysis import (
+    DEFAULT_MODEL,
+    AiRefusalError,
     has_minimum_data,
     build_prompts,
     call_anthropic_api,
+    extract_response_text,
     merge_actions,
     _parse_ai_json,
 )
+
+
+# CR-048: a resposta da API traz blocos tipados e, com thinking ligado, o
+# primeiro deles e de raciocinio — os mocks precisam refletir isso.
+
+def text_block(text: str):
+    return MagicMock(type="text", text=text)
+
+
+def thinking_block():
+    return MagicMock(type="thinking", thinking="raciocinio interno")
+
+
+def ai_response(text: str, *, with_thinking: bool = True, stop_reason: str = "end_turn"):
+    """Resposta mockada da API no formato da geracao atual."""
+    response = MagicMock()
+    blocks = [thinking_block()] if with_thinking else []
+    blocks.append(text_block(text))
+    response.content = blocks
+    response.stop_reason = stop_reason
+    response.usage.input_tokens = 1500
+    response.usage.output_tokens = 800
+    return response
 
 
 # ========== Fixtures ==========
@@ -234,11 +260,7 @@ class TestCallAnthropicApi:
         mock_client = MagicMock()
         mock_anthropic_module.Anthropic.return_value = mock_client
 
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=json.dumps(VALID_AI_RESPONSE))]
-        mock_response.usage.input_tokens = 1500
-        mock_response.usage.output_tokens = 800
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create.return_value = ai_response(json.dumps(VALID_AI_RESPONSE))
 
         result = call_anthropic_api("system", "user")
 
@@ -275,14 +297,96 @@ class TestCallAnthropicApi:
         mock_client = MagicMock()
         mock_anthropic_module.Anthropic.return_value = mock_client
 
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Isso não é JSON")]
-        mock_response.usage.input_tokens = 100
-        mock_response.usage.output_tokens = 50
-        mock_client.messages.create.return_value = mock_response
+        mock_client.messages.create.return_value = ai_response("Isso não é JSON")
 
         with pytest.raises(ValueError, match="JSON inválido"):
             call_anthropic_api("system", "user")
+
+
+# ========== CR-048: parametros da geracao atual ==========
+
+class TestModelMigration:
+    """CR-048: migracao para Claude Opus 5 (sem temperature, thinking adaptativo)."""
+
+    @staticmethod
+    def _run(mock_anthropic_module, response=None):
+        mock_client = MagicMock()
+        mock_anthropic_module.Anthropic.return_value = mock_client
+        mock_client.messages.create.return_value = response or ai_response(
+            json.dumps(VALID_AI_RESPONSE)
+        )
+        return mock_client
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test", "CLAUDE_MODEL": ""})
+    @patch("app.ai_analysis.anthropic_sdk")
+    def test_nao_envia_temperature(self, mock_anthropic_module):
+        """Parametros de amostragem sao rejeitados com 400 na geracao atual."""
+        mock_client = self._run(mock_anthropic_module)
+
+        call_anthropic_api("system", "user")
+
+        kwargs = mock_client.messages.create.call_args.kwargs
+        assert "temperature" not in kwargs
+        assert "top_p" not in kwargs
+        assert "top_k" not in kwargs
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=True)
+    @patch("app.ai_analysis.anthropic_sdk")
+    def test_usa_modelo_default_e_thinking_adaptativo(self, mock_anthropic_module):
+        mock_client = self._run(mock_anthropic_module)
+
+        call_anthropic_api("system", "user")
+
+        kwargs = mock_client.messages.create.call_args.kwargs
+        assert kwargs["model"] == DEFAULT_MODEL == "claude-opus-5"
+        assert kwargs["thinking"] == {"type": "adaptive"}
+        # max_tokens cobre raciocinio + resposta somados; effort padrao (alto)
+        # gera bastante raciocinio, entao o teto precisa ser folgado
+        assert kwargs["max_tokens"] >= 16000
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"})
+    @patch("app.ai_analysis.anthropic_sdk")
+    def test_le_texto_apos_bloco_de_thinking(self, mock_anthropic_module):
+        """Com thinking ligado, content[0] e o raciocinio — o texto vem depois."""
+        response = ai_response(json.dumps(VALID_AI_RESPONSE), with_thinking=True)
+        assert response.content[0].type == "thinking"  # garante o cenario
+        self._run(mock_anthropic_module, response)
+
+        result = call_anthropic_api("system", "user")
+
+        assert result["resultado"]["mensagem_motivacional"]
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"})
+    @patch("app.ai_analysis.anthropic_sdk")
+    def test_recusa_nao_faz_retry(self, mock_anthropic_module):
+        """stop_reason=refusal e deterministico — repetir so gastaria chamadas."""
+        response = ai_response("", stop_reason="refusal")
+        response.content = []
+        mock_client = self._run(mock_anthropic_module, response)
+
+        with pytest.raises(AiRefusalError):
+            call_anthropic_api("system", "user")
+
+        assert mock_client.messages.create.call_count == 1
+
+
+class TestExtractResponseText:
+    def test_ignora_bloco_de_thinking(self):
+        response = MagicMock(stop_reason="end_turn")
+        response.content = [thinking_block(), text_block("  resposta  ")]
+        assert extract_response_text(response) == "resposta"
+
+    def test_resposta_sem_bloco_de_texto(self):
+        response = MagicMock(stop_reason="end_turn")
+        response.content = [thinking_block()]
+        with pytest.raises(ValueError, match="não contém bloco de texto"):
+            extract_response_text(response)
+
+    def test_recusa_levanta_erro_dedicado(self):
+        response = MagicMock(stop_reason="refusal")
+        response.content = []
+        with pytest.raises(AiRefusalError):
+            extract_response_text(response)
 
 
 # ========== merge_actions ==========

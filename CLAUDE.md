@@ -292,8 +292,9 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - **Obrigatórias:** `SECRET_KEY` (JWT — app não inicia sem ela, CR-010), `DATABASE_URL` (fallback SQLite se ausente)
 - **Google OAuth:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
 - **Email (SendGrid):** `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `FRONTEND_URL`
-- **Análise IA (CR-032):** `ANTHROPIC_API_KEY`, `AI_ANALYSIS_ENABLED`, `CLAUDE_MODEL`, `AI_ANALYSIS_TIMEOUT_SECONDS`
-- **Importação de extratos (CR-046):** `IMPORT_ENABLED` (default true), `IMPORT_TIMEOUT_SECONDS` (default 90) — compartilha `ANTHROPIC_API_KEY`/`CLAUDE_MODEL`
+- **Análise IA (CR-032):** `ANTHROPIC_API_KEY`, `AI_ANALYSIS_ENABLED`, `CLAUDE_MODEL`, `AI_ANALYSIS_TIMEOUT_SECONDS` (default 120)
+- **Importação de extratos (CR-046):** `IMPORT_ENABLED` (default true), `IMPORT_TIMEOUT_SECONDS` (default 180) — compartilha `ANTHROPIC_API_KEY`/`CLAUDE_MODEL`
+- **`CLAUDE_MODEL` (CR-048):** default `claude-opus-5`, definido na constante `DEFAULT_MODEL` em `app/ai_analysis.py`. **Exige modelo da geração 4.6+** — os atuais rejeitam `temperature`/`top_p`/`top_k` com 400 e ligam thinking por padrão (o código já trata os dois). Ambos os serviços de IA consomem créditos da mesma conta Anthropic
 - **Auth/CORS (com defaults):** `ALLOWED_ORIGINS`, `ENVIRONMENT`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`
 
 ---
@@ -314,11 +315,11 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 ### Change Requests
 > **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-043: Hotfix segurança — path traversal no fallback do SPA (main.py serve_spa); payloads percent-encoded (`/..%2f.env`) vazavam backend/.env; corrigido com contenção de path (`resolve_static_file` + is_relative_to) + 9 testes de regressão (concluido)
 - CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
 - CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (concluido)
 - CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (concluido)
 - CR-047: Importação de Extratos/Faturas — frontend F07: página /import (upload → revisão → resultado) + aba Importar, requestMultipart no api.ts (FormData + refresh-401), hooks useImports, helpers importReview com 12 testes Vitest; validado E2E via Playwright (concluido)
+- CR-048: Migração dos serviços de IA para Claude Opus 5 — remove `temperature` (400 na geração atual), thinking adaptativo (effort low na importação), corrige leitura da resposta (`content[0]` é bloco de thinking) e trata `stop_reason=refusal` fora do retry; 11 testes novos (em implementação — aguardando CI)
 
 ---
 

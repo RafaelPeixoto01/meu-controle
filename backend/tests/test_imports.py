@@ -2,9 +2,10 @@
 CR-046 (F07): Testes da importacao de extratos/faturas em PDF via IA.
 API Anthropic sempre mockada (call_import_api).
 """
+import json
 import pytest
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from starlette.testclient import TestClient
 from sqlalchemy import create_engine
@@ -23,7 +24,9 @@ from app.models import (
     ImportTransaction,
     User,
 )
+from app.ai_analysis import DEFAULT_MODEL, AiRefusalError
 from app.import_service import (
+    call_import_api,
     compute_fingerprint,
     normalize_description,
     validate_ai_result,
@@ -171,6 +174,90 @@ def upload(client, transacoes=None, **kwargs):
             "/api/imports",
             files={"file": ("fatura.pdf", PDF_BYTES, "application/pdf")},
         )
+
+
+# ========== CR-048: parametros da geracao atual ==========
+
+def _import_response(text: str, *, with_thinking: bool = True, stop_reason: str = "end_turn"):
+    """Resposta mockada da API no formato da geracao atual (blocos tipados)."""
+    response = MagicMock()
+    blocks = [MagicMock(type="thinking", thinking="raciocinio")] if with_thinking else []
+    blocks.append(MagicMock(type="text", text=text))
+    response.content = blocks
+    response.stop_reason = stop_reason
+    response.usage.input_tokens = 9000
+    response.usage.output_tokens = 3000
+    return response
+
+
+VALID_EXTRACTION = json.dumps({
+    "banco": "Nubank",
+    "tipo_documento": "fatura",
+    "transacoes": [TX_PADARIA],
+})
+
+
+class TestModelMigration:
+    """CR-048: migracao para Claude Opus 5 no servico de importacao."""
+
+    @staticmethod
+    def _run(mock_sdk, response=None):
+        mock_client = MagicMock()
+        mock_sdk.Anthropic.return_value = mock_client
+        mock_client.messages.create.return_value = response or _import_response(VALID_EXTRACTION)
+        return mock_client
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=True)
+    @patch("app.import_service.anthropic_sdk")
+    def test_nao_envia_temperature(self, mock_sdk):
+        mock_client = self._run(mock_sdk)
+
+        call_import_api(PDF_BYTES, "system", "user")
+
+        kwargs = mock_client.messages.create.call_args.kwargs
+        assert "temperature" not in kwargs
+        assert "top_p" not in kwargs
+        assert "top_k" not in kwargs
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=True)
+    @patch("app.import_service.anthropic_sdk")
+    def test_modelo_default_thinking_e_effort(self, mock_sdk):
+        mock_client = self._run(mock_sdk)
+
+        call_import_api(PDF_BYTES, "system", "user")
+
+        kwargs = mock_client.messages.create.call_args.kwargs
+        assert kwargs["model"] == DEFAULT_MODEL == "claude-opus-5"
+        assert kwargs["thinking"] == {"type": "adaptive"}
+        # effort baixo: extracao e mecanica — contem custo e latencia
+        assert kwargs["output_config"] == {"effort": "low"}
+        # max_tokens cobre raciocinio + JSON de uma fatura grande
+        assert kwargs["max_tokens"] >= 16000
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=True)
+    @patch("app.import_service.anthropic_sdk")
+    def test_le_texto_apos_bloco_de_thinking(self, mock_sdk):
+        response = _import_response(VALID_EXTRACTION, with_thinking=True)
+        assert response.content[0].type == "thinking"
+        self._run(mock_sdk, response)
+
+        result = call_import_api(PDF_BYTES, "system", "user")
+
+        assert result["resultado"]["banco"] == "Nubank"
+        assert result["tokens_input"] == 9000
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=True)
+    @patch("app.import_service.anthropic_sdk")
+    def test_recusa_nao_faz_retry(self, mock_sdk):
+        response = _import_response("", stop_reason="refusal")
+        response.content = []
+        mock_client = self._run(mock_sdk, response)
+
+        with pytest.raises(AiRefusalError):
+            call_import_api(PDF_BYTES, "system", "user")
+
+        # PDF e caro para reenviar — a recusa nao pode consumir os retries
+        assert mock_client.messages.create.call_count == 1
 
 
 # ========== Unit: fingerprint ==========
