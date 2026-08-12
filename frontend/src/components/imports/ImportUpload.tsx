@@ -52,8 +52,8 @@ export default function ImportUpload({
         <div>
           <p className="font-bold text-text">Interpretando o documento...</p>
           <p className="text-sm text-text-muted mt-1">
-            A IA está lendo as transações do PDF. Isso pode levar até 1 minuto e meio —
-            não feche esta página.
+            A IA está lendo as transações do PDF. Isso pode levar até 3 minutos em
+            faturas grandes — não feche esta página.
           </p>
         </div>
       </div>

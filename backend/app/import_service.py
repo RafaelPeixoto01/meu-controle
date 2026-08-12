@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app import crud
-from app.ai_analysis import _parse_ai_json
+from app.ai_analysis import DEFAULT_MODEL, AiRefusalError, _parse_ai_json, extract_response_text
 from app.categories import EXPENSE_CATEGORIES, PAYMENT_METHODS, is_valid_payment_method
 from app.models import ExpenseStatus
 
@@ -130,8 +130,8 @@ def call_import_api(pdf_bytes: bytes, system_prompt: str, user_prompt: str) -> d
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY não configurada")
 
-    model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-    timeout_seconds = int(os.getenv("IMPORT_TIMEOUT_SECONDS", "90"))
+    model = os.getenv("CLAUDE_MODEL", DEFAULT_MODEL)
+    timeout_seconds = int(os.getenv("IMPORT_TIMEOUT_SECONDS", "180"))
 
     client = anthropic_sdk.Anthropic(api_key=api_key, timeout=timeout_seconds)
     pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("ascii")
@@ -142,10 +142,18 @@ def call_import_api(pdf_bytes: bytes, system_prompt: str, user_prompt: str) -> d
 
     for attempt in range(max_retries + 1):
         try:
+            # CR-048: sem `temperature` (rejeitado com 400 na geracao atual).
+            # Thinking fica ligado com `effort: low`: desligar no Opus 5 pode
+            # vazar tags XML internas no texto e quebrar o parse do JSON, e
+            # baixar o effort e a forma recomendada de conter custo e latencia
+            # numa tarefa mecanica de extracao.
+            # max_tokens cobre raciocinio + JSON somados — fatura grande gera
+            # muitas transacoes.
             response = client.messages.create(
                 model=model,
-                max_tokens=8192,
-                temperature=0,
+                max_tokens=16000,
+                thinking={"type": "adaptive"},
+                output_config={"effort": "low"},
                 system=system_prompt,
                 messages=[
                     {
@@ -166,7 +174,7 @@ def call_import_api(pdf_bytes: bytes, system_prompt: str, user_prompt: str) -> d
             )
 
             elapsed_ms = int((time.time() - start_time) * 1000)
-            raw_text = response.content[0].text.strip()
+            raw_text = extract_response_text(response)
             resultado = _parse_ai_json(raw_text)
 
             return {
@@ -176,6 +184,9 @@ def call_import_api(pdf_bytes: bytes, system_prompt: str, user_prompt: str) -> d
                 "modelo": model,
                 "tempo_processamento_ms": elapsed_ms,
             }
+
+        except AiRefusalError:
+            raise  # CR-048: recusa e deterministica — retry so gastaria chamadas
 
         except json.JSONDecodeError as e:
             last_error = e
