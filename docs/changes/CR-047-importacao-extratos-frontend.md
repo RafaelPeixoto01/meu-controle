@@ -117,20 +117,60 @@ Aba "Importar" no ViewSelector → página `/import`: selecionar PDF → acompan
 
 ## 8. Critérios de Aceite
 
-- [ ] Aba "Importar" no ViewSelector navega para `/import` (rota protegida)
-- [ ] Upload de PDF exibe estado "processando" e, ao concluir, a tela de revisão com as transações agrupadas por classificação
-- [ ] Revisão permite: incluir/excluir transação, editar descrição/valor/data/categoria/subcategoria/método, trocar destino (gasto diário ↔ conciliar planejado ↔ descartar)
-- [ ] Transações `ignorar` e `duplicada` aparecem em seções separadas, desmarcadas por padrão, e podem ser resgatadas
-- [ ] Confirmação chama `/confirm` com as decisões e exibe o resumo (criados/atualizados/descartadas); caches de gastos diários e visão mensal são invalidados
-- [ ] Lote pendente de revisão é oferecido para retomada ao entrar em `/import`
-- [ ] Respostas `indisponivel`/`erro` do upload exibem mensagem explicativa sem quebrar a página
-- [ ] `requestMultipart` envia Bearer token, NÃO seta Content-Type manualmente e mantém o refresh-401 com retry
-- [ ] Testes existentes continuam passando (regressão: Vitest + tsc + eslint)
-- [ ] Novos testes cobrem a mudança (api multipart + helpers de revisão)
-- [ ] Fluxo afetado exercitado em runtime antes do merge via Playwright — registrar o que foi validado
-- [ ] Revisão de código pré-merge executada (complexidade Média) — registrar findings
-- [ ] Revisão de segurança executada ou justificada
-- [ ] Documentos afetados foram atualizados
+- [x] Aba "Importar" no ViewSelector navega para `/import` (rota protegida) — validado via Playwright
+- [x] Upload de PDF exibe estado "processando" e, ao concluir, a tela de revisão com as transações agrupadas por classificação — estado processando implementado; revisão validada via lote seedado (ver 8.1)
+- [x] Revisão permite: incluir/excluir transação, editar descrição/valor/data/categoria/subcategoria/método, trocar destino (gasto diário ↔ conciliar planejado ↔ descartar) — edição de descrição exercitada no E2E
+- [x] Transações `ignorar` e `duplicada` aparecem em seções separadas, desmarcadas por padrão, e podem ser resgatadas — validado via Playwright (grupos "Ignoradas pela IA" e "Duplicadas")
+- [x] Confirmação chama `/confirm` com as decisões e exibe o resumo; caches invalidados — E2E: "1 gasto diário criado · 1 planejado pago · 1 transação descartada"; views refletiram sem reload
+- [x] Lote pendente de revisão é oferecido para retomada ao entrar em `/import` — banner "Retomar revisão" validado no E2E
+- [x] Respostas `indisponivel`/`erro` do upload exibem mensagem explicativa sem quebrar a página — upload real sem API key exibiu "Importação não configurada..." (ver 8.1)
+- [x] `requestMultipart` envia Bearer token, NÃO seta Content-Type manualmente e mantém o refresh-401 com retry — 4 testes Vitest dedicados
+- [x] Testes existentes continuam passando (regressão) — Vitest 47/47, tsc limpo, eslint sem erros novos (8 warnings pré-existentes em arquivos não tocados)
+- [x] Novos testes cobrem a mudança — 12 novos (4 multipart em `api.test.ts` + 8 em `importReview.test.ts`)
+- [x] Fluxo afetado exercitado em runtime antes do merge via Playwright — ver seção 8.1
+- [x] Revisão de código pré-merge executada — ver seção 8.2 (5 findings: 4 corrigidos, 1 dead code removido)
+- [x] Revisão de segurança executada — ver seção 8.3
+- [x] Documentos afetados foram atualizados — Spec F07 (seção Frontend), índice 03-SPEC, Arquitetura v3.1, Plano, PRD (refs), CLAUDE.md
+
+### 8.1 Validação Runtime via Playwright (CR-037)
+
+Backend (uvicorn :8000, sem `ANTHROPIC_API_KEY`) + frontend (vite :5173) reais, usuário de teste `cr047-e2e@test.local`, lote `pendente_revisao` seedado direto no staging (a chamada de IA não é exercitável localmente — mesma justificativa registrada no CR-046; o upload→parse real é coberto pelos testes de backend mockados e será validado em produção):
+
+| Fluxo | Resultado |
+|-------|-----------|
+| Login + aba "Importar" → `/import` | ✅ página carregada, 6ª aba ativa |
+| Banner de lote pendente + "Retomar revisão" | ✅ tela de revisão com 4 grupos (1 novo gasto, 1 conciliação, 1 ignorada, 1 duplicada), 2/4 selecionadas por padrão |
+| Conciliação mostra planejado alvo | ✅ "Energia elétrica — R$ 200,00 · Pendente · vence 15/08" pré-selecionado |
+| Edição inline (descrição "PADARIA STELLA" → "Padaria Stella") + Confirmar | ✅ resultado "1 gasto diário criado · 1 planejado pago · 1 transação descartada" (duplicada ficou de fora) |
+| Ver Gastos Diários | ✅ "Padaria Stella" R$ 23,50 em 05/08 (descrição editada persistida) |
+| Ver Gastos Planejados | ✅ "Energia elétrica" status **Pago**, valor atualizado para **R$ 187,32** — caches invalidados sem reload |
+| Upload real de PDF (sem API key no backend) | ✅ arquivo enviado via file chooser; mensagem "Importação não configurada. Configure ANTHROPIC_API_KEY." exibida sem quebrar |
+| Console do browser | ✅ 0 erros durante todo o fluxo |
+
+### 8.2 Code Review Pré-merge (CR-040)
+
+Executado sobre `git diff master...HEAD` (agentes: bugs + aderência a padrões). 5 findings:
+
+| # | Finding | Tratamento |
+|---|---------|-----------|
+| 1 | Falha no descarte durante a revisão voltava ao upload e destruía as edições do usuário | **Corrigido** — permanece na revisão e exibe o erro no rodapé |
+| 2 | Erro de validação por linha ficava obsoleto após o usuário corrigir o campo | **Corrigido** — `updateDecision` limpa o erro da linha |
+| 3 | Candidatos a conciliação não cobriam meses de transações reclassificadas manualmente para "Pagar gasto planejado" | **Corrigido** — `monthsToFetchForMatches` inclui meses de todas as transações (+ teste atualizado) |
+| 4 | Sem guarda client-side contra pagar o mesmo planejado em duas linhas (backend responde 422 genérico) | **Corrigido** — validação por linha no `handleConfirm` |
+| 5 | `useImportBatch` exportado sem uso (retomada usa chamada direta) | **Corrigido** — dead code removido; chamada direta mantida de propósito (hook + efeito violaria `react-hooks/set-state-in-effect` para um fluxo imperativo one-shot) |
+
+Pós-fixes: tsc limpo, Vitest 47/47.
+
+### 8.3 Revisão de Segurança
+
+CR exclusivamente de UI, sem endpoints novos — mas toca o caminho de autenticação do client HTTP, então o checklist foi executado:
+
+- [x] Sem segredos hardcoded
+- [x] Validação client-side de arquivo (extensão/10MB) é só UX — a validação de verdade permanece no backend (CR-046), inalterada
+- [x] Tokens: `requestMultipart` reusa o mecanismo existente (access token em localStorage conforme ADR-015, refresh via HttpOnly cookie); nenhum armazenamento novo de credencial
+- [x] Ownership: inalterado (backend)
+- [x] CORS/headers: inalterados
+- [x] Dependências: **nenhuma nova** (`npm audit` coberto pelo CI)
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.
 
@@ -182,3 +222,6 @@ Aba "Importar" no ViewSelector → página `/import`: selecionar PDF → acompan
 | Data       | Autor  | Descrição |
 |------------|--------|-----------|
 | 2026-08-12 | Claude | CR criado (UI da F07; backend no CR-046) |
+| 2026-08-12 | Claude | Implementação concluída: página /import, requestMultipart, hooks, helpers; 12 testes novos (Vitest 47/47, tsc/eslint limpos) |
+| 2026-08-12 | Claude | Validação runtime E2E via Playwright ✅ (8.1), code review pré-merge ✅ (8.2: 5 findings tratados), revisão de segurança ✅ (8.3) |
+| 2026-08-12 | Claude | Docs sincronizados (Spec F07, 03-SPEC, Arquitetura v3.1, Plano, PRD refs, CLAUDE.md). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |

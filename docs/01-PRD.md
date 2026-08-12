@@ -4,7 +4,7 @@
 **Data:** 2026-08-12
 **Status:** Aprovado
 **Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047
 
 ---
 
@@ -625,4 +625,4 @@ Os itens abaixo **nao** estao no escopo atual:
 *Atualizado para v2.2 em 2026-02-17. RF-13: Gastos Diarios — CRUD, categorias fixas, visao mensal agrupada por dia (CR-005).*
 *Atualizado para v2.3 em 2026-03-16. RF-15: Score de Saude Financeira (CR-026).*
 *Atualizado para v3.0 em 2026-03-18. Sincronizacao massiva: RF-16 Categorizacao (CR-016), RF-17 Dashboard (CR-019), RF-18 Parcelas Futuras (CR-021), RF-19 Analise IA (CR-032), RF-20 Alertas (CR-033). Atualizados User Stories (US-24 a US-28), Regras de Negocio (RN-025 a RN-037), Fora de Escopo, Glossario e Roadmap.*
-*Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7.*
+*Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7. UI entregue no CR-047 (mesma data) — conteudo do RF-21 ja cobria a feature completa.*

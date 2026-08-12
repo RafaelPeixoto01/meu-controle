@@ -226,7 +226,7 @@ Personal Finance/
 │       ├── services/           # api.ts (client + 401 interceptor), authApi.ts
 │       ├── contexts/           # AuthContext
 │       ├── hooks/              # useXxx por domínio (expenses, incomes, dashboard, score, alerts...)
-│       ├── components/         # + subpastas dashboard/, installments/, score/, analysis/, alerts/
+│       ├── components/         # + subpastas dashboard/, installments/, score/, analysis/, alerts/, imports/
 │       ├── pages/              # Views + páginas de auth
 │       └── utils/              # format.ts, date.ts
 ├── CLAUDE.md
@@ -314,11 +314,11 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 ### Change Requests
 > **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-042: Update deps backend — python-jose 3.5, fastapi 0.139/starlette 1.3, python-dotenv 1.2, pytest 9; corrige 15 advisories do pip-audit; ecdsa aceito (HS256 não usa ECDSA) (concluido)
 - CR-043: Hotfix segurança — path traversal no fallback do SPA (main.py serve_spa); payloads percent-encoded (`/..%2f.env`) vazavam backend/.env; corrigido com contenção de path (`resolve_static_file` + is_relative_to) + 9 testes de regressão (concluido)
 - CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
 - CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (concluido)
 - CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (concluido)
+- CR-047: Importação de Extratos/Faturas — frontend F07: página /import (upload → revisão → resultado) + aba Importar, requestMultipart no api.ts (FormData + refresh-401), hooks useImports, helpers importReview com 12 testes Vitest; validado E2E via Playwright (em implementação — aguardando CI)
 
 ---
 

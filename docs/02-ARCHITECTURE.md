@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 3.0
+**Versao:** 3.1
 **Data:** 2026-08-12
 **PRD Ref:** 01-PRD v3.1
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046 (Importacao de Extratos — F07, ADR-018)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018)
 
 ---
 
@@ -175,7 +175,8 @@ Personal Finance/
 │       │   ├── useMonthTransition.ts
 │       │   ├── useAuth.ts                   # CR-002: Auth convenience hook
 │       │   ├── useDailyExpenses.ts          # CR-005: TanStack Query hooks gastos diarios
-│       │   └── useDailyExpensesView.ts      # CR-005: Navegacao mensal gastos diarios
+│       │   ├── useDailyExpensesView.ts      # CR-005: Navegacao mensal gastos diarios
+│       │   └── useImports.ts                # CR-047: pending/upload/confirm/discard + match targets
 │       ├── components/
 │       │   ├── MonthNavigator.tsx
 │       │   ├── IncomeTable.tsx
@@ -189,7 +190,8 @@ Personal Finance/
 │       │   ├── UserMenu.tsx                 # CR-002: Dropdown perfil/logout
 │       │   ├── DailyExpenseTable.tsx        # CR-005: Tabela gastos agrupada por dia
 │       │   ├── DailyExpenseFormModal.tsx    # CR-005: Modal formulario gasto diario
-│       │   └── ViewSelector.tsx            # CR-005: Seletor Planejados/Diarios
+│       │   ├── ViewSelector.tsx            # CR-005: Seletor de abas (6 abas desde CR-047)
+│       │   └── imports/                    # CR-047: ImportUpload, ImportReview, ImportResult
 │       └── pages/
 │           ├── MonthlyView.tsx
 │           ├── LoginPage.tsx                # CR-002
@@ -197,7 +199,8 @@ Personal Finance/
 │           ├── ForgotPasswordPage.tsx       # CR-002
 │           ├── ResetPasswordPage.tsx        # CR-002
 │           ├── ProfilePage.tsx              # CR-002
-│           └── DailyExpensesView.tsx       # CR-005: Pagina gastos diarios
+│           ├── DailyExpensesView.tsx       # CR-005: Pagina gastos diarios
+│           └── ImportView.tsx              # CR-047: Pagina /import (upload → revisao → resultado)
 └── .gitignore
 ```
 
