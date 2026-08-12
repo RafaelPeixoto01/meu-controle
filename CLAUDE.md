@@ -318,7 +318,7 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 - CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
 - CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (concluido)
 - CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (concluido)
-- CR-047: Importação de Extratos/Faturas — frontend F07: página /import (upload → revisão → resultado) + aba Importar, requestMultipart no api.ts (FormData + refresh-401), hooks useImports, helpers importReview com 12 testes Vitest; validado E2E via Playwright (em implementação — aguardando CI)
+- CR-047: Importação de Extratos/Faturas — frontend F07: página /import (upload → revisão → resultado) + aba Importar, requestMultipart no api.ts (FormData + refresh-401), hooks useImports, helpers importReview com 12 testes Vitest; validado E2E via Playwright (concluido)
 
 ---
 

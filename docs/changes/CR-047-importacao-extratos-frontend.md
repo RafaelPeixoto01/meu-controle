@@ -1,8 +1,8 @@
 # Change Request — CR-047: Importação de Extratos e Faturas — Frontend (F07)
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-08-12
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -225,3 +225,4 @@ CR exclusivamente de UI, sem endpoints novos — mas toca o caminho de autentica
 | 2026-08-12 | Claude | Implementação concluída: página /import, requestMultipart, hooks, helpers; 12 testes novos (Vitest 47/47, tsc/eslint limpos) |
 | 2026-08-12 | Claude | Validação runtime E2E via Playwright ✅ (8.1), code review pré-merge ✅ (8.2: 5 findings tratados), revisão de segurança ✅ (8.3) |
 | 2026-08-12 | Claude | Docs sincronizados (Spec F07, 03-SPEC, Arquitetura v3.1, Plano, PRD refs, CLAUDE.md). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |
+| 2026-08-12 | Claude | Merge --no-ff em master + push; CI verde (run 31647414330). Status → Concluído. Validação ✅ |
