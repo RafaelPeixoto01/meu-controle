@@ -18,7 +18,7 @@ from app.schemas import (
     ImportConfirmResponse,
     ImportUploadResponse,
 )
-from app import crud, import_service
+from app import crud, import_service, services
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +160,7 @@ def confirm_import(
         decisions[d.id] = d
 
     criados = 0
+    planejados_criados = 0  # CR-049
     atualizados = 0
     descartadas = 0
     expenses_ja_atualizados: set[str] = set()
@@ -218,6 +219,50 @@ def confirm_import(
             tx.status = "confirmada"
             criados += 1
 
+        elif acao == "criar_planejado_parcelado":
+            # CR-049: materializa a compra parcelada como serie de gastos planejados
+            descricao = (decision.descricao or tx.descricao).strip()
+            if not descricao:
+                raise HTTPException(
+                    status_code=422, detail=f"Transação {tx.id}: descrição vazia"
+                )
+            valor = decision.valor if decision.valor is not None else float(tx.valor)
+            data_tx = decision.data or tx.data
+            categoria = decision.categoria or tx.categoria
+            subcategoria = decision.subcategoria or tx.subcategoria
+
+            # Categoria e opcional em Expense, mas se vier tem que ser um par valido
+            if categoria or subcategoria:
+                if (
+                    categoria not in EXPENSE_CATEGORIES
+                    or subcategoria not in EXPENSE_CATEGORIES.get(categoria, [])
+                ):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Transação {tx.id}: categoria/subcategoria inválidas",
+                    )
+
+            expense_atual, criadas = services.create_expense_with_installments(
+                db,
+                user_id=current_user.id,
+                mes_referencia=date(data_tx.year, data_tx.month, 1),  # RN-039
+                nome=descricao,
+                valor=valor,
+                vencimento=data_tx,  # RN-045: base do vencimento e a data da compra
+                categoria=categoria,
+                subcategoria=subcategoria,
+                parcela_atual=decision.parcela_atual,
+                parcela_total=decision.parcela_total,
+                recorrente=False,
+                # RN-044: a parcela desta fatura ja foi cobrada
+                status_primeira=ExpenseStatus.PAGO.value,
+                skip_existing=True,  # RN-046
+            )
+            db.flush()
+            tx.expense_id_criado = expense_atual.id
+            tx.status = "confirmada"
+            planejados_criados += criadas
+
         elif acao == "atualizar_planejado":
             expense_id = decision.expense_id or tx.expense_id_sugerido
             if not expense_id:
@@ -247,6 +292,7 @@ def confirm_import(
 
     return ImportConfirmResponse(
         gastos_diarios_criados=criados,
+        planejados_criados=planejados_criados,
         planejados_atualizados=atualizados,
         descartadas=descartadas,
     )

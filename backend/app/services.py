@@ -8,8 +8,93 @@ from collections import defaultdict
 
 from app import crud
 from app.models import Expense, ExpenseStatus, Income
+from app.utils import add_months
 
 logger = logging.getLogger(__name__)
+
+
+def create_expense_with_installments(
+    db: Session,
+    user_id: str,
+    mes_referencia: date,
+    nome: str,
+    valor: float,
+    vencimento: date,
+    categoria: str | None = None,
+    subcategoria: str | None = None,
+    parcela_atual: int | None = None,
+    parcela_total: int | None = None,
+    recorrente: bool = True,
+    status_primeira: str = ExpenseStatus.PENDENTE.value,
+    skip_existing: bool = False,
+) -> tuple[Expense, int]:
+    """
+    CR-049: Cria uma despesa e, se for parcelada (parcela_total > 1), TODAS as
+    parcelas futuras de uma vez (criacao upfront do CR-007).
+
+    Extraido do router de expenses para ser reutilizado pela importacao de
+    faturas (F07), que precisa da mesma regra ao materializar um parcelamento
+    detectado no PDF.
+
+    - As parcelas futuras herdam categoria/subcategoria/valor e nascem sempre
+      Pendente e `recorrente=False` (elas nao sao fixas mensais).
+    - `mes_referencia` e `vencimento` avancam com `add_months`, que preserva o
+      dia e trata meses curtos (31/01 -> 28/02).
+    - `status_primeira` permite que a importacao marque a parcela ja cobrada na
+      fatura como Paga (RN-044), sem afetar o cadastro manual.
+    - `skip_existing=True` pula parcelas ja existentes no mes-alvo (RN-046),
+      evitando duplicacao quando a fatura do mes seguinte e importada.
+
+    Retorna (despesa da parcela informada, total de despesas criadas).
+    NAO faz commit — quem chama controla a transacao.
+    """
+    criadas = 0
+    expense_atual = Expense(
+        user_id=user_id,
+        mes_referencia=mes_referencia,
+        nome=nome,
+        categoria=categoria,
+        subcategoria=subcategoria,
+        valor=valor,
+        vencimento=vencimento,
+        parcela_atual=parcela_atual,
+        parcela_total=parcela_total,
+        recorrente=recorrente,
+        status=status_primeira,
+    )
+    db.add(expense_atual)
+    criadas += 1
+
+    if parcela_total and parcela_total > 1:
+        base = parcela_atual or 1
+        for i in range(base + 1, parcela_total + 1):
+            offset_months = i - base
+            next_mes = add_months(mes_referencia, offset_months)
+
+            if skip_existing and crud.expense_installment_exists(
+                db, next_mes, user_id, nome, i, parcela_total
+            ):
+                continue
+
+            db.add(
+                Expense(
+                    user_id=user_id,
+                    mes_referencia=next_mes,
+                    nome=nome,
+                    categoria=categoria,
+                    subcategoria=subcategoria,
+                    valor=valor,
+                    vencimento=add_months(vencimento, offset_months),
+                    parcela_atual=i,
+                    parcela_total=parcela_total,
+                    # Parcelas futuras nao sao "recorrentes" no sentido da flag
+                    recorrente=False,
+                    status=ExpenseStatus.PENDENTE.value,
+                )
+            )
+            criadas += 1
+
+    return expense_atual, criadas
 
 
 def get_next_month(current: date) -> date:

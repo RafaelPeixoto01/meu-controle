@@ -598,12 +598,14 @@ class ImportTransactionResponse(BaseModel):
     data: date
     descricao: str
     valor: float
-    classificacao: str  # gasto_diario | match_planejado | ignorar
+    classificacao: str  # gasto_diario | match_planejado | parcelamento | ignorar
     motivo_ignorar: str | None = None
     expense_id_sugerido: str | None = None
     categoria: str | None = None
     subcategoria: str | None = None
     metodo_pagamento: str | None = None
+    parcela_atual: int | None = None  # CR-049
+    parcela_total: int | None = None  # CR-049
     status: str  # pendente | confirmada | descartada | duplicada
 
 
@@ -629,7 +631,8 @@ class ImportUploadResponse(BaseModel):
 
 class ImportConfirmDecision(BaseModel):
     id: str
-    acao: str  # criar_gasto_diario | atualizar_planejado | descartar
+    # criar_gasto_diario | atualizar_planejado | criar_planejado_parcelado (CR-049) | descartar
+    acao: str
     descricao: str | None = Field(None, min_length=1, max_length=255)
     valor: float | None = Field(None, gt=0)
     data: date | None = None
@@ -637,12 +640,27 @@ class ImportConfirmDecision(BaseModel):
     subcategoria: str | None = None
     metodo_pagamento: str | None = None
     expense_id: str | None = None
+    parcela_atual: int | None = Field(None, ge=1)  # CR-049
+    parcela_total: int | None = Field(None, ge=2)  # CR-049: serie exige 2+ parcelas
 
     @model_validator(mode="after")
     def validate_acao(self):
-        acoes_validas = {"criar_gasto_diario", "atualizar_planejado", "descartar"}
+        acoes_validas = {
+            "criar_gasto_diario",
+            "atualizar_planejado",
+            "criar_planejado_parcelado",
+            "descartar",
+        }
         if self.acao not in acoes_validas:
             raise ValueError(f"Ação inválida: {self.acao}")
+        # CR-049: a serie de parcelas so faz sentido com numeracao coerente
+        if self.acao == "criar_planejado_parcelado":
+            if self.parcela_atual is None or self.parcela_total is None:
+                raise ValueError(
+                    "parcela_atual e parcela_total são obrigatórios em criar_planejado_parcelado"
+                )
+            if self.parcela_atual > self.parcela_total:
+                raise ValueError("parcela_atual deve ser <= parcela_total")
         return self
 
 
@@ -652,5 +670,6 @@ class ImportConfirmRequest(BaseModel):
 
 class ImportConfirmResponse(BaseModel):
     gastos_diarios_criados: int
+    planejados_criados: int = 0  # CR-049: parcelas criadas a partir de parcelamentos
     planejados_atualizados: int
     descartadas: int

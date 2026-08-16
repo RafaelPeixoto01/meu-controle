@@ -12,7 +12,11 @@ REGRAS DE CLASSIFICAÇÃO (campo "classificacao"):
    - Pagamento de fatura de cartão (no extrato: "Pagamento de fatura"; na fatura: "Pagamento recebido") — evita contagem dupla entre extrato e fatura
    - Preencha "motivo_ignorar" com uma justificativa curta (ex: "receita", "transferência própria", "pagamento de fatura", "estorno")
 
-3. "gasto_diario" — qualquer outro gasto de consumo (compras, mercado, restaurante, transporte, delivery etc.). Sugira "categoria" e "subcategoria" escolhendo EXATAMENTE um par válido da lista fornecida (a subcategoria deve pertencer à categoria). Sugira "metodo_pagamento" da lista fornecida (fatura de cartão → "Cartão de Crédito"; no extrato use "Pix" ou "Cartão de Débito" conforme a transação).
+3. "parcelamento" — compra parcelada identificada pela numeração explícita da parcela na descrição (ex: "LOJA 03/10", "PARC 03/10", "PARCELA 3 DE 10") que NÃO casou com nenhum gasto planejado da lista. Preencha "parcela_atual" e "parcela_total" com os números lidos (inteiros) e limpe a numeração do campo "descricao" (ex: "NETSHOES PARC 03/10" → "Netshoes"). O "valor" é o da parcela, não o total da compra. Sugira também "categoria"/"subcategoria" (par válido da lista).
+   - **Precedência:** se existir gasto planejado correspondente na lista, use "match_planejado" — nunca "parcelamento". Isso evita recriar parcelas já cadastradas quando o usuário importa a fatura de vários meses.
+   - Assinaturas e mensalidades sem numeração de parcela (Netflix, academia) NÃO são parcelamento — são "gasto_diario" ou "match_planejado".
+
+4. "gasto_diario" — qualquer outro gasto de consumo (compras, mercado, restaurante, transporte, delivery etc.). Sugira "categoria" e "subcategoria" escolhendo EXATAMENTE um par válido da lista fornecida (a subcategoria deve pertencer à categoria). Sugira "metodo_pagamento" da lista fornecida (fatura de cartão → "Cartão de Crédito"; no extrato use "Pix" ou "Cartão de Débito" conforme a transação).
 
 REGRAS DE EXTRAÇÃO:
 - Uma entrada por transação; não agrupe nem resuma.
@@ -37,7 +41,22 @@ FORMATO DE SAÍDA — responda APENAS com JSON válido, sem markdown, sem coment
       "subcategoria": "Padaria",
       "metodo_pagamento": "Cartão de Crédito",
       "expense_id": null,
-      "motivo_ignorar": null
+      "motivo_ignorar": null,
+      "parcela_atual": null,
+      "parcela_total": null
+    },
+    {
+      "data": "2026-07-15",
+      "descricao": "Netshoes",
+      "valor": 149.90,
+      "classificacao": "parcelamento",
+      "categoria": "Compras Pessoais",
+      "subcategoria": "Roupas",
+      "metodo_pagamento": "Cartão de Crédito",
+      "expense_id": null,
+      "motivo_ignorar": null,
+      "parcela_atual": 3,
+      "parcela_total": 10
     }
   ]
 }

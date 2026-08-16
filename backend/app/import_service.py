@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
 
 MAX_PDF_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
-CLASSIFICACOES_VALIDAS = {"gasto_diario", "match_planejado", "ignorar"}
+# CR-049: "parcelamento" = compra parcelada detectada na fatura sem gasto
+# planejado correspondente; vira uma serie de Expense na confirmacao.
+CLASSIFICACOES_VALIDAS = {"gasto_diario", "match_planejado", "parcelamento", "ignorar"}
 
 # Janela de gastos planejados enviados no prompt: extratos/faturas cobrem
 # tipicamente o mes anterior; 3 meses para tras + mes seguinte da margem.
@@ -209,6 +211,24 @@ def call_import_api(pdf_bytes: bytes, system_prompt: str, user_prompt: str) -> d
 
 # ========== Validacao do resultado da IA ==========
 
+def _parse_parcelas(tx: dict) -> tuple[int | None, int | None]:
+    """
+    CR-049: le e valida o par parcela_atual/parcela_total de uma transacao.
+
+    Retorna (None, None) se a numeracao nao for coerente — o que rebaixa a
+    classificacao para gasto_diario. Exige inteiros com total > 1 e
+    1 <= atual <= total; "1/1" nao e parcelamento, e uma compra a vista.
+    """
+    try:
+        atual = int(tx.get("parcela_atual"))
+        total = int(tx.get("parcela_total"))
+    except (TypeError, ValueError):
+        return None, None
+    if total <= 1 or atual < 1 or atual > total:
+        return None, None
+    return atual, total
+
+
 def validate_ai_result(resultado: dict, valid_expense_ids: set[str]) -> dict:
     """
     Sanitiza o JSON da IA: descarta transacoes malformadas e normaliza campos.
@@ -216,6 +236,7 @@ def validate_ai_result(resultado: dict, valid_expense_ids: set[str]) -> dict:
     - data invalida, valor <= 0 ou descricao vazia → transacao descartada
     - classificacao desconhecida → vira gasto_diario
     - match_planejado com expense_id fora da lista de planejados em aberto → vira gasto_diario
+    - parcelamento sem numeracao coerente (CR-049) → vira gasto_diario
     - par categoria/subcategoria invalido → ambos None (usuario define na revisao)
     - metodo_pagamento invalido → None; fatura sem metodo → "Cartão de Crédito"
     """
@@ -252,6 +273,14 @@ def validate_ai_result(resultado: dict, valid_expense_ids: set[str]) -> dict:
         else:
             expense_id = None
 
+        # CR-049: parcelamento sem numeracao coerente nao vira serie de parcelas —
+        # rebaixa para gasto_diario e deixa o usuario decidir na revisao
+        parcela_atual, parcela_total = _parse_parcelas(tx)
+        if classificacao == "parcelamento" and parcela_total is None:
+            classificacao = "gasto_diario"
+        if classificacao != "parcelamento":
+            parcela_atual = parcela_total = None
+
         categoria = tx.get("categoria")
         subcategoria = tx.get("subcategoria")
         if (
@@ -281,6 +310,8 @@ def validate_ai_result(resultado: dict, valid_expense_ids: set[str]) -> dict:
             "subcategoria": subcategoria,
             "metodo_pagamento": metodo,
             "motivo_ignorar": motivo,
+            "parcela_atual": parcela_atual,
+            "parcela_total": parcela_total,
         })
 
     return {
