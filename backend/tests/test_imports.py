@@ -719,7 +719,7 @@ class TestParcelamentoConfirm:
         assert all(p.status == ExpenseStatus.PENDENTE.value for p in parcelas[1:])
 
     def test_mes_e_vencimento_avancam_a_partir_da_data_da_compra(self, client, db):
-        """RN-039 + RN-045: base e a data da compra (2026-07-15)."""
+        """RN-045: compra em 15/07/2026; a parcela 3 e cobrada 2 meses depois."""
         batch = self._upload_parcelamento(client)
         tx = batch["transacoes"][0]
 
@@ -729,21 +729,22 @@ class TestParcelamentoConfirm:
         )
 
         parcelas = db.query(Expense).order_by(Expense.parcela_atual).all()
-        assert parcelas[0].mes_referencia == date(2026, 7, 1)
-        assert parcelas[0].vencimento == date(2026, 7, 15)
-        # parcela 10 = 7 meses depois
-        assert parcelas[-1].mes_referencia == date(2027, 2, 1)
-        assert parcelas[-1].vencimento == date(2027, 2, 15)
+        # parcela 3 = compra + 2 meses (nao o mes da compra)
+        assert parcelas[0].mes_referencia == date(2026, 9, 1)
+        assert parcelas[0].vencimento == date(2026, 9, 15)
+        # parcela 10 = compra + 9 meses
+        assert parcelas[-1].mes_referencia == date(2027, 4, 1)
+        assert parcelas[-1].vencimento == date(2027, 4, 15)
 
     def test_nao_recria_parcela_ja_existente(self, client, db, user_a):
         """RN-046: importar a fatura do mes seguinte nao duplica a serie."""
         db.add(
             Expense(
                 user_id=user_a.id,
-                mes_referencia=date(2026, 8, 1),
+                mes_referencia=date(2026, 10, 1),
                 nome="Netshoes",
                 valor=149.90,
-                vencimento=date(2026, 8, 15),
+                vencimento=date(2026, 10, 15),
                 parcela_atual=4,
                 parcela_total=10,
                 recorrente=False,
@@ -766,13 +767,14 @@ class TestParcelamentoConfirm:
     def test_reimportar_a_propria_parcela_nao_duplica(self, client, db, user_a):
         """RN-046: fatura seguinte com a parcela ja criada concilia, nao duplica."""
         for parcela in (3, 4):
+            # compra em 15/07: parcela 3 em set, parcela 4 em out
             db.add(
                 Expense(
                     user_id=user_a.id,
-                    mes_referencia=date(2026, 7 + parcela - 3, 1),
+                    mes_referencia=date(2026, 6 + parcela, 1),
                     nome="Netshoes",
                     valor=149.90,
-                    vencimento=date(2026, 7 + parcela - 3, 15),
+                    vencimento=date(2026, 6 + parcela, 15),
                     parcela_atual=parcela,
                     parcela_total=10,
                     recorrente=False,
@@ -875,6 +877,63 @@ class TestParcelamentoConfirm:
         }
         assert db.query(Expense).count() == 0
         assert db.query(DailyExpense).count() == 1
+
+
+class TestParcelamentoCodeReview:
+    """Findings do code review pre-merge do CR-049."""
+
+    def test_fingerprint_distingue_parcelas_da_mesma_compra(self):
+        """Parcelas da mesma compra compartilham data/valor/descricao limpa."""
+        base = ("user-a", date(2026, 7, 15), 149.90, "Netshoes")
+        fp3 = compute_fingerprint(*base, 3, 10)
+        fp4 = compute_fingerprint(*base, 4, 10)
+        assert fp3 != fp4
+        # sem numeracao, a formula original (fingerprints antigos seguem validos)
+        assert compute_fingerprint(*base) == compute_fingerprint(*base, None, None)
+
+    def test_parcela_seguinte_nao_nasce_duplicada(self, client, db):
+        """Sem o fix, a parcela 4 do mes seguinte viria marcada 'duplicada'."""
+        b1 = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        client.post(f"/api/imports/{b1['id']}/confirm", json={"transacoes": [
+            {"id": b1["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
+             "parcela_atual": 3, "parcela_total": 10}]})
+
+        b2 = upload(client, transacoes=[{**TX_PARCELAMENTO, "parcela_atual": 4}]).json()["batch"]
+        assert b2["transacoes"][0]["status"] == "pendente"
+
+    def test_parcela_total_absurdo_rejeitado(self, client, db):
+        """Teto de parcelas evita criar milhares de despesas num request."""
+        batch = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
+            {"id": batch["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
+             "parcela_atual": 1, "parcela_total": 200000}]})
+        assert r.status_code == 422
+        assert db.query(Expense).count() == 0
+
+    def test_duas_linhas_para_a_mesma_serie_retorna_422(self, client, db):
+        """Sem a guarda, a segunda linha sobrescreveria a despesa da primeira."""
+        tx_b = {**TX_PARCELAMENTO, "valor": 300.00}
+        batch = upload(client, transacoes=[TX_PARCELAMENTO, tx_b]).json()["batch"]
+        ids = [t["id"] for t in batch["transacoes"]]
+        r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
+            {"id": ids[0], "acao": "criar_planejado_parcelado", "parcela_atual": 3, "parcela_total": 10},
+            {"id": ids[1], "acao": "criar_planejado_parcelado", "parcela_atual": 3, "parcela_total": 10}]})
+        assert r.status_code == 422
+        assert "outra transação deste lote" in r.json()["detail"]
+        assert db.query(Expense).count() == 0
+
+    def test_categoria_limpa_na_revisao_nao_volta_da_ia(self, client, db):
+        """Usuario que limpa a categoria nao recebe o palpite da IA de volta."""
+        batch = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        assert batch["transacoes"][0]["categoria"] == "Compras Pessoais"
+
+        client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
+            {"id": batch["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
+             "parcela_atual": 3, "parcela_total": 10}]})  # sem categoria no payload
+
+        parcela = db.query(Expense).filter(Expense.parcela_atual == 3).one()
+        assert parcela.categoria is None
+        assert parcela.subcategoria is None
 
 
 # ========== Dedup (RN-042) ==========

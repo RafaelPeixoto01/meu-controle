@@ -592,6 +592,10 @@ class ConfiguracaoAlertasUpdate(BaseModel):
 
 # ========== Imports (CR-046, F07) ==========
 
+# CR-049: teto de parcelas de uma serie. Financiamentos longos chegam a 60x;
+# 120 da folga sem permitir que a IA dispare a criacao de milhares de linhas.
+MAX_PARCELAS = 120
+
 class ImportTransactionResponse(BaseModel):
     model_config = {"from_attributes": True}
     id: str
@@ -640,8 +644,10 @@ class ImportConfirmDecision(BaseModel):
     subcategoria: str | None = None
     metodo_pagamento: str | None = None
     expense_id: str | None = None
-    parcela_atual: int | None = Field(None, ge=1)  # CR-049
-    parcela_total: int | None = Field(None, ge=2)  # CR-049: serie exige 2+ parcelas
+    parcela_atual: int | None = Field(None, ge=1, le=MAX_PARCELAS)  # CR-049
+    # CR-049: serie exige 2+ parcelas; o teto evita que um numero absurdo vindo
+    # da IA gere milhares de despesas numa unica requisicao
+    parcela_total: int | None = Field(None, ge=2, le=MAX_PARCELAS)
 
     @model_validator(mode="after")
     def validate_acao(self):

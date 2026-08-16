@@ -325,10 +325,18 @@ describe("buildConfirmPayload (parcelamentos)", () => {
 
 describe("describeInstallmentSeries", () => {
   it("calcula quantas parcelas e ate quando", () => {
+    // compra 15/07/2026, parcela 3/10: cria 8 parcelas, a ultima em abr/2027
+    // (a parcela k e cobrada k-1 meses apos a compra)
     expect(describeInstallmentSeries(parcelaDecision())).toEqual({
       quantidade: 8,
-      ultimoMes: "02/2027",
+      ultimoMes: "04/2027",
     });
+  });
+
+  it("rejeita total acima do teto do backend", () => {
+    expect(validateDecision(parcelaDecision({ parcelaTotal: "200" }), CATEGORIAS)).toMatch(
+      /120/
+    );
   });
 
   it("retorna null para numeracao invalida", () => {

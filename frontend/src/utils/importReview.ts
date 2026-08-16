@@ -69,7 +69,9 @@ export function describeInstallmentSeries(
   if (!ano || !mes) return null;
 
   const quantidade = total - atual + 1;
-  const ultimo = new Date(ano, mes - 1 + (quantidade - 1), 1);
+  // A data e a da COMPRA: a parcela k e cobrada k-1 meses depois dela,
+  // entao a ultima da serie cai em (compra + total - 1) meses.
+  const ultimo = new Date(ano, mes - 1 + (total - 1), 1);
   const ultimoMes = `${String(ultimo.getMonth() + 1).padStart(2, "0")}/${ultimo.getFullYear()}`;
   return { quantidade, ultimoMes };
 }
@@ -127,6 +129,8 @@ export function validateDecision(
     if (!Number.isInteger(atual) || !Number.isInteger(total) || total <= 1) {
       return "Informe a numeração da parcela (ex: 3 de 10)";
     }
+    // Espelha MAX_PARCELAS do backend
+    if (total > 120) return "Total de parcelas não pode passar de 120";
     if (atual < 1 || atual > total) {
       return "Parcela atual deve estar entre 1 e o total";
     }

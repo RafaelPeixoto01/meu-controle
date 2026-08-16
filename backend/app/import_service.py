@@ -48,9 +48,25 @@ def normalize_description(descricao: str) -> str:
     return " ".join(descricao.lower().split())
 
 
-def compute_fingerprint(user_id: str, data_tx: date, valor: float, descricao: str) -> str:
-    """Fingerprint de deduplicacao (RN-042): sha256(user|data|valor|descricao normalizada)."""
+def compute_fingerprint(
+    user_id: str,
+    data_tx: date,
+    valor: float,
+    descricao: str,
+    parcela_atual: int | None = None,
+    parcela_total: int | None = None,
+) -> str:
+    """
+    Fingerprint de deduplicacao (RN-042): sha256(user|data|valor|descricao normalizada).
+
+    CR-049: parcelas da mesma compra compartilham data (a da compra), valor e
+    descricao ja limpa da numeracao — sem a numeracao no fingerprint, a parcela
+    do mes seguinte nasceria marcada como duplicada. Transacoes sem parcela
+    mantem a formula original (fingerprints antigos continuam validos).
+    """
     raw = f"{user_id}|{data_tx.isoformat()}|{float(valor):.2f}|{normalize_description(descricao)}"
+    if parcela_atual and parcela_total:
+        raw += f"|{parcela_atual}/{parcela_total}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -328,7 +344,14 @@ def mark_duplicates(db: Session, user_id: str, transacoes: list[dict]) -> list[d
     'fingerprint' e 'status' em cada dict.
     """
     for tx in transacoes:
-        tx["fingerprint"] = compute_fingerprint(user_id, tx["data"], tx["valor"], tx["descricao"])
+        tx["fingerprint"] = compute_fingerprint(
+            user_id,
+            tx["data"],
+            tx["valor"],
+            tx["descricao"],
+            tx.get("parcela_atual"),
+            tx.get("parcela_total"),
+        )
 
     fingerprints = [tx["fingerprint"] for tx in transacoes]
     confirmados = crud.get_confirmed_fingerprints(db, user_id, fingerprints)

@@ -200,6 +200,7 @@ export default function ImportReview({
                     <input
                       type="number"
                       min="1"
+                      max="120"
                       step="1"
                       value={decision.parcelaAtual}
                       onChange={(e) => updateDecision(tx.id, { parcelaAtual: e.target.value })}
@@ -211,6 +212,7 @@ export default function ImportReview({
                     <input
                       type="number"
                       min="2"
+                      max="120"
                       step="1"
                       value={decision.parcelaTotal}
                       onChange={(e) => updateDecision(tx.id, { parcelaTotal: e.target.value })}
@@ -252,10 +254,11 @@ export default function ImportReview({
                 </div>
                 {serie && (
                   <p className="text-xs text-text-muted bg-slate-50 rounded-lg px-3 py-2">
-                    Cria <strong>{serie.quantidade}</strong>{" "}
+                    Cria até <strong>{serie.quantidade}</strong>{" "}
                     {serie.quantidade === 1 ? "parcela" : "parcelas"} de{" "}
                     {formatBRL(Number(decision.valor) || 0)} até <strong>{serie.ultimoMes}</strong>.
-                    A parcela {decision.parcelaAtual} já entra como <strong>Paga</strong>.
+                    A parcela {decision.parcelaAtual} já entra como <strong>Paga</strong>;
+                    parcelas que já existirem são reaproveitadas.
                   </p>
                 )}
               </div>
