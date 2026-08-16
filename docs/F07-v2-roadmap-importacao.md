@@ -1,6 +1,6 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-08-16
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
@@ -29,7 +29,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 | # | Lacuna | Evidência no código |
 |---|--------|---------------------|
-| L1 | **Cobertura incompleta** — toda receita cai em `ignorar`, e compras parceladas viram um gasto diário solto, sem conexão com o módulo de parcelas que já existe | `CLASSIFICACOES_VALIDAS` em [`import_service.py:33`](../backend/app/import_service.py#L33) conhece apenas `gasto_diario \| match_planejado \| ignorar` |
+| L1 | **Cobertura incompleta** — compras parceladas viram um gasto diário solto, sem conexão com o módulo de parcelas que já existe | `CLASSIFICACOES_VALIDAS` em [`import_service.py:33`](../backend/app/import_service.py#L33) conhece apenas `gasto_diario \| match_planejado \| ignorar` |
 | L2 | **Revisão trabalhosa** — as mesmas descrições são recorrigidas todo mês; sem edição em massa, filtro ou totais | [`ImportReview.tsx`](../frontend/src/components/imports/ImportReview.tsx) edita linha a linha; nenhum somatório na tela |
 | L3 | **Confiabilidade** — upload síncrono de até 3 min, extração incompleta indetectável, confirm errado irreversível | `upload_import` chama a IA no request ([`routers/imports.py:30`](../backend/app/routers/imports.py#L30)); `daily_expense_id_criado`/`expense_id_atualizado` são gravados mas nunca usados |
 
@@ -48,7 +48,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 ## 4. Evoluções de Alta Prioridade
 
-### E-A — Cobertura: receitas e compras parceladas
+### E-A — Cobertura: compras parceladas
 
 | Campo | Valor |
 |-------|-------|
@@ -56,29 +56,27 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 | Complexidade | Alta (backend + frontend + migration + refactor) |
 | Depende de | — |
 
-**Problema.** Um extrato de conta corrente é metade receita, e hoje 100% dela vira `ignorar` por RN-041. Uma fatura de cartão com "NETSHOES PARC 3/10" gera um `DailyExpense` isolado de R$ X, perdendo as 7 parcelas futuras — justamente o dado que alimenta a projeção de parcelas (CR-021) e o fator D2 do health score.
+**Problema.** Uma fatura de cartão com "NETSHOES PARC 3/10" gera hoje um `DailyExpense` isolado de R$ X, perdendo as 7 parcelas futuras — justamente o dado que alimenta a projeção de parcelas (CR-021) e o fator D2 do health score. O modelo de dados já suporta parcelamento (`Expense.parcela_atual`/`parcela_total`), mas a importação não sabe produzi-lo.
 
 **Desenho:**
 
-- **Classificações novas da IA:** `receita` e `parcelamento`, somadas às três atuais em `CLASSIFICACOES_VALIDAS`.
-- **Prompt** ([`import_extraction_system.txt`](../backend/prompts/import_extraction_system.txt)) instruído a:
-  - reconhecer os padrões brasileiros de parcela — `3/10`, `PARC 03/10`, `PARCELA 3 DE 10` — e devolver `parcela_atual`/`parcela_total`;
-  - distinguir **receita real** (salário, PIX recebido de terceiro, rendimento) de **transferência entre contas próprias e pagamento de fatura**, que continuam `ignorar`.
-- **Ações novas no confirm** ([`routers/imports.py:135`](../backend/app/routers/imports.py#L135)):
-  - `criar_receita` → `Income(mes_referencia = mês da data, nome, valor, data, recorrente=False)`. O modelo já existe e não muda.
-  - `criar_planejado_parcelado` → `Expense` com `parcela_atual`/`parcela_total` **e todas as parcelas futuras**.
+- **Classificação nova da IA:** `parcelamento`, somada às três atuais em `CLASSIFICACOES_VALIDAS`.
+- **Prompt** ([`import_extraction_system.txt`](../backend/prompts/import_extraction_system.txt)) instruído a reconhecer os padrões brasileiros de parcela — `3/10`, `PARC 03/10`, `PARCELA 3 DE 10` — e devolver `parcela_atual`/`parcela_total`.
+- **Ação nova no confirm** ([`routers/imports.py:135`](../backend/app/routers/imports.py#L135)): `criar_planejado_parcelado` → `Expense` com `parcela_atual`/`parcela_total` **e todas as parcelas futuras**.
 - **Refactor necessário:** a criação upfront das parcelas futuras hoje vive inline no router, em [`routers/expenses.py:119-149`](../backend/app/routers/expenses.py#L119-L149). Extrair para `services.create_expense_with_installments(...)` e chamar dos dois lugares — sem isso a regra de parcelas ficaria duplicada em dois routers. Guarda contra duplicação já existe: [`crud.expense_installment_exists`](../backend/app/crud.py#L95).
 - **Migration:** colunas `parcela_atual` e `parcela_total` em `import_transactions`.
-- **Frontend:** dois grupos novos na revisão ("Receitas" e "Compras parceladas"), editor de `x/y` e de vencimento, e as duas ações novas nos helpers de [`utils/importReview.ts`](../frontend/src/utils/importReview.ts) (`buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`).
+- **Frontend:** grupo novo na revisão ("Compras parceladas"), editor de `x/y` e de vencimento, e a ação nova nos helpers de [`utils/importReview.ts`](../frontend/src/utils/importReview.ts) (`buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`).
 
-**Impacto em documentos:** **RN-041 muda de sentido** e precisa ser reescrita no PRD dentro do CR — receita de extrato passa a ser importável; apenas transferências entre contas próprias e pagamento de fatura seguem em `ignorar`. RF novo para as duas ações de confirm.
+**Fora de escopo:** a importação continua tratando receitas como `ignorar` (RN-041 inalterada). Extratos de conta corrente seguem cobertos apenas na parte de despesas.
+
+**Impacto em documentos:** RF novo para a ação de confirm; RN nova para a criação de parcelas via importação. RN-041 permanece como está.
 
 **Riscos:**
 
 | Risco | Mitigação |
 |-------|-----------|
 | Importar a mesma fatura em dois meses recria as parcelas futuras | `expense_installment_exists` + fingerprint de dedup já existente |
-| IA confunde estorno/reembolso com receita | Staging + revisão obrigatória; estornos ficam como caso explícito no prompt |
+| IA marca como parcelamento uma recorrência fixa (assinatura mensal) | Staging + revisão obrigatória; o prompt distingue "3/10" de cobrança recorrente sem numeração |
 | Parcelamento detectado com `parcela_total` errado gera N despesas erradas | Revisão mostra a projeção ("cria 7 parcelas de R$ X até 03/2027") antes de confirmar |
 
 ---
@@ -116,7 +114,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 |-------|-------|
 | Lacuna | L2 |
 | Complexidade | Alta (migration + serviço + retrabalho da tela de revisão) |
-| Depende de | E-A (as classificações novas precisam estar estáveis no prompt) |
+| Depende de | E-A (a classificação nova precisa estar estável no prompt) |
 
 **Problema.** A IA erra as mesmas descrições todo mês, e a revisão de uma fatura com 40–80 linhas é feita uma a uma.
 
@@ -148,7 +146,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 |-------|-------|
 | Lacuna | L3 |
 | Complexidade | Alta (migration + endpoints + tela nova) |
-| Depende de | E-A (o undo precisa desfazer também `criar_receita` e `criar_planejado_parcelado`) |
+| Depende de | E-A (o undo precisa desfazer também `criar_planejado_parcelado`, incluindo as parcelas futuras) |
 
 **Problema.** Não há como saber se a IA **omitiu** transações — uma fatura parcialmente lida passa despercebida. E um confirm errado com 60 lançamentos só se resolve apagando à mão, apesar de os campos de auditoria já estarem gravados.
 
@@ -157,7 +155,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 - **Reconciliação de total.** A IA passa a devolver `total_documento` (total da fatura ou saldo/movimentação do extrato). O backend grava `total_documento` e `total_extraido` no batch; a revisão mostra "soma R$ X · documento R$ Y · diferença R$ Z" e alerta na divergência. É a única defesa possível contra extração silenciosamente incompleta — sem ela, o único detector é o usuário perceber a falta.
 - **Histórico.** `GET /api/imports` paginado, com resumo por lote (hoje só existe `/pending`, ou seja, o que já foi importado é invisível).
 - **Desfazer.** `POST /api/imports/{id}/undo` para lote `confirmado`:
-  - apaga os `DailyExpense` / `Income` / `Expense` criados pelo lote (via os IDs de auditoria);
+  - apaga os `DailyExpense` e os `Expense` criados pelo lote (via os IDs de auditoria);
   - **restaura** status e valor dos planejados conciliados — o que exige gravar o estado anterior no momento do confirm: colunas novas `expense_status_anterior` e `expense_valor_anterior` em `import_transactions` (migration);
   - lançamentos que o usuário já apagou ou editou à mão são ignorados e reportados nos contadores, em vez de bloquear o undo inteiro;
   - status novo de batch: `revertido`.
@@ -179,8 +177,8 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 |-------|------|----------------------|
 | 1º | **E-A** | Maior valor percebido e a única isolada no par revisão/confirm — não depende de nada |
 | 2º | **E-B** | Muda o contrato do upload; feito cedo, todo o trabalho de UI seguinte já se apoia na forma final |
-| 3º | **E-C** | As regras de categorização só fazem sentido depois que as classificações novas da E-A estabilizaram o prompt |
-| 4º | **E-D** | O undo precisa saber desfazer **todas** as ações, inclusive as duas que a E-A introduz; antes disso garantiria retrabalho |
+| 3º | **E-C** | As regras de categorização só fazem sentido depois que a classificação nova da E-A estabilizou o prompt |
+| 4º | **E-D** | O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras); antes disso garantiria retrabalho |
 
 Cada evolução vira um CR próprio no momento da implementação (numeração sequencial a partir de CR-049, via `/sdd-pipeline`). Este roadmap **não** reserva os números: CRs criados com antecedência envelhecem antes de serem executados.
 
@@ -228,7 +226,7 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 
 | ID | Item | Prioridade | Depende de | Migration? |
 |----|------|-----------|------------|-----------|
-| E-A | Receitas e compras parceladas | Alta | — | Sim |
+| E-A | Compras parceladas | Alta | — | Sim |
 | E-B | Upload assíncrono | Alta | — | Sim |
 | E-C | Memória de categorização + revisão em massa | Alta | E-A | Sim |
 | E-D | Reconciliação, histórico e desfazer | Alta | E-A | Sim |
@@ -248,3 +246,4 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | Data | Autor | Descrição |
 |------|-------|-----------|
 | 2026-08-16 | Claude | Documento criado a partir do brainstorming de evolução da F07: 4 evoluções de alta prioridade (E-A..E-D) + 8 itens de backlog (B-1..B-8) |
+| 2026-08-16 | Claude | E-A reduzida a compras parceladas — classificação de receitas retirada do roadmap por decisão do autor; RN-041 permanece inalterada |
