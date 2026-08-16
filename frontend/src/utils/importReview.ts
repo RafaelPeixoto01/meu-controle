@@ -11,7 +11,7 @@ import type {
 // Campos numericos ficam como string para bind direto nos inputs.
 export interface ReviewDecision {
   incluida: boolean;
-  acao: "criar_gasto_diario" | "atualizar_planejado";
+  acao: "criar_gasto_diario" | "atualizar_planejado" | "criar_planejado_parcelado";
   descricao: string;
   valor: string;
   data: string;
@@ -19,22 +19,33 @@ export interface ReviewDecision {
   subcategoria: string;
   metodoPagamento: string;
   expenseId: string;
+  parcelaAtual: string; // CR-049
+  parcelaTotal: string; // CR-049
 }
 
 export interface ReviewGroups {
   novos: ImportTransaction[];
   matches: ImportTransaction[];
+  parcelamentos: ImportTransaction[]; // CR-049
   ignoradas: ImportTransaction[];
   duplicadas: ImportTransaction[];
 }
 
 export function groupTransactions(batch: ImportBatch): ReviewGroups {
-  const groups: ReviewGroups = { novos: [], matches: [], ignoradas: [], duplicadas: [] };
+  const groups: ReviewGroups = {
+    novos: [],
+    matches: [],
+    parcelamentos: [],
+    ignoradas: [],
+    duplicadas: [],
+  };
   for (const tx of batch.transacoes) {
     if (tx.status === "duplicada") {
       groups.duplicadas.push(tx);
     } else if (tx.classificacao === "match_planejado") {
       groups.matches.push(tx);
+    } else if (tx.classificacao === "parcelamento") {
+      groups.parcelamentos.push(tx);
     } else if (tx.classificacao === "ignorar") {
       groups.ignoradas.push(tx);
     } else {
@@ -44,14 +55,40 @@ export function groupTransactions(batch: ImportBatch): ReviewGroups {
   return groups;
 }
 
+// CR-049: quantas parcelas serao criadas e ate quando — usado na previa da
+// revisao, para o usuario conferir antes de gravar uma serie inteira.
+export function describeInstallmentSeries(
+  decision: ReviewDecision
+): { quantidade: number; ultimoMes: string } | null {
+  const atual = Number(decision.parcelaAtual);
+  const total = Number(decision.parcelaTotal);
+  if (!Number.isInteger(atual) || !Number.isInteger(total)) return null;
+  if (total <= 1 || atual < 1 || atual > total) return null;
+
+  const [ano, mes] = decision.data.split("-").map(Number);
+  if (!ano || !mes) return null;
+
+  const quantidade = total - atual + 1;
+  const ultimo = new Date(ano, mes - 1 + (quantidade - 1), 1);
+  const ultimoMes = `${String(ultimo.getMonth() + 1).padStart(2, "0")}/${ultimo.getFullYear()}`;
+  return { quantidade, ultimoMes };
+}
+
 export function buildInitialDecisions(batch: ImportBatch): Record<string, ReviewDecision> {
   const decisions: Record<string, ReviewDecision> = {};
   for (const tx of batch.transacoes) {
     const isMatch = tx.classificacao === "match_planejado" && !!tx.expense_id_sugerido;
+    // CR-049: parcelamento so nasce como serie se a IA numerou a parcela
+    const isParcelamento =
+      tx.classificacao === "parcelamento" && !!tx.parcela_atual && !!tx.parcela_total;
+    let acao: ReviewDecision["acao"] = "criar_gasto_diario";
+    if (isMatch) acao = "atualizar_planejado";
+    else if (isParcelamento) acao = "criar_planejado_parcelado";
+
     decisions[tx.id] = {
       // Ignoradas e duplicadas nascem desmarcadas (resgataveis na revisao)
       incluida: tx.status === "pendente" && tx.classificacao !== "ignorar",
-      acao: isMatch ? "atualizar_planejado" : "criar_gasto_diario",
+      acao,
       descricao: tx.descricao,
       valor: String(tx.valor),
       data: tx.data,
@@ -59,6 +96,8 @@ export function buildInitialDecisions(batch: ImportBatch): Record<string, Review
       subcategoria: tx.subcategoria ?? "",
       metodoPagamento: tx.metodo_pagamento ?? "",
       expenseId: tx.expense_id_sugerido ?? "",
+      parcelaAtual: tx.parcela_atual ? String(tx.parcela_atual) : "",
+      parcelaTotal: tx.parcela_total ? String(tx.parcela_total) : "",
     };
   }
   return decisions;
@@ -79,6 +118,27 @@ export function validateDecision(
   }
   if (!decision.descricao.trim()) return "Descrição é obrigatória";
   if (!decision.data) return "Data é obrigatória";
+
+  // CR-049: serie de parcelas — categoria e opcional em gastos planejados,
+  // mas se informada tem que formar par valido; a numeracao e obrigatoria.
+  if (decision.acao === "criar_planejado_parcelado") {
+    const atual = Number(decision.parcelaAtual);
+    const total = Number(decision.parcelaTotal);
+    if (!Number.isInteger(atual) || !Number.isInteger(total) || total <= 1) {
+      return "Informe a numeração da parcela (ex: 3 de 10)";
+    }
+    if (atual < 1 || atual > total) {
+      return "Parcela atual deve estar entre 1 e o total";
+    }
+    if (decision.categoria || decision.subcategoria) {
+      const subs = categorias[decision.categoria];
+      if (!subs || !subs.includes(decision.subcategoria)) {
+        return "Subcategoria não pertence à categoria selecionada";
+      }
+    }
+    return null;
+  }
+
   if (!decision.categoria || !decision.subcategoria) {
     return "Categoria e subcategoria são obrigatórias";
   }
@@ -108,6 +168,20 @@ export function buildConfirmPayload(
         acao: "atualizar_planejado",
         expense_id: decision.expenseId,
         valor: Number(decision.valor),
+      });
+    } else if (decision.acao === "criar_planejado_parcelado") {
+      transacoes.push({
+        id: tx.id,
+        acao: "criar_planejado_parcelado",
+        descricao: decision.descricao.trim(),
+        valor: Number(decision.valor),
+        data: decision.data,
+        // Categoria e opcional no gasto planejado: so envia o par completo
+        ...(decision.categoria && decision.subcategoria
+          ? { categoria: decision.categoria, subcategoria: decision.subcategoria }
+          : {}),
+        parcela_atual: Number(decision.parcelaAtual),
+        parcela_total: Number(decision.parcelaTotal),
       });
     } else {
       transacoes.push({

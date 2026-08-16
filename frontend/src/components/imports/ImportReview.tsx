@@ -13,6 +13,7 @@ import { formatBRL, formatDateBR } from "../../utils/format";
 import {
   buildConfirmPayload,
   buildInitialDecisions,
+  describeInstallmentSeries,
   groupTransactions,
   validateDecision,
   type ReviewDecision,
@@ -94,6 +95,9 @@ export default function ImportReview({
     if (!decision) return null;
     const error = errors[tx.id];
     const subcategorias = decision.categoria ? categorias[decision.categoria] ?? [] : [];
+    // CR-049: previa da serie de parcelas (null se a numeracao ainda nao fecha)
+    const serie =
+      decision.acao === "criar_planejado_parcelado" ? describeInstallmentSeries(decision) : null;
     // Candidatos a conciliacao: planejados em aberto + o ja selecionado (para nao sumir da lista)
     const candidates = Object.values(matchTargets).filter(
       (e) => e.status !== "Pago" || e.id === decision.expenseId
@@ -146,6 +150,8 @@ export default function ImportReview({
                 >
                   <option value="criar_gasto_diario">Novo gasto diário</option>
                   <option value="atualizar_planejado">Pagar gasto planejado</option>
+                  {/* CR-049 */}
+                  <option value="criar_planejado_parcelado">Compra parcelada</option>
                 </select>
               </label>
               <label className="block">
@@ -159,9 +165,12 @@ export default function ImportReview({
                   className={inputClass}
                 />
               </label>
-              {decision.acao === "criar_gasto_diario" && (
+              {decision.acao !== "atualizar_planejado" && (
                 <label className="block">
-                  <span className="text-xs font-semibold text-text-muted">Data</span>
+                  <span className="text-xs font-semibold text-text-muted">
+                    {/* CR-049: na serie, a data da compra e a base dos vencimentos */}
+                    {decision.acao === "criar_planejado_parcelado" ? "Data da compra" : "Data"}
+                  </span>
                   <input
                     type="date"
                     value={decision.data}
@@ -172,7 +181,85 @@ export default function ImportReview({
               )}
             </div>
 
-            {decision.acao === "criar_gasto_diario" ? (
+            {decision.acao === "criar_planejado_parcelado" ? (
+              /* CR-049: serie de parcelas — categoria e opcional no gasto planejado */
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-text-muted">Descrição</span>
+                    <input
+                      type="text"
+                      maxLength={255}
+                      value={decision.descricao}
+                      onChange={(e) => updateDecision(tx.id, { descricao: e.target.value })}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-text-muted">Parcela atual</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={decision.parcelaAtual}
+                      onChange={(e) => updateDecision(tx.id, { parcelaAtual: e.target.value })}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-text-muted">Total de parcelas</span>
+                    <input
+                      type="number"
+                      min="2"
+                      step="1"
+                      value={decision.parcelaTotal}
+                      onChange={(e) => updateDecision(tx.id, { parcelaTotal: e.target.value })}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-text-muted">
+                      Categoria <span className="font-normal">(opcional)</span>
+                    </span>
+                    <select
+                      value={decision.categoria}
+                      onChange={(e) =>
+                        updateDecision(tx.id, { categoria: e.target.value, subcategoria: "" })
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">Selecione...</option>
+                      {Object.keys(categorias).map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {decision.categoria && (
+                    <label className="block">
+                      <span className="text-xs font-semibold text-text-muted">Subcategoria</span>
+                      <select
+                        value={decision.subcategoria}
+                        onChange={(e) => updateDecision(tx.id, { subcategoria: e.target.value })}
+                        className={inputClass}
+                      >
+                        <option value="">Selecione...</option>
+                        {subcategorias.map((sub) => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                {serie && (
+                  <p className="text-xs text-text-muted bg-slate-50 rounded-lg px-3 py-2">
+                    Cria <strong>{serie.quantidade}</strong>{" "}
+                    {serie.quantidade === 1 ? "parcela" : "parcelas"} de{" "}
+                    {formatBRL(Number(decision.valor) || 0)} até <strong>{serie.ultimoMes}</strong>.
+                    A parcela {decision.parcelaAtual} já entra como <strong>Paga</strong>.
+                  </p>
+                )}
+              </div>
+            ) : decision.acao === "criar_gasto_diario" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <label className="block lg:col-span-1">
                   <span className="text-xs font-semibold text-text-muted">Descrição</span>
@@ -295,6 +382,11 @@ export default function ImportReview({
         "Conciliações com gastos planejados",
         "Ao confirmar, o gasto planejado escolhido é marcado como Pago com o valor da transação.",
         groups.matches
+      )}
+      {renderGroup(
+        "Compras parceladas",
+        "Viram gastos planejados com todas as parcelas. A parcela desta fatura entra como Paga; as futuras, como Pendentes.",
+        groups.parcelamentos
       )}
       {renderGroup(
         "Ignoradas pela IA",
