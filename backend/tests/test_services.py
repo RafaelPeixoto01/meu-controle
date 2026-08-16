@@ -429,3 +429,43 @@ class TestCreateExpenseWithInstallments:
         assert criadas == 2  # parcela 1 + parcela 3 (a 2 ja existia)
         parcelas_2 = db.query(Expense).filter(Expense.parcela_atual == 2).all()
         assert len(parcelas_2) == 1
+
+    def test_skip_existing_concilia_a_propria_parcela_em_vez_de_duplicar(self, db, test_user):
+        """RN-046: reimportar a fatura do mes seguinte nao cria uma segunda 4/10."""
+        db.add(
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 4, 1),
+                nome="Notebook",
+                valor=250.00,
+                vencimento=date(2026, 4, 15),
+                parcela_atual=4,
+                parcela_total=5,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+        )
+        db.commit()
+
+        expense, criadas = create_expense_with_installments(
+            db,
+            user_id=test_user.id,
+            mes_referencia=date(2026, 4, 1),
+            nome="Notebook",
+            valor=260.00,  # valor real cobrado na fatura
+            vencimento=date(2026, 4, 15),
+            parcela_atual=4,
+            parcela_total=5,
+            recorrente=False,
+            status_primeira=ExpenseStatus.PAGO.value,
+            skip_existing=True,
+        )
+        db.commit()
+
+        assert criadas == 1  # so a parcela 5; a 4 ja existia
+        parcelas_4 = db.query(Expense).filter(Expense.parcela_atual == 4).all()
+        assert len(parcelas_4) == 1
+        # A parcela existente foi conciliada, nao duplicada
+        assert expense.id == parcelas_4[0].id
+        assert parcelas_4[0].status == ExpenseStatus.PAGO.value
+        assert float(parcelas_4[0].valor) == 260.00

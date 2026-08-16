@@ -763,6 +763,38 @@ class TestParcelamentoConfirm:
         parcelas_4 = db.query(Expense).filter(Expense.parcela_atual == 4).all()
         assert len(parcelas_4) == 1
 
+    def test_reimportar_a_propria_parcela_nao_duplica(self, client, db, user_a):
+        """RN-046: fatura seguinte com a parcela ja criada concilia, nao duplica."""
+        for parcela in (3, 4):
+            db.add(
+                Expense(
+                    user_id=user_a.id,
+                    mes_referencia=date(2026, 7 + parcela - 3, 1),
+                    nome="Netshoes",
+                    valor=149.90,
+                    vencimento=date(2026, 7 + parcela - 3, 15),
+                    parcela_atual=parcela,
+                    parcela_total=10,
+                    recorrente=False,
+                    status=ExpenseStatus.PENDENTE.value,
+                )
+            )
+        db.commit()
+
+        batch = self._upload_parcelamento(client)
+        tx_id = batch["transacoes"][0]["id"]
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx_id)]},
+        )
+
+        # 3 e 4 ja existiam: cria apenas 5..10
+        assert r.json()["planejados_criados"] == 6
+        parcelas_3 = db.query(Expense).filter(Expense.parcela_atual == 3).all()
+        assert len(parcelas_3) == 1
+        # a parcela desta fatura foi conciliada (RN-044), nao duplicada
+        assert parcelas_3[0].status == ExpenseStatus.PAGO.value
+
     def test_auditoria_grava_expense_id_criado(self, client, db):
         batch = self._upload_parcelamento(client)
         tx_id = batch["transacoes"][0]["id"]

@@ -43,27 +43,43 @@ def create_expense_with_installments(
     - `status_primeira` permite que a importacao marque a parcela ja cobrada na
       fatura como Paga (RN-044), sem afetar o cadastro manual.
     - `skip_existing=True` pula parcelas ja existentes no mes-alvo (RN-046),
-      evitando duplicacao quando a fatura do mes seguinte e importada.
+      evitando duplicacao quando a fatura do mes seguinte e importada. Se a
+      propria parcela informada ja existir, ela e conciliada (status e valor
+      atualizados) em vez de duplicada, e nao entra na contagem de criadas.
 
     Retorna (despesa da parcela informada, total de despesas criadas).
     NAO faz commit — quem chama controla a transacao.
     """
     criadas = 0
-    expense_atual = Expense(
-        user_id=user_id,
-        mes_referencia=mes_referencia,
-        nome=nome,
-        categoria=categoria,
-        subcategoria=subcategoria,
-        valor=valor,
-        vencimento=vencimento,
-        parcela_atual=parcela_atual,
-        parcela_total=parcela_total,
-        recorrente=recorrente,
-        status=status_primeira,
-    )
-    db.add(expense_atual)
-    criadas += 1
+
+    # A propria parcela informada pode ja existir (fatura do mes seguinte
+    # reimportada): concilia com ela em vez de criar uma segunda igual (RN-046).
+    existente = None
+    if skip_existing and parcela_atual and parcela_total:
+        existente = crud.get_expense_installment(
+            db, mes_referencia, user_id, nome, parcela_atual, parcela_total
+        )
+
+    if existente is not None:
+        existente.status = status_primeira
+        existente.valor = valor
+        expense_atual = existente
+    else:
+        expense_atual = Expense(
+            user_id=user_id,
+            mes_referencia=mes_referencia,
+            nome=nome,
+            categoria=categoria,
+            subcategoria=subcategoria,
+            valor=valor,
+            vencimento=vencimento,
+            parcela_atual=parcela_atual,
+            parcela_total=parcela_total,
+            recorrente=recorrente,
+            status=status_primeira,
+        )
+        db.add(expense_atual)
+        criadas += 1
 
     if parcela_total and parcela_total > 1:
         base = parcela_atual or 1
