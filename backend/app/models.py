@@ -266,18 +266,23 @@ class ImportTransaction(Base):
     valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     classificacao: Mapped[str] = mapped_column(
         String(20), nullable=False
-    )  # gasto_diario | match_planejado | ignorar
+    )  # gasto_diario | match_planejado | parcelamento (CR-049) | ignorar
     motivo_ignorar: Mapped[str | None] = mapped_column(String(255), nullable=True)
     expense_id_sugerido: Mapped[str | None] = mapped_column(String(36), nullable=True)
     categoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
     subcategoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
     metodo_pagamento: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # CR-049: numeracao da parcela detectada na fatura (so em classificacao 'parcelamento')
+    parcela_atual: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parcela_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256 hex (RN-042)
     status: Mapped[str] = mapped_column(
         String(20), default="pendente", nullable=False
     )  # pendente | confirmada | descartada | duplicada
     daily_expense_id_criado: Mapped[str | None] = mapped_column(String(36), nullable=True)
     expense_id_atualizado: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # CR-049: id da parcela criada (a 'atual' da serie) — auditoria do parcelamento
+    expense_id_criado: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.now, onupdate=datetime.now

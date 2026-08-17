@@ -211,7 +211,7 @@ Personal Finance/
 │   ├── changes/                #   Change Requests CR-XXX + INDEX.md (histórico completo)
 │   └── templates/              #   Templates obrigatórios dos documentos
 ├── backend/
-│   ├── alembic/versions/       # Migrations 001..009 (aplicar antes de rodar o backend)
+│   ├── alembic/versions/       # Migrations 001..010 (aplicar antes de rodar o backend)
 │   ├── prompts/                # System/user prompts da análise IA (CR-032) e importação (CR-046)
 │   ├── app/                    # main, database, models, schemas, crud, services, utils, auth,
 │   │   │                       #   rate_limit (CR-044), health_score, ai_analysis, alerts,
@@ -315,10 +315,10 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 ### Change Requests
 > **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-044: Hardening — rate limiting (slowapi: 5/min login, 3/min forgot-password) + CSP e HSTS no SecurityHeadersMiddleware + proxy-headers no Dockerfile (IP real atrás do proxy Railway); 5 testes novos, CSP validado na UI via Playwright (concluido)
 - CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (concluido)
 - CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (concluido)
 - CR-047: Importação de Extratos/Faturas — frontend F07: página /import (upload → revisão → resultado) + aba Importar, requestMultipart no api.ts (FormData + refresh-401), hooks useImports, helpers importReview com 12 testes Vitest; validado E2E via Playwright (concluido)
+- CR-049: Importação de Compras Parceladas (F07, item E-A do [roadmap v2](docs/F07-v2-roadmap-importacao.md)) — classificação `parcelamento` + ação `criar_planejado_parcelado`; migration 010; `services.create_expense_with_installments()` extraído do router de expenses e compartilhado com a importação; RN-044/045/046; 31 testes novos (concluido)
 - CR-048: Migração dos serviços de IA para Claude Opus 5 — remove `temperature` (400 na geração atual), thinking adaptativo (effort low na importação), corrige leitura da resposta (`content[0]` é bloco de thinking) e trata `stop_reason=refusal` fora do retry; 11 testes novos (concluido)
 
 ---
@@ -366,6 +366,12 @@ Referencia rapida de problemas encontrados durante o desenvolvimento e suas solu
 | Problema | Causa | Solucao |
 |----------|-------|---------|
 | Arquivos `.js` duplicando os `.tsx` em `frontend/src/` | Alguem rodou `tsc` sem `--noEmit`, emitindo JS ao lado dos fontes (removidos no CR-041, mas podem reaparecer) | Estao ignorados via `.gitignore` (`frontend/src/**/*.js`) e nao vao para o repo. **Sempre editar o `.tsx`/`.ts`** — nunca o `.js`. Pode deletar os `.js` com seguranca |
+
+### Banco de Dados Local
+
+| Problema | Causa | Solucao |
+|----------|-------|---------|
+| `alembic upgrade`, `alembic downgrade` ou `uvicorn` local atingem **producao** | `backend/.env` tem `DATABASE_URL` apontando para o PostgreSQL do Railway (nao para um banco local) — aconteceu no CR-049, que aplicou migration e criou dados de teste em producao | **Sempre sobrescrever a variavel** para trabalho local: `DATABASE_URL="sqlite:///./local.db" python -m alembic upgrade head` e o mesmo prefixo no `uvicorn`. Conferir com `python -c "from app.database import engine; print(engine.url)"` antes de qualquer escrita. A suite `pytest` e segura (SQLite in-memory via fixtures, ignora o `.env`) |
 
 ### Ambiente Windows
 

@@ -156,6 +156,20 @@ TX_MATCH_LUZ = {
     "motivo_ignorar": None,
 }
 
+TX_PARCELAMENTO = {
+    "data": "2026-07-15",
+    "descricao": "Netshoes",
+    "valor": 149.90,
+    "classificacao": "parcelamento",
+    "categoria": "Compras Pessoais",
+    "subcategoria": "Roupas",
+    "metodo_pagamento": "Cartão de Crédito",
+    "expense_id": None,
+    "motivo_ignorar": None,
+    "parcela_atual": 3,
+    "parcela_total": 10,
+}
+
 TX_IGNORAR = {
     "data": "2026-07-05",
     "descricao": "PAGAMENTO RECEBIDO",
@@ -457,6 +471,7 @@ class TestConfirm:
         body = r.json()
         assert body == {
             "gastos_diarios_criados": 1,
+            "planejados_criados": 0,  # CR-049: nenhum parcelamento neste lote
             "planejados_atualizados": 1,
             "descartadas": 1,  # a transacao 'ignorar' ausente do payload
         }
@@ -604,6 +619,321 @@ class TestConfirm:
             },
         )
         assert r.status_code == 404
+
+
+# ========== CR-049: compras parceladas (F07 E-A) ==========
+
+class TestParcelamentoValidacao:
+    """Sanitizacao dos campos de parcela em validate_ai_result."""
+
+    def test_parcelamento_valido_preserva_numeracao(self):
+        parsed = validate_ai_result(
+            {"transacoes": [TX_PARCELAMENTO]}, valid_expense_ids=set()
+        )
+        tx = parsed["transacoes"][0]
+        assert tx["classificacao"] == "parcelamento"
+        assert tx["parcela_atual"] == 3
+        assert tx["parcela_total"] == 10
+
+    @pytest.mark.parametrize(
+        "parcelas",
+        [
+            {"parcela_atual": None, "parcela_total": None},   # sem numeracao
+            {"parcela_atual": 3, "parcela_total": None},      # incompleta
+            {"parcela_atual": 11, "parcela_total": 10},       # atual > total
+            {"parcela_atual": 1, "parcela_total": 1},         # 1/1 nao e parcelamento
+            {"parcela_atual": 0, "parcela_total": 10},        # atual < 1
+            {"parcela_atual": "tres", "parcela_total": "dez"},  # nao inteiros
+        ],
+    )
+    def test_numeracao_incoerente_vira_gasto_diario(self, parcelas):
+        parsed = validate_ai_result(
+            {"transacoes": [{**TX_PARCELAMENTO, **parcelas}]}, valid_expense_ids=set()
+        )
+        tx = parsed["transacoes"][0]
+        assert tx["classificacao"] == "gasto_diario"
+        assert tx["parcela_atual"] is None
+        assert tx["parcela_total"] is None
+
+    def test_parcelas_ignoradas_em_outras_classificacoes(self):
+        """Numeracao so vale em 'parcelamento' — nao contamina gasto_diario."""
+        parsed = validate_ai_result(
+            {"transacoes": [{**TX_PADARIA, "parcela_atual": 3, "parcela_total": 10}]},
+            valid_expense_ids=set(),
+        )
+        tx = parsed["transacoes"][0]
+        assert tx["classificacao"] == "gasto_diario"
+        assert tx["parcela_atual"] is None
+
+
+class TestParcelamentoConfirm:
+    """Confirmacao da acao criar_planejado_parcelado."""
+
+    def _upload_parcelamento(self, client):
+        r = upload(client, transacoes=[TX_PARCELAMENTO])
+        assert r.status_code == 201
+        return r.json()["batch"]
+
+    def _decisao(self, tx_id, **overrides):
+        decisao = {
+            "id": tx_id,
+            "acao": "criar_planejado_parcelado",
+            "parcela_atual": 3,
+            "parcela_total": 10,
+        }
+        decisao.update(overrides)
+        return decisao
+
+    def test_cria_serie_de_parcelas(self, client, db):
+        batch = self._upload_parcelamento(client)
+        tx = batch["transacoes"][0]
+        assert tx["classificacao"] == "parcelamento"
+        assert tx["parcela_atual"] == 3
+
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx["id"])]},
+        )
+        assert r.status_code == 200
+        assert r.json()["planejados_criados"] == 8  # parcelas 3..10
+        assert r.json()["gastos_diarios_criados"] == 0
+
+        parcelas = db.query(Expense).order_by(Expense.parcela_atual).all()
+        assert [p.parcela_atual for p in parcelas] == [3, 4, 5, 6, 7, 8, 9, 10]
+        assert all(p.nome == "Netshoes" for p in parcelas)
+        assert all(p.parcela_total == 10 for p in parcelas)
+        assert all(p.recorrente is False for p in parcelas)
+
+    def test_parcela_atual_nasce_paga_e_futuras_pendentes(self, client, db):
+        """RN-044: a parcela desta fatura ja foi cobrada."""
+        batch = self._upload_parcelamento(client)
+        tx = batch["transacoes"][0]
+
+        client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx["id"])]},
+        )
+
+        parcelas = db.query(Expense).order_by(Expense.parcela_atual).all()
+        assert parcelas[0].status == ExpenseStatus.PAGO.value
+        assert all(p.status == ExpenseStatus.PENDENTE.value for p in parcelas[1:])
+
+    def test_mes_e_vencimento_avancam_a_partir_da_data_da_compra(self, client, db):
+        """RN-045: compra em 15/07/2026; a parcela 3 e cobrada 2 meses depois."""
+        batch = self._upload_parcelamento(client)
+        tx = batch["transacoes"][0]
+
+        client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx["id"])]},
+        )
+
+        parcelas = db.query(Expense).order_by(Expense.parcela_atual).all()
+        # parcela 3 = compra + 2 meses (nao o mes da compra)
+        assert parcelas[0].mes_referencia == date(2026, 9, 1)
+        assert parcelas[0].vencimento == date(2026, 9, 15)
+        # parcela 10 = compra + 9 meses
+        assert parcelas[-1].mes_referencia == date(2027, 4, 1)
+        assert parcelas[-1].vencimento == date(2027, 4, 15)
+
+    def test_nao_recria_parcela_ja_existente(self, client, db, user_a):
+        """RN-046: importar a fatura do mes seguinte nao duplica a serie."""
+        db.add(
+            Expense(
+                user_id=user_a.id,
+                mes_referencia=date(2026, 10, 1),
+                nome="Netshoes",
+                valor=149.90,
+                vencimento=date(2026, 10, 15),
+                parcela_atual=4,
+                parcela_total=10,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+        )
+        db.commit()
+
+        batch = self._upload_parcelamento(client)
+        tx = batch["transacoes"][0]
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx["id"])]},
+        )
+
+        assert r.json()["planejados_criados"] == 7  # a parcela 4 ja existia
+        parcelas_4 = db.query(Expense).filter(Expense.parcela_atual == 4).all()
+        assert len(parcelas_4) == 1
+
+    def test_reimportar_a_propria_parcela_nao_duplica(self, client, db, user_a):
+        """RN-046: fatura seguinte com a parcela ja criada concilia, nao duplica."""
+        for parcela in (3, 4):
+            # compra em 15/07: parcela 3 em set, parcela 4 em out
+            db.add(
+                Expense(
+                    user_id=user_a.id,
+                    mes_referencia=date(2026, 6 + parcela, 1),
+                    nome="Netshoes",
+                    valor=149.90,
+                    vencimento=date(2026, 6 + parcela, 15),
+                    parcela_atual=parcela,
+                    parcela_total=10,
+                    recorrente=False,
+                    status=ExpenseStatus.PENDENTE.value,
+                )
+            )
+        db.commit()
+
+        batch = self._upload_parcelamento(client)
+        tx_id = batch["transacoes"][0]["id"]
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx_id)]},
+        )
+
+        # 3 e 4 ja existiam: cria apenas 5..10
+        assert r.json()["planejados_criados"] == 6
+        parcelas_3 = db.query(Expense).filter(Expense.parcela_atual == 3).all()
+        assert len(parcelas_3) == 1
+        # a parcela desta fatura foi conciliada (RN-044), nao duplicada
+        assert parcelas_3[0].status == ExpenseStatus.PAGO.value
+
+    def test_auditoria_grava_expense_id_criado(self, client, db):
+        batch = self._upload_parcelamento(client)
+        tx_id = batch["transacoes"][0]["id"]
+
+        client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx_id)]},
+        )
+
+        tx_db = db.query(ImportTransaction).filter(ImportTransaction.id == tx_id).one()
+        assert tx_db.status == "confirmada"
+        parcela_atual = db.query(Expense).filter(Expense.parcela_atual == 3).one()
+        assert tx_db.expense_id_criado == parcela_atual.id
+
+    @pytest.mark.parametrize(
+        "parcelas",
+        [
+            {"parcela_atual": None, "parcela_total": None},  # obrigatorios
+            {"parcela_atual": 3, "parcela_total": None},
+            {"parcela_atual": 11, "parcela_total": 10},      # atual > total
+            {"parcela_atual": 1, "parcela_total": 1},        # serie exige 2+
+        ],
+    )
+    def test_numeracao_invalida_no_confirm_retorna_422(self, client, db, parcelas):
+        batch = self._upload_parcelamento(client)
+        tx_id = batch["transacoes"][0]["id"]
+
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={"transacoes": [self._decisao(tx_id, **parcelas)]},
+        )
+
+        assert r.status_code == 422
+        assert db.query(Expense).count() == 0  # nada gravado
+
+    def test_categoria_invalida_retorna_422(self, client, db):
+        batch = self._upload_parcelamento(client)
+        tx_id = batch["transacoes"][0]["id"]
+
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={
+                "transacoes": [
+                    self._decisao(tx_id, categoria="Alimentação", subcategoria="Roupas")
+                ]
+            },
+        )
+
+        assert r.status_code == 422
+        assert db.query(Expense).count() == 0
+
+    def test_usuario_pode_rebaixar_parcelamento_para_gasto_diario(self, client, db):
+        """A revisao manda no destino: parcelamento pode virar gasto diario."""
+        batch = self._upload_parcelamento(client)
+        tx_id = batch["transacoes"][0]["id"]
+
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={
+                "transacoes": [
+                    {
+                        "id": tx_id,
+                        "acao": "criar_gasto_diario",
+                        "categoria": "Compras Pessoais",
+                        "subcategoria": "Roupas",
+                        "metodo_pagamento": "Cartão de Crédito",
+                    }
+                ]
+            },
+        )
+
+        assert r.status_code == 200
+        assert r.json() == {
+            "gastos_diarios_criados": 1,
+            "planejados_criados": 0,
+            "planejados_atualizados": 0,
+            "descartadas": 0,
+        }
+        assert db.query(Expense).count() == 0
+        assert db.query(DailyExpense).count() == 1
+
+
+class TestParcelamentoCodeReview:
+    """Findings do code review pre-merge do CR-049."""
+
+    def test_fingerprint_distingue_parcelas_da_mesma_compra(self):
+        """Parcelas da mesma compra compartilham data/valor/descricao limpa."""
+        base = ("user-a", date(2026, 7, 15), 149.90, "Netshoes")
+        fp3 = compute_fingerprint(*base, 3, 10)
+        fp4 = compute_fingerprint(*base, 4, 10)
+        assert fp3 != fp4
+        # sem numeracao, a formula original (fingerprints antigos seguem validos)
+        assert compute_fingerprint(*base) == compute_fingerprint(*base, None, None)
+
+    def test_parcela_seguinte_nao_nasce_duplicada(self, client, db):
+        """Sem o fix, a parcela 4 do mes seguinte viria marcada 'duplicada'."""
+        b1 = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        client.post(f"/api/imports/{b1['id']}/confirm", json={"transacoes": [
+            {"id": b1["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
+             "parcela_atual": 3, "parcela_total": 10}]})
+
+        b2 = upload(client, transacoes=[{**TX_PARCELAMENTO, "parcela_atual": 4}]).json()["batch"]
+        assert b2["transacoes"][0]["status"] == "pendente"
+
+    def test_parcela_total_absurdo_rejeitado(self, client, db):
+        """Teto de parcelas evita criar milhares de despesas num request."""
+        batch = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
+            {"id": batch["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
+             "parcela_atual": 1, "parcela_total": 200000}]})
+        assert r.status_code == 422
+        assert db.query(Expense).count() == 0
+
+    def test_duas_linhas_para_a_mesma_serie_retorna_422(self, client, db):
+        """Sem a guarda, a segunda linha sobrescreveria a despesa da primeira."""
+        tx_b = {**TX_PARCELAMENTO, "valor": 300.00}
+        batch = upload(client, transacoes=[TX_PARCELAMENTO, tx_b]).json()["batch"]
+        ids = [t["id"] for t in batch["transacoes"]]
+        r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
+            {"id": ids[0], "acao": "criar_planejado_parcelado", "parcela_atual": 3, "parcela_total": 10},
+            {"id": ids[1], "acao": "criar_planejado_parcelado", "parcela_atual": 3, "parcela_total": 10}]})
+        assert r.status_code == 422
+        assert "outra transação deste lote" in r.json()["detail"]
+        assert db.query(Expense).count() == 0
+
+    def test_categoria_limpa_na_revisao_nao_volta_da_ia(self, client, db):
+        """Usuario que limpa a categoria nao recebe o palpite da IA de volta."""
+        batch = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        assert batch["transacoes"][0]["categoria"] == "Compras Pessoais"
+
+        client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
+            {"id": batch["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
+             "parcela_atual": 3, "parcela_total": 10}]})  # sem categoria no payload
+
+        parcela = db.query(Expense).filter(Expense.parcela_atual == 3).one()
+        assert parcela.categoria is None
+        assert parcela.subcategoria is None
 
 
 # ========== Dedup (RN-042) ==========

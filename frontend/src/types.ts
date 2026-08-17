@@ -470,10 +470,18 @@ export interface ConfiguracaoAlertas {
 
 // ========== Import Types (CR-047, F07) ==========
 
-export type ImportClassificacao = "gasto_diario" | "match_planejado" | "ignorar";
+export type ImportClassificacao =
+  | "gasto_diario"
+  | "match_planejado"
+  | "parcelamento" // CR-049
+  | "ignorar";
 export type ImportTransactionStatus = "pendente" | "confirmada" | "descartada" | "duplicada";
 export type ImportBatchStatus = "pendente_revisao" | "confirmado" | "descartado";
-export type ImportAcao = "criar_gasto_diario" | "atualizar_planejado" | "descartar";
+export type ImportAcao =
+  | "criar_gasto_diario"
+  | "atualizar_planejado"
+  | "criar_planejado_parcelado" // CR-049
+  | "descartar";
 
 export interface ImportTransaction {
   id: string;
@@ -486,6 +494,8 @@ export interface ImportTransaction {
   categoria: string | null;
   subcategoria: string | null;
   metodo_pagamento: string | null;
+  parcela_atual: number | null; // CR-049
+  parcela_total: number | null; // CR-049
   status: ImportTransactionStatus;
 }
 
@@ -518,6 +528,8 @@ export interface ImportConfirmDecision {
   subcategoria?: string;
   metodo_pagamento?: string;
   expense_id?: string;
+  parcela_atual?: number; // CR-049
+  parcela_total?: number; // CR-049
 }
 
 export interface ImportConfirmRequest {
@@ -526,6 +538,7 @@ export interface ImportConfirmRequest {
 
 export interface ImportConfirmResponse {
   gastos_diarios_criados: number;
+  planejados_criados: number; // CR-049
   planejados_atualizados: number;
   descartadas: number;
 }

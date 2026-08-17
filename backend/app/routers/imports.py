@@ -18,7 +18,8 @@ from app.schemas import (
     ImportConfirmResponse,
     ImportUploadResponse,
 )
-from app import crud, import_service
+from app import crud, import_service, services
+from app.utils import add_months
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +161,11 @@ def confirm_import(
         decisions[d.id] = d
 
     criados = 0
+    planejados_criados = 0  # CR-049
     atualizados = 0
     descartadas = 0
     expenses_ja_atualizados: set[str] = set()
+    series_ja_criadas: set[tuple] = set()  # CR-049
 
     for tx in batch.transacoes:
         decision = decisions.get(tx.id)
@@ -218,6 +221,70 @@ def confirm_import(
             tx.status = "confirmada"
             criados += 1
 
+        elif acao == "criar_planejado_parcelado":
+            # CR-049: materializa a compra parcelada como serie de gastos planejados
+            descricao = (decision.descricao or tx.descricao).strip()
+            if not descricao:
+                raise HTTPException(
+                    status_code=422, detail=f"Transação {tx.id}: descrição vazia"
+                )
+            valor = decision.valor if decision.valor is not None else float(tx.valor)
+            data_tx = decision.data or tx.data
+            # Sem fallback para o palpite da IA: a revisao pode ter limpado a
+            # categoria de proposito, e o par so chega aqui quando completo
+            categoria = decision.categoria
+            subcategoria = decision.subcategoria
+
+            # Categoria e opcional em Expense, mas se vier tem que ser um par valido
+            if categoria or subcategoria:
+                if (
+                    categoria not in EXPENSE_CATEGORIES
+                    or subcategoria not in EXPENSE_CATEGORIES.get(categoria, [])
+                ):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Transação {tx.id}: categoria/subcategoria inválidas",
+                    )
+
+            # RN-045: `data` e a data da COMPRA; a parcela N e cobrada N-1 meses
+            # depois dela. Sem esse offset a serie inteira nasceria deslocada
+            # para tras (parcela 3 de uma compra de maio cairia em maio).
+            offset = decision.parcela_atual - 1
+            venc_parcela = add_months(data_tx, offset)
+
+            # Duas linhas do mesmo lote apontando para a mesma serie colapsariam
+            # numa despesa so (a segunda sobrescreveria o valor da primeira e
+            # perderia suas parcelas futuras) — espelha a guarda do planejado
+            serie_key = (descricao, decision.parcela_atual, decision.parcela_total, venc_parcela)
+            if serie_key in series_ja_criadas:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transação {tx.id}: esta parcela já foi criada por outra "
+                           "transação deste lote",
+                )
+            series_ja_criadas.add(serie_key)
+
+            expense_atual, criadas = services.create_expense_with_installments(
+                db,
+                user_id=current_user.id,
+                mes_referencia=date(venc_parcela.year, venc_parcela.month, 1),
+                nome=descricao,
+                valor=valor,
+                vencimento=venc_parcela,
+                categoria=categoria,
+                subcategoria=subcategoria,
+                parcela_atual=decision.parcela_atual,
+                parcela_total=decision.parcela_total,
+                recorrente=False,
+                # RN-044: a parcela desta fatura ja foi cobrada
+                status_primeira=ExpenseStatus.PAGO.value,
+                skip_existing=True,  # RN-046
+            )
+            db.flush()
+            tx.expense_id_criado = expense_atual.id
+            tx.status = "confirmada"
+            planejados_criados += criadas
+
         elif acao == "atualizar_planejado":
             expense_id = decision.expense_id or tx.expense_id_sugerido
             if not expense_id:
@@ -247,6 +314,7 @@ def confirm_import(
 
     return ImportConfirmResponse(
         gastos_diarios_criados=criados,
+        planejados_criados=planejados_criados,
         planejados_atualizados=atualizados,
         descartadas=descartadas,
     )

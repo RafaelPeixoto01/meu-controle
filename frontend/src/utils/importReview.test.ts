@@ -4,6 +4,7 @@ import type { ImportBatch, ImportTransaction } from "../types";
 import {
   buildConfirmPayload,
   buildInitialDecisions,
+  describeInstallmentSeries,
   groupTransactions,
   monthsToFetchForMatches,
   validateDecision,
@@ -22,6 +23,8 @@ function makeTx(overrides: Partial<ImportTransaction>): ImportTransaction {
     categoria: "Alimentação",
     subcategoria: "Padaria",
     metodo_pagamento: "Cartão de Crédito",
+    parcela_atual: null,
+    parcela_total: null,
     status: "pendente",
     ...overrides,
   };
@@ -104,6 +107,8 @@ describe("validateDecision", () => {
     subcategoria: "Padaria",
     metodoPagamento: "Pix",
     expenseId: "",
+    parcelaAtual: "",
+    parcelaTotal: "",
   };
 
   it("aceita decisao valida de gasto diario", () => {
@@ -196,5 +201,145 @@ describe("monthsToFetchForMatches", () => {
     expect(months).toContainEqual({ year: 2026, month: 6 }); // jun nao duplica
     expect(months).toContainEqual({ year: 2025, month: 1 });
     expect(months).toHaveLength(4);
+  });
+});
+
+// ========== CR-049: compras parceladas ==========
+
+function makeParcelamento(overrides: Partial<ImportTransaction> = {}): ImportTransaction {
+  return makeTx({
+    id: "p1",
+    data: "2026-07-15",
+    descricao: "Netshoes",
+    valor: 149.9,
+    classificacao: "parcelamento",
+    categoria: "Compras Pessoais",
+    subcategoria: "Roupas",
+    parcela_atual: 3,
+    parcela_total: 10,
+    ...overrides,
+  });
+}
+
+function parcelaDecision(overrides: Partial<ReviewDecision> = {}): ReviewDecision {
+  return {
+    incluida: true,
+    acao: "criar_planejado_parcelado",
+    descricao: "Netshoes",
+    valor: "149.90",
+    data: "2026-07-15",
+    categoria: "",
+    subcategoria: "",
+    metodoPagamento: "",
+    expenseId: "",
+    parcelaAtual: "3",
+    parcelaTotal: "10",
+    ...overrides,
+  };
+}
+
+describe("groupTransactions (parcelamentos)", () => {
+  it("separa parcelamentos em grupo proprio", () => {
+    const batch = makeBatch([
+      makeTx({ id: "a" }),
+      makeParcelamento(),
+      makeParcelamento({ id: "p2", status: "duplicada" }),
+    ]);
+    const groups = groupTransactions(batch);
+    expect(groups.parcelamentos.map((t) => t.id)).toEqual(["p1"]);
+    expect(groups.novos.map((t) => t.id)).toEqual(["a"]);
+    // duplicada continua tendo precedencia sobre a classificacao
+    expect(groups.duplicadas.map((t) => t.id)).toEqual(["p2"]);
+  });
+});
+
+describe("buildInitialDecisions (parcelamentos)", () => {
+  it("parcelamento numerado nasce como serie de parcelas", () => {
+    const decisions = buildInitialDecisions(makeBatch([makeParcelamento()]));
+    expect(decisions.p1.acao).toBe("criar_planejado_parcelado");
+    expect(decisions.p1.parcelaAtual).toBe("3");
+    expect(decisions.p1.parcelaTotal).toBe("10");
+    expect(decisions.p1.incluida).toBe(true);
+  });
+
+  it("parcelamento sem numeracao cai para gasto diario", () => {
+    const batch = makeBatch([makeParcelamento({ parcela_atual: null, parcela_total: null })]);
+    const decisions = buildInitialDecisions(batch);
+    expect(decisions.p1.acao).toBe("criar_gasto_diario");
+    expect(decisions.p1.parcelaAtual).toBe("");
+  });
+});
+
+describe("validateDecision (parcelamentos)", () => {
+  it("aceita serie valida sem exigir categoria nem metodo", () => {
+    expect(validateDecision(parcelaDecision(), CATEGORIAS)).toBeNull();
+  });
+
+  it.each([
+    ["parcelaTotal", { parcelaTotal: "1" }],
+    ["sem numeracao", { parcelaAtual: "", parcelaTotal: "" }],
+    ["nao inteiro", { parcelaAtual: "2.5" }],
+  ])("rejeita numeracao invalida: %s", (_label, patch) => {
+    expect(validateDecision(parcelaDecision(patch), CATEGORIAS)).toMatch(/numeração|Parcela/);
+  });
+
+  it("rejeita parcela atual maior que o total", () => {
+    expect(validateDecision(parcelaDecision({ parcelaAtual: "11" }), CATEGORIAS)).toMatch(
+      /entre 1 e o total/
+    );
+  });
+
+  it("rejeita par categoria/subcategoria incoerente", () => {
+    const decision = parcelaDecision({ categoria: "Alimentação", subcategoria: "Streaming" });
+    expect(validateDecision(decision, CATEGORIAS)).toMatch(/não pertence/);
+  });
+});
+
+describe("buildConfirmPayload (parcelamentos)", () => {
+  it("envia numeracao e omite categoria quando o par esta incompleto", () => {
+    const batch = makeBatch([makeParcelamento()]);
+    const payload = buildConfirmPayload(batch, { p1: parcelaDecision() });
+    expect(payload.transacoes).toEqual([
+      {
+        id: "p1",
+        acao: "criar_planejado_parcelado",
+        descricao: "Netshoes",
+        valor: 149.9,
+        data: "2026-07-15",
+        parcela_atual: 3,
+        parcela_total: 10,
+      },
+    ]);
+  });
+
+  it("inclui categoria quando o par esta completo", () => {
+    const batch = makeBatch([makeParcelamento()]);
+    const decision = parcelaDecision({ categoria: "Alimentação", subcategoria: "Padaria" });
+    const payload = buildConfirmPayload(batch, { p1: decision });
+    expect(payload.transacoes[0]).toMatchObject({
+      categoria: "Alimentação",
+      subcategoria: "Padaria",
+    });
+  });
+});
+
+describe("describeInstallmentSeries", () => {
+  it("calcula quantas parcelas e ate quando", () => {
+    // compra 15/07/2026, parcela 3/10: cria 8 parcelas, a ultima em abr/2027
+    // (a parcela k e cobrada k-1 meses apos a compra)
+    expect(describeInstallmentSeries(parcelaDecision())).toEqual({
+      quantidade: 8,
+      ultimoMes: "04/2027",
+    });
+  });
+
+  it("rejeita total acima do teto do backend", () => {
+    expect(validateDecision(parcelaDecision({ parcelaTotal: "200" }), CATEGORIAS)).toMatch(
+      /120/
+    );
+  });
+
+  it("retorna null para numeracao invalida", () => {
+    expect(describeInstallmentSeries(parcelaDecision({ parcelaTotal: "1" }))).toBeNull();
   });
 });

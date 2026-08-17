@@ -1,7 +1,7 @@
 """Tests for RF-06: Month transition / expense replication."""
 from datetime import date
 
-from app.services import generate_month_data
+from app.services import create_expense_with_installments, generate_month_data
 from app import crud
 from app.models import Expense, Income, ExpenseStatus, User
 
@@ -305,3 +305,167 @@ class TestGenerateMonthData:
         feb_incomes = crud.get_incomes_by_month(db, date(2026, 2, 1), test_user.id)
         assert len(feb_incomes) == 1
         assert feb_incomes[0].nome == "Salario"
+
+
+class TestCreateExpenseWithInstallments:
+    """CR-049: criacao upfront de parcelas, extraida do router de expenses."""
+
+    def test_cria_apenas_uma_despesa_quando_nao_parcelada(self, db, test_user):
+        expense, criadas = create_expense_with_installments(
+            db,
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Netflix",
+            valor=39.90,
+            vencimento=date(2026, 3, 10),
+        )
+        db.commit()
+
+        assert criadas == 1
+        assert expense.recorrente is True
+        assert expense.status == ExpenseStatus.PENDENTE.value
+        todas = db.query(Expense).filter(Expense.user_id == test_user.id).all()
+        assert len(todas) == 1
+
+    def test_cria_parcelas_futuras_upfront(self, db, test_user):
+        """Parcela 3/10 gera a atual + 7 futuras, avancando mes e vencimento."""
+        expense, criadas = create_expense_with_installments(
+            db,
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Notebook",
+            valor=250.00,
+            vencimento=date(2026, 3, 15),
+            categoria="Compras Pessoais",
+            subcategoria="Eletrônicos",
+            parcela_atual=3,
+            parcela_total=10,
+            recorrente=False,
+        )
+        db.commit()
+
+        assert criadas == 8  # 3..10
+        todas = db.query(Expense).order_by(Expense.parcela_atual).all()
+        assert [e.parcela_atual for e in todas] == [3, 4, 5, 6, 7, 8, 9, 10]
+        assert todas[0].id == expense.id
+        # A ultima parcela (10) cai 7 meses depois de marco/2026
+        assert todas[-1].mes_referencia == date(2026, 10, 1)
+        assert todas[-1].vencimento == date(2026, 10, 15)
+        # Futuras herdam categoria e nascem Pendente + recorrente=False
+        assert all(e.categoria == "Compras Pessoais" for e in todas)
+        assert all(e.status == ExpenseStatus.PENDENTE.value for e in todas[1:])
+        assert all(e.recorrente is False for e in todas[1:])
+
+    def test_status_primeira_parcela_configuravel(self, db, test_user):
+        """RN-044: importacao marca a parcela ja cobrada na fatura como Paga."""
+        expense, criadas = create_expense_with_installments(
+            db,
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Netshoes",
+            valor=149.90,
+            vencimento=date(2026, 3, 20),
+            parcela_atual=1,
+            parcela_total=3,
+            recorrente=False,
+            status_primeira=ExpenseStatus.PAGO.value,
+        )
+        db.commit()
+
+        assert criadas == 3
+        assert expense.status == ExpenseStatus.PAGO.value
+        futuras = db.query(Expense).filter(Expense.parcela_atual > 1).all()
+        assert all(e.status == ExpenseStatus.PENDENTE.value for e in futuras)
+
+    def test_vencimento_ajusta_mes_curto(self, db, test_user):
+        """add_months preserva o dia mas respeita meses curtos (31/01 -> 28/02)."""
+        create_expense_with_installments(
+            db,
+            user_id=test_user.id,
+            mes_referencia=date(2026, 1, 1),
+            nome="Compra",
+            valor=100.00,
+            vencimento=date(2026, 1, 31),
+            parcela_atual=1,
+            parcela_total=2,
+            recorrente=False,
+        )
+        db.commit()
+
+        segunda = db.query(Expense).filter(Expense.parcela_atual == 2).one()
+        assert segunda.vencimento == date(2026, 2, 28)
+
+    def test_skip_existing_nao_recria_parcela_ja_gravada(self, db, test_user):
+        """RN-046: reimportar a fatura seguinte nao duplica parcelas ja criadas."""
+        db.add(
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 4, 1),
+                nome="Notebook",
+                valor=250.00,
+                vencimento=date(2026, 4, 15),
+                parcela_atual=2,
+                parcela_total=3,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+        )
+        db.commit()
+
+        _, criadas = create_expense_with_installments(
+            db,
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Notebook",
+            valor=250.00,
+            vencimento=date(2026, 3, 15),
+            parcela_atual=1,
+            parcela_total=3,
+            recorrente=False,
+            skip_existing=True,
+        )
+        db.commit()
+
+        assert criadas == 2  # parcela 1 + parcela 3 (a 2 ja existia)
+        parcelas_2 = db.query(Expense).filter(Expense.parcela_atual == 2).all()
+        assert len(parcelas_2) == 1
+
+    def test_skip_existing_concilia_a_propria_parcela_em_vez_de_duplicar(self, db, test_user):
+        """RN-046: reimportar a fatura do mes seguinte nao cria uma segunda 4/10."""
+        db.add(
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 4, 1),
+                nome="Notebook",
+                valor=250.00,
+                vencimento=date(2026, 4, 15),
+                parcela_atual=4,
+                parcela_total=5,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+        )
+        db.commit()
+
+        expense, criadas = create_expense_with_installments(
+            db,
+            user_id=test_user.id,
+            mes_referencia=date(2026, 4, 1),
+            nome="Notebook",
+            valor=260.00,  # valor real cobrado na fatura
+            vencimento=date(2026, 4, 15),
+            parcela_atual=4,
+            parcela_total=5,
+            recorrente=False,
+            status_primeira=ExpenseStatus.PAGO.value,
+            skip_existing=True,
+        )
+        db.commit()
+
+        assert criadas == 1  # so a parcela 5; a 4 ja existia
+        parcelas_4 = db.query(Expense).filter(Expense.parcela_atual == 4).all()
+        assert len(parcelas_4) == 1
+        # A parcela existente foi conciliada, nao duplicada
+        assert expense.id == parcelas_4[0].id
+        assert parcelas_4[0].status == ExpenseStatus.PAGO.value
+        assert float(parcelas_4[0].valor) == 260.00

@@ -73,8 +73,6 @@ def duplicate_expense(
     return crud.create_expense(db, new_expense)
 
 
-from app.utils import add_months
-
 @router.post("/{year}/{month}", response_model=ExpenseResponse, status_code=201)
 def create_expense(
     year: int,
@@ -100,53 +98,21 @@ def create_expense(
             raise HTTPException(status_code=422, detail=f"Subcategoria inválida: {data.subcategoria}")
         categoria = get_category_for_subcategory(data.subcategoria)
 
-    # 1. Criar a despesa do mês atual (que será retornada)
-    expense_atual = Expense(
+    # Criar a despesa do mes e, se parcelada, todas as parcelas futuras.
+    # CR-049: a criacao upfront vive em services (compartilhada com a importacao de faturas)
+    expense_atual, _ = services.create_expense_with_installments(
+        db,
         user_id=current_user.id,
         mes_referencia=mes_referencia_inicial,
         nome=data.nome,
-        categoria=categoria,  # CR-016
-        subcategoria=data.subcategoria,  # CR-016
         valor=data.valor,
         vencimento=data.vencimento,
+        categoria=categoria,  # CR-016
+        subcategoria=data.subcategoria,  # CR-016
         parcela_atual=data.parcela_atual,
         parcela_total=data.parcela_total,
         recorrente=data.recorrente,
-        status=ExpenseStatus.PENDENTE.value,
     )
-    db.add(expense_atual)
-    
-    # 2. Se for parcelada, criar as futuras (apenas se nao for recorrente infinita, que tem logica propria)
-    # Assumindo que 'recorrente' flag é para fixas mensais (Netflix) e 'parcela_total > 1' é compras parceladas (Notebook)
-    if data.parcela_total and data.parcela_total > 1:
-        # Quantas parcelas faltam criar?
-        # Se usuario ta criando parcela 1 de 10, faltam 9 (2 a 10)
-        start_p = (data.parcela_atual or 1) + 1
-        end_p = data.parcela_total
-        
-        for i in range(start_p, end_p + 1):
-            offset_months = i - data.parcela_atual
-            
-            # Calcular proximo mes de referencia
-            next_mes = add_months(mes_referencia_inicial, offset_months)
-            
-            # Calcular proximo vencimento (mantendo dia se possivel)
-            next_venc = add_months(data.vencimento, offset_months)
-            
-            future_expense = Expense(
-                user_id=current_user.id,
-                mes_referencia=next_mes,
-                nome=data.nome,
-                categoria=categoria,  # CR-016
-                subcategoria=data.subcategoria,  # CR-016
-                valor=data.valor,
-                vencimento=next_venc,
-                parcela_atual=i,
-                parcela_total=data.parcela_total,
-                recorrente=False, # Parcelas futuras nao sao "recorrentes" no sentido de flag
-                status=ExpenseStatus.PENDENTE.value
-            )
-            db.add(future_expense)
 
     db.commit()
     db.refresh(expense_atual)

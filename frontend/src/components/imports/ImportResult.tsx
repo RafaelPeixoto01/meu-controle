@@ -20,6 +20,13 @@ export default function ImportResult({ result, onImportAnother }: ImportResultPr
         <p className="text-sm text-text-muted mt-1">
           {result.gastos_diarios_criados}{" "}
           {result.gastos_diarios_criados === 1 ? "gasto diário criado" : "gastos diários criados"} ·{" "}
+          {/* CR-049: so aparece quando houve parcelamento no lote */}
+          {result.planejados_criados > 0 && (
+            <>
+              {result.planejados_criados}{" "}
+              {result.planejados_criados === 1 ? "parcela criada" : "parcelas criadas"} ·{" "}
+            </>
+          )}
           {result.planejados_atualizados}{" "}
           {result.planejados_atualizados === 1 ? "planejado pago" : "planejados pagos"} ·{" "}
           {result.descartadas}{" "}
