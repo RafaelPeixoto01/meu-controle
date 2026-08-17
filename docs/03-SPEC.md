@@ -25,7 +25,7 @@
 | [specs/07-score-saude.md](specs/07-score-saude.md) | Endpoints de score, cálculo determinístico (D1–D4), cenário conservador, ações, persistência | F04 (CR-026) |
 | [specs/08-alertas.md](specs/08-alertas.md) | Motor de alertas on-demand, 8 tipos (A1–A8), ciclo de vida, endpoints, configurações | F05 (CR-033) |
 | [specs/09-analise-ia.md](specs/09-analise-ia.md) | Endpoint /api/analysis, arquitetura real (ai_analysis.py), regras (mês fechado, cache mensal, mesclagem F04, graceful degradation), env vars | F06 (CR-032; criada no CR-041) |
-| [specs/10-importacao-extratos.md](specs/10-importacao-extratos.md) | Upload de extrato/fatura PDF, interpretação por IA, staging/revisão, dedup por fingerprint, confirmação (gastos diários + conciliação de planejados), UI /import | F07 / RF-21 (CR-046 backend, CR-047 frontend — ambos entregues) |
+| [specs/10-importacao-extratos.md](specs/10-importacao-extratos.md) | Upload de extrato/fatura PDF, interpretação por IA, staging/revisão, dedup por fingerprint, confirmação (gastos diários + conciliação de planejados + séries de parcelas), UI /import | F07 / RF-21 (CR-046 backend, CR-047 frontend, CR-049 compras parceladas — entregues) |
 
 ---
 

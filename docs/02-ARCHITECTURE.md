@@ -1,6 +1,6 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 3.1
+**Versao:** 3.2
 **Data:** 2026-08-12
 **PRD Ref:** 01-PRD v3.1
 **CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018)
@@ -524,7 +524,7 @@ erDiagram
 
 > **Index:** `ix_import_batches_user_status (user_id, status)`
 
-#### ImportTransaction (`import_transactions`) — CR-046
+#### ImportTransaction (`import_transactions`) — CR-046 / CR-049
 
 | Campo                    | Tipo         | Restricoes                              | Descricao                                        |
 |--------------------------|--------------|------------------------------------------|---------------------------------------------------|
@@ -534,15 +534,17 @@ erDiagram
 | data                     | Date         | NOT NULL                                 | Data real da transacao/compra                     |
 | descricao                | String(255)  | NOT NULL                                 | Descricao extraida do documento                   |
 | valor                    | Numeric(10,2)| NOT NULL                                 | Valor da transacao                                |
-| classificacao            | String(20)   | NOT NULL                                 | gasto_diario, match_planejado, ignorar            |
+| classificacao            | String(20)   | NOT NULL                                 | gasto_diario, match_planejado, parcelamento, ignorar |
 | motivo_ignorar           | String(255)  | Nullable                                 | Justificativa quando classificacao=ignorar        |
 | expense_id_sugerido      | String(36)   | Nullable                                 | Gasto planejado sugerido pela IA para conciliacao |
 | categoria/subcategoria   | String(50)   | Nullable                                 | Sugestao da IA (par validado no backend)          |
 | metodo_pagamento         | String(30)   | Nullable                                 | Sugestao da IA                                    |
+| parcela_atual/total      | Integer      | Nullable                                 | CR-049: numeracao lida da fatura (so parcelamento) |
 | fingerprint              | String(64)   | NOT NULL                                 | sha256 para dedup entre uploads (RN-042)          |
 | status                   | String(20)   | NOT NULL, default pendente               | pendente, confirmada, descartada, duplicada       |
 | daily_expense_id_criado  | String(36)   | Nullable                                 | Auditoria: DailyExpense criado na confirmacao     |
 | expense_id_atualizado    | String(36)   | Nullable                                 | Auditoria: Expense conciliado na confirmacao      |
+| expense_id_criado        | String(36)   | Nullable                                 | CR-049: Expense ancora da serie de parcelas criada |
 | created_at/updated_at    | DateTime     | NOT NULL, default now()                  | Timestamps                                        |
 
 > **Index:** `ix_import_tx_user_fingerprint (user_id, fingerprint)`, `ix_import_transactions_batch_id (batch_id)`
@@ -885,6 +887,14 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
 - **Contexto:** A F07 precisa interpretar PDFs de extratos/faturas de multiplos bancos (Nubank, Itau, Mercado Pago), cujos layouts variam e mudam com o tempo. Parsers deterministicos por layout (pdfplumber + regex) exigiriam ~6 variantes fragies e manutencao continua.
 - **Decisao:** Enviar o PDF diretamente para a API Claude (document block base64) com prompt estruturado contendo as categorias validas e os gastos planejados em aberto do usuario. A IA extrai, classifica e sugere conciliacao; o backend faz validacao deterministica (`validate_ai_result`), deduplicacao por fingerprint sha256 (RN-042) e mantem tudo em staging (`import_batches`/`import_transactions`) ate confirmacao explicita do usuario (RN-038). O PDF nunca e persistido (RN-043). Reutiliza os padroes do CR-032 (retry/backoff, parse de JSON com reparo, feature flag, graceful degradation sem 5xx).
 - **Consequencias:** Funciona para qualquer banco sem codigo novo; custo por upload (mitigado por rate limit 5/min) e dependencia da API Anthropic (mitigada por flag `IMPORT_ENABLED` e revisao obrigatoria antes de gravar). Risco de prompt injection via PDF mitigado por sanitizacao da saida, matches restritos aos planejados do proprio usuario e revisao humana.
+
+### ADR-020: Criacao de parcelas compartilhada entre cadastro manual e importacao (CR-049)
+
+- **Contexto:** A importacao de faturas passou a materializar compras parceladas como series de `Expense`. A criacao upfront de todas as parcelas ja existia, mas inline no handler de `POST /api/expenses/{year}/{month}`.
+- **Decisao:** Extrair a regra para `services.create_expense_with_installments()`, usada pelos dois caminhos. O import passa `status_primeira=Pago` (RN-044) e `skip_existing=True` (RN-046); o cadastro manual usa os defaults e mantem o comportamento anterior.
+- **Alternativa descartada:** duplicar a regra no router de imports — divergiria na primeira mudanca de regra de parcelas.
+- **Consequencia:** uma unica definicao de "o que e uma serie de parcelas". O service nao faz commit: quem chama controla a transacao, o que preserva a atomicidade do confirm.
+- **Ancoragem (RN-045):** a `data` de uma fatura e a da **compra**; a parcela k vence em `data + (k-1)` meses. Ancorar a serie direto na data da compra (sem o offset) deslocaria todas as parcelas para tras.
 
 ### ADR-019: Claude Opus 5 como modelo padrao dos servicos de IA (CR-048)
 

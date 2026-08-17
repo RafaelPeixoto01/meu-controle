@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 3.1
-**Data:** 2026-08-12
+**Versao:** 3.2
+**Data:** 2026-08-16
 **Status:** Aprovado
 **Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049
 
 ---
 
@@ -254,13 +254,14 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 
 **RF-21 — Detalhamento:**
 - Upload de PDF (extrato de conta ou fatura de cartao — Nubank, Itau, Mercado Pago; sem parser fixo por banco) via `POST /api/imports` (multipart, max 10MB).
-- IA (API Claude, leitura nativa de PDF) extrai as transacoes e sugere para cada uma: novo gasto diario (com categoria/subcategoria/metodo), match com gasto planejado pendente/atrasado do usuario, ou ignorar (receitas, transferencias, pagamento de fatura — evita contagem dupla extrato+fatura).
+- IA (API Claude, leitura nativa de PDF) extrai as transacoes e sugere para cada uma: novo gasto diario (com categoria/subcategoria/metodo), match com gasto planejado pendente/atrasado do usuario, **compra parcelada** (CR-049 — numeracao `x/y` na descricao, sem planejado correspondente), ou ignorar (receitas, transferencias, pagamento de fatura — evita contagem dupla extrato+fatura).
 - Resultado fica em staging (lote `pendente_revisao`, tabelas `import_batches`/`import_transactions`) — retomavel se o usuario sair da pagina; nada e gravado nas tabelas finais sem confirmacao.
 - Deduplicacao por transacao: fingerprint sha256(usuario + data + valor + descricao normalizada); transacoes ja confirmadas em lotes anteriores nascem marcadas `duplicada`.
-- Confirmacao (`POST /api/imports/{id}/confirm`) aplica as decisoes revisadas: cria gastos diarios no mes da **data da compra** e/ou atualiza gastos planejados (status → Pago + valor real), gravando referencias de auditoria no lote.
+- Confirmacao (`POST /api/imports/{id}/confirm`) aplica as decisoes revisadas: cria gastos diarios no mes da **data da compra**, cria **series de parcelas** a partir de compras parceladas (CR-049) e/ou atualiza gastos planejados (status → Pago + valor real), gravando referencias de auditoria no lote.
+- Compra parcelada (CR-049) vira gasto planejado com `parcela_atual`/`parcela_total` e **todas as parcelas restantes** criadas upfront, alimentando a projecao de parcelas (RF-14) e o score (RF-17). Serie limitada a 120 parcelas.
 - O PDF e processado em memoria e **nunca persistido**; apenas as transacoes extraidas sao armazenadas.
 - Feature flag `IMPORT_ENABLED` + `ANTHROPIC_API_KEY`; indisponibilidade retorna resposta explicativa sem quebrar o app (padrao RF-19).
-- UI (CR-047): pagina propria "Importar" no ViewSelector com fluxo upload → processamento → revisao → confirmacao.
+- UI (CR-047): pagina propria "Importar" no ViewSelector com fluxo upload → processamento → revisao → confirmacao. A revisao agrupa por destino, incluindo "Compras parceladas" com edicao da numeracao e previa da serie antes de gravar (CR-049).
 
 ### Modulo: Autenticacao e Usuarios (CR-002)
 
@@ -501,8 +502,11 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-039 | Gasto diario criado por importacao pertence ao mes da data da compra, nao ao mes de vencimento da fatura | Importacao (RF-21) |
 | RN-040 | Match de transacao com gasto planejado atualiza status para Pago e sobrescreve o valor com o valor real da transacao | Importacao (RF-21) |
 | RN-041 | Receitas, transferencias entre contas proprias e pagamento de fatura de cartao sao classificados como "ignorar" (evita contagem dupla), mas permanecem visiveis na revisao para resgate | Importacao (RF-21) |
-| RN-042 | Deduplicacao por fingerprint sha256(user_id + data + valor + descricao normalizada); fingerprint ja confirmado marca a transacao como duplicada | Importacao (RF-21) |
+| RN-042 | Deduplicacao por fingerprint sha256(user_id + data + valor + descricao normalizada [+ numeracao da parcela, CR-049]); fingerprint ja confirmado marca a transacao como duplicada | Importacao (RF-21) |
 | RN-043 | O PDF enviado e processado em memoria e nunca persistido em disco ou banco; apenas as transacoes extraidas sao armazenadas | Importacao (RF-21) |
+| RN-044 | Parcela correspondente a transacao importada nasce com status Pago (ja cobrada na fatura); as parcelas seguintes nascem Pendente | Importacao (RF-21, CR-049) |
+| RN-045 | A data da transacao numa fatura e a da COMPRA: a parcela k vence em (data da compra + k-1 meses), e seu mes de referencia e o desse vencimento | Importacao (RF-21, CR-049) |
+| RN-046 | Parcela ja existente no mes-alvo (mesmo nome + numeracao) nao e recriada: e conciliada (status/valor atualizados), evitando duplicacao ao importar faturas de meses consecutivos | Importacao (RF-21, CR-049) |
 
 ---
 
@@ -625,4 +629,6 @@ Os itens abaixo **nao** estao no escopo atual:
 *Atualizado para v2.2 em 2026-02-17. RF-13: Gastos Diarios — CRUD, categorias fixas, visao mensal agrupada por dia (CR-005).*
 *Atualizado para v2.3 em 2026-03-16. RF-15: Score de Saude Financeira (CR-026).*
 *Atualizado para v3.0 em 2026-03-18. Sincronizacao massiva: RF-16 Categorizacao (CR-016), RF-17 Dashboard (CR-019), RF-18 Parcelas Futuras (CR-021), RF-19 Analise IA (CR-032), RF-20 Alertas (CR-033). Atualizados User Stories (US-24 a US-28), Regras de Negocio (RN-025 a RN-037), Fora de Escopo, Glossario e Roadmap.*
+*Atualizado para v3.2 em 2026-08-16. CR-049: importacao de compras parceladas (F07, item E-A do roadmap v2) — RF-21 estendido com a classificacao `parcelamento` e a acao `criar_planejado_parcelado`; RN-044 a RN-046 novas; RN-042 passa a considerar a numeracao da parcela. Receitas seguem em `ignorar` (RN-041 inalterada).*
+
 *Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7. UI entregue no CR-047 (mesma data) — conteudo do RF-21 ja cobria a feature completa.*

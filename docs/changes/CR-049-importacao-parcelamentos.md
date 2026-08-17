@@ -1,6 +1,6 @@
 # Change Request — CR-049: Importação de Compras Parceladas (F07 — E-A)
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-08-16
 **Status:** Em Implementação
 **Autor:** Rafael (via Claude)
@@ -63,8 +63,8 @@ A IA classifica a linha como `parcelamento` e devolve `parcela_atual`/`parcela_t
 **Regras decididas (autor, 2026-08-16):**
 
 - **RN-044 (nova):** a parcela correspondente à transação importada nasce com status **Pago** (a compra já foi cobrada na fatura); as parcelas seguintes nascem **Pendente**.
-- **RN-045 (nova):** o vencimento de cada parcela é a **data da compra + N meses**, via `add_months` (que já preserva o dia e trata meses curtos). Não depende de a IA extrair a data de vencimento da fatura.
-- **RN-046 (nova):** parcela que já existe no mês-alvo (mesmo nome + `parcela_atual` + `parcela_total`) não é recriada — importar a fatura do mês seguinte concilia em vez de duplicar.
+- **RN-045 (nova):** a `data` de uma fatura é a da **compra**; a parcela k vence em `add_months(data, k-1)` e seu `mes_referencia` é o mês desse vencimento. Uma compra de 15/05 com "03/10" cria a parcela 3 em **julho**, não em maio.
+- **RN-046 (nova):** parcela que já existe no mês-alvo (mesmo nome + `parcela_atual` + `parcela_total`) não é recriada. A parcela âncora existente é **conciliada** (status → Pago, valor → real) e as futuras já existentes são puladas; nenhuma delas entra em `planejados_criados`.
 
 ### 4.2 O que NÃO muda
 
@@ -167,20 +167,73 @@ ALTER TABLE import_transactions ADD COLUMN expense_id_criado VARCHAR(36) NULL;
 
 ## 8. Critérios de Aceite
 
-- [ ] IA classificando `parcelamento` produz transação com `parcela_atual`/`parcela_total` no staging
-- [ ] `validate_ai_result` rebaixa para `gasto_diario` quando os campos de parcela estão ausentes ou incoerentes (`total <= 1`, `atual > total`, não inteiros)
-- [ ] Confirm com `criar_planejado_parcelado` cria `total - atual + 1` despesas: a atual **Paga**, as seguintes **Pendentes**, com `mes_referencia` e `vencimento` corretos mês a mês
-- [ ] Parcela já existente no mês-alvo não é recriada (RN-046)
-- [ ] Decisão com parcela inválida retorna 422 sem gravar nada
-- [ ] `expense_id_criado` gravado para auditoria; contador `planejados_criados` correto na resposta
-- [ ] `POST /api/expenses/{year}/{month}` mantém exatamente o comportamento atual após o refactor (regressão)
-- [ ] Revisão exibe o grupo "Compras parceladas" com a prévia do que será criado e permite editar `x/y`, valor, data e categoria
-- [ ] Testes existentes continuam passando (regressão)
-- [ ] Novos testes cobrem a mudança (backend + frontend)
-- [ ] Fluxo afetado exercitado em runtime antes do merge (HTTP + Playwright) — ver seção 8.1
-- [ ] Revisão de código pré-merge (`/code-review`) executada — complexidade Alta
-- [ ] Revisão de segurança (checklist OWASP) executada — endpoint alterado
-- [ ] Documentos afetados foram atualizados
+- [x] IA classificando `parcelamento` produz transação com `parcela_atual`/`parcela_total` no staging — `TestParcelamentoValidacao` + runtime
+- [x] `validate_ai_result` rebaixa para `gasto_diario` quando os campos de parcela estão ausentes ou incoerentes — 6 casos parametrizados
+- [x] Confirm com `criar_planejado_parcelado` cria `total - atual + 1` despesas: a âncora **Paga**, as seguintes **Pendentes**, com `mes_referencia` e `vencimento` corretos mês a mês — `TestParcelamentoConfirm` + runtime (compra 15/05 "03/10" → parcela 3 em jul/2026, parcela 10 em fev/2027)
+- [x] Parcela já existente no mês-alvo não é recriada (RN-046) — 3 testes (âncora e futuras) + runtime
+- [x] Decisão com parcela inválida retorna 422 sem gravar nada — 4 casos parametrizados + teto de 120
+- [x] `expense_id_criado` gravado para auditoria; contador `planejados_criados` correto na resposta — `test_auditoria_grava_expense_id_criado`
+- [x] `POST /api/expenses/{year}/{month}` mantém o comportamento após o refactor (regressão) — suíte pré-existente verde + 5 testes novos do service extraído
+- [x] Revisão exibe o grupo "Compras parceladas" com a prévia do que será criado e permite editar `x/y`, valor, data e categoria — validado via Playwright (ver 8.1)
+- [x] Testes existentes continuam passando (regressão) — backend 180 (149 baseline + 31), frontend 61 (47 + 14)
+- [x] Novos testes cobrem a mudança — 31 backend + 14 frontend
+- [x] Fluxo afetado exercitado em runtime antes do merge (HTTP + Playwright) — ver seção 8.1
+- [x] Revisão de código pré-merge (`/code-review`) executada — ver seção 8.2 (6 findings, todos corrigidos)
+- [x] Revisão de segurança (checklist OWASP) executada — ver seção 8.3
+- [x] Documentos afetados foram atualizados — PRD v3.2, Arquitetura v3.2 (ADR-020), spec F07, índice 03-SPEC, Plano, Deploy Guide, roadmap v1.2, CLAUDE.md
+
+### 8.1 Validação Runtime (CR-037)
+
+> **Incidente registrado:** a primeira rodada de validação foi executada contra o **PostgreSQL de produção** — `backend/.env` aponta para o Railway, e isso não foi verificado antes de subir o backend local. Criou o usuário `cr049-e2e@test.local` com 9 expenses, 2 batches e 2 transactions, e aplicou a migration 010 em produção. Os dados de teste foram removidos (delete em cascata; contagens conferidas antes/depois: 14→13 usuários, 1308→1299 expenses, `daily_expenses` inalterado; nenhum dado dos outros 13 usuários foi lido ou alterado). A migration 010 foi mantida aplicada por decisão do autor — é a mesma que o deploy aplicaria, colunas nullable. Alerta adicionado ao Deploy Guide §3.2.
+
+Revalidação completa contra **SQLite local isolado** (`DATABASE_URL` sobrescrito só no processo, sem tocar no `.env`), backend uvicorn + frontend vite reais:
+
+| Fluxo | Resultado |
+|-------|-----------|
+| `alembic upgrade head` / `downgrade 009` / `upgrade` | ✅ em PostgreSQL e SQLite (`batch_alter_table`) |
+| `GET /api/imports/{id}` com transação `parcelamento` | ✅ 200, `parcela 3/10` no payload |
+| `confirm` com `parcela_atual=11, total=10` | ✅ 422, nenhuma despesa gravada |
+| `confirm` com `parcela_total=200000` | ✅ 422 (teto de 120), nada gravado |
+| `confirm` 3/10 de compra em **15/05/2026** | ✅ 200, `planejados_criados=8`; parcela 3 em **jul/2026** (Pago), parcela 10 em **fev/2027** (Pendente) |
+| Categoria propagada para todas as parcelas | ✅ `Compras Pessoais / Roupas` |
+| Reconfirmar lote já confirmado | ✅ 409 |
+| RN-046: reimportar a parcela 4/10 já existente | ✅ 200, `planejados_criados=0`, total de despesas inalterado, parcela 4 conciliada (Pago, valor real) |
+| **UI**: aba Importar → "Retomar revisão" | ✅ grupo "Compras parceladas (1)" com a dica do comportamento |
+| **UI**: destino "Compra parcelada", campos `x/y`, rótulo "Data da compra" | ✅ presentes e editáveis |
+| **UI**: prévia reagindo à edição | ✅ 1/5 → "até 5 parcelas … 01/2027"; total alterado para 3 → "3 parcelas … 11/2026" |
+| **UI**: confirmar | ✅ "1 gasto diário criado · 3 parcelas criadas · 0 planejados pagos · 0 transações descartadas" |
+| **UI**: aba Parcelas | ✅ "Magalu 3x" em Em Andamento, "Próxima a Encerrar: Magalu — Novembro 2026", série na projeção (RF-14) |
+| Console do browser | ✅ 0 erros no fluxo (os 2 erros da sessão são 401 em `/auth/refresh` na tela de login, antes de autenticar) |
+
+Caminho feliz com IA real não é exercitável localmente (sem `ANTHROPIC_API_KEY` no ambiente dev; TLS local interceptado — ver Troubleshooting do CLAUDE.md). A extração é coberta por testes com a API mockada.
+
+### 8.2 Code Review Pré-merge (CR-040)
+
+Executado sobre `git diff master...HEAD`. **6 findings, todos corrigidos**, cada um com teste de regressão:
+
+| # | Finding | Tratamento |
+|---|---------|-----------|
+| 1 | **Série inteira deslocada:** ancorada na data da compra sem offset, "PARC 03/10" de uma compra de maio criava a parcela 3 em maio (o certo é julho) | **Corrigido** — parcela k em `compra + (k-1)` meses; RN-045 reescrita; testes que codificavam a premissa errada atualizados |
+| 2 | Fingerprint não distinguia parcelas da mesma compra (mesma data, valor e descrição limpa) → parcela do mês seguinte nasceria `duplicada` | **Corrigido** — numeração entra no fingerprint; transações sem parcela mantêm a fórmula original (fingerprints antigos seguem válidos) |
+| 3 | `parcela_total` sem teto: `200000` criaria ~200k despesas num request | **Corrigido** — `MAX_PARCELAS=120` no schema e no input da UI |
+| 4 | Duas linhas do mesmo lote para a mesma série colapsavam numa despesa (a segunda sobrescrevia a primeira e perdia suas futuras) | **Corrigido** — 422, espelhando a guarda do `atualizar_planejado` |
+| 5 | `decision.categoria or tx.categoria` reaplicava o palpite da IA quando o usuário limpava a categoria de propósito | **Corrigido** — sem fallback na ação nova (o padrão pré-existente em `criar_gasto_diario` fica como está, fora de escopo) |
+| 6 | Prévia dizia "cria N parcelas" ignorando as já existentes | **Corrigido** — "cria até N" + aviso de reaproveitamento |
+
+Bug adicional encontrado na **validação runtime** (antes do review): `skip_existing` não cobria a própria parcela âncora, recriando-a ao reimportar a fatura seguinte. Corrigido com `crud.get_expense_installment()` + conciliação, com 2 testes de regressão.
+
+### 8.3 Revisão de Segurança (checklist OWASP)
+
+Obrigatória: o CR altera um endpoint existente (`/confirm`).
+
+- [x] Sem segredos hardcoded — nenhuma variável de ambiente nova
+- [x] Inputs validados via Pydantic — `parcela_atual`/`parcela_total` com `ge`/`le` (1..120) e coerência `atual <= total` no `model_validator`; par categoria/subcategoria revalidado no servidor
+- [x] Tokens sensíveis não em localStorage — N/A (sem mudança em auth)
+- [x] Ownership verificado — inalterado: o lote é buscado por `(batch_id, user_id)`, as despesas são criadas com `user_id=current_user.id` e `get_expense_installment` filtra por `user_id`
+- [x] Queries via ORM parametrizado — sem SQL raw
+- [x] CORS/headers — inalterados
+- [x] Dependências — **nenhuma nova**
+- Específico da feature: **exaustão de recursos** era o risco novo (a IA controla `parcela_total`, que vira número de INSERTs). Mitigado pelo teto de 120 + staging com revisão obrigatória + rate limit 5/min já existente. Prompt injection segue mitigada pela sanitização em `validate_ai_result`, que agora também rebaixa numeração incoerente.
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.
 
@@ -212,7 +265,7 @@ ALTER TABLE import_transactions ADD COLUMN expense_id_criado VARCHAR(36) NULL;
 
 - **Migration afetada:** `010_add_import_installments.py`
 - **Comando de downgrade:** `alembic downgrade 009`
-- **Downgrade testado?** [ ] Sim / [ ] Nao — a preencher em CR-T-01
+- **Downgrade testado?** [x] Sim (upgrade → downgrade 009 → upgrade, em PostgreSQL e SQLite)
 - **Downgrade e destrutivo?** [x] Sim (colunas de parcela e auditoria removidas do staging) — não afeta `expenses` já criadas
 
 ### 10.3 Impacto em Dados
@@ -239,4 +292,9 @@ ALTER TABLE import_transactions ADD COLUMN expense_id_criado VARCHAR(36) NULL;
 
 | Data | Autor | Descrição |
 |------|-------|-----------|
-| 2026-08-16 | Claude | CR criado a partir do item E-A do roadmap F07 v2; decisões de RN-044 (parcela atual Paga), RN-045 (vencimento = data da compra + N) e escopo único tomadas pelo autor |
+| 2026-08-16 | Claude | CR criado a partir do item E-A do roadmap F07 v2; decisões de RN-044, RN-045 e escopo único tomadas pelo autor |
+| 2026-08-16 | Claude | Backend: migration 010, `create_expense_with_installments` extraído do router, classificação `parcelamento`, ação `criar_planejado_parcelado`, prompt (24 testes) |
+| 2026-08-16 | Claude | Frontend: grupo "Compras parceladas", campos `x/y`, prévia da série, contador no resultado (13 testes) |
+| 2026-08-16 | Claude | Validação runtime — **incidente:** primeira rodada atingiu o banco de produção; dados de teste removidos e alerta adicionado ao Deploy Guide. Revalidado em SQLite isolado (HTTP + Playwright). Bug da RN-046 (parcela âncora duplicada) encontrado e corrigido |
+| 2026-08-16 | Claude | Code review pré-merge: 6 findings, todos corrigidos com testes — incluindo a ancoragem da série (RN-045 reescrita) |
+| 2026-08-16 | Claude | Docs sincronizados (PRD v3.2, Arquitetura v3.2/ADR-020, spec F07, 03-SPEC, Plano, Deploy Guide, roadmap v1.2, CLAUDE.md). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |

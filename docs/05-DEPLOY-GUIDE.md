@@ -154,6 +154,15 @@ Todos os itens da secao 3.1, mais:
 - [ ] Se destrutiva: rollback documentado no CR correspondente
 - [ ] Funcao `downgrade()` da migration esta implementada (nao vazia)
 
+> **⚠️ `backend/.env` aponta para o PostgreSQL de PRODUCAO (Railway).** Rodar `alembic upgrade`, `alembic downgrade` ou subir o `uvicorn` local sem sobrescrever `DATABASE_URL` executa tudo **em producao**. Para trabalho local, prefixe o comando com um banco proprio:
+> ```bash
+> DATABASE_URL="sqlite:///./local.db" python -m alembic upgrade head
+> DATABASE_URL="sqlite:///./local.db" python -m uvicorn app.main:app --reload
+> ```
+> A suite de testes (`pytest`) e segura: usa SQLite in-memory via fixtures, ignorando o `.env`.
+
+> **Estado atual:** a migration `010` (CR-049) ja foi aplicada em producao antecipadamente, fora do fluxo de deploy. O `alembic upgrade head` do proximo deploy sera no-op para ela. Colunas nullable, sem impacto no codigo em execucao.
+
 ---
 
 ## 4. Procedimentos de Rollback

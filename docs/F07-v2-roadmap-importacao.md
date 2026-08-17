@@ -1,6 +1,6 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.1
+**Versão:** 1.2
 **Data:** 2026-08-16
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
@@ -48,13 +48,14 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 ## 4. Evoluções de Alta Prioridade
 
-### E-A — Cobertura: compras parceladas
+### E-A — Cobertura: compras parceladas ✅ Implementada (CR-049)
 
 | Campo | Valor |
 |-------|-------|
 | Lacuna | L1 |
 | Complexidade | Alta (backend + frontend + migration + refactor) |
 | Depende de | — |
+| Entregue em | [CR-049](changes/CR-049-importacao-parcelamentos.md) — migration 010 |
 
 **Problema.** Uma fatura de cartão com "NETSHOES PARC 3/10" gera hoje um `DailyExpense` isolado de R$ X, perdendo as 7 parcelas futuras — justamente o dado que alimenta a projeção de parcelas (CR-021) e o fator D2 do health score. O modelo de dados já suporta parcelamento (`Expense.parcela_atual`/`parcela_total`), mas a importação não sabe produzi-lo.
 
@@ -70,6 +71,12 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 **Fora de escopo:** a importação continua tratando receitas como `ignorar` (RN-041 inalterada). Extratos de conta corrente seguem cobertos apenas na parte de despesas.
 
 **Impacto em documentos:** RF novo para a ação de confirm; RN nova para a criação de parcelas via importação. RN-041 permanece como está.
+
+> **Como ficou (CR-049).** Fonte da verdade: [spec F07 — Compras parceladas](specs/10-importacao-extratos.md). Dois pontos saíram diferentes deste desenho inicial:
+> - **Ancoragem (RN-045):** a `data` de uma fatura é a da **compra**, não a da cobrança. A parcela k vence em `compra + (k-1)` meses — ancorar direto na data da compra deslocaria a série inteira para trás. O desenho acima não distinguia os dois.
+> - **Dedup (RN-042):** como a descrição é limpa da numeração (o nome precisa ser estável para a RN-046 casar), parcelas da mesma compra passariam a colidir no fingerprint; a numeração entrou no cálculo.
+>
+> Além disso: teto de 120 parcelas por série, guarda contra duas linhas do mesmo lote apontando para a mesma série, e conciliação (em vez de duplicação) quando a própria parcela já existe.
 
 **Riscos:**
 
@@ -226,7 +233,7 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 
 | ID | Item | Prioridade | Depende de | Migration? |
 |----|------|-----------|------------|-----------|
-| E-A | Compras parceladas | Alta | — | Sim |
+| E-A | Compras parceladas ✅ CR-049 | Alta | — | Sim (010) |
 | E-B | Upload assíncrono | Alta | — | Sim |
 | E-C | Memória de categorização + revisão em massa | Alta | E-A | Sim |
 | E-D | Reconciliação, histórico e desfazer | Alta | E-A | Sim |
@@ -246,4 +253,5 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | Data | Autor | Descrição |
 |------|-------|-----------|
 | 2026-08-16 | Claude | Documento criado a partir do brainstorming de evolução da F07: 4 evoluções de alta prioridade (E-A..E-D) + 8 itens de backlog (B-1..B-8) |
+| 2026-08-16 | Claude | E-A implementada no CR-049 (RN-044/045/046). Nota: a `data` da fatura e a da COMPRA — a parcela k vence em compra + (k-1) meses |
 | 2026-08-16 | Claude | E-A reduzida a compras parceladas — classificação de receitas retirada do roadmap por decisão do autor; RN-041 permanece inalterada |

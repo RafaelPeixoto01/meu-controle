@@ -1,6 +1,6 @@
-# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend)
+# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos)
 
-**PRD Ref:** RF-21, US-29, RN-038..RN-043
+**PRD Ref:** RF-21, US-29, RN-038..RN-046
 
 ## Visão Geral
 
@@ -78,9 +78,35 @@ Todos exigem autenticação (Bearer) e verificam ownership (404 para recurso de 
 - Transações do lote ausentes do payload são tratadas como `descartar` — exceto as `duplicada`, que permanecem `duplicada` (auditoria consistente com o DELETE)
 - Duas decisões `atualizar_planejado` apontando para o mesmo `expense_id` no mesmo confirm → 422 (evita sobrescrita silenciosa)
 - `criar_gasto_diario`: valida par categoria+subcategoria (subcategoria deve pertencer à categoria informada — não deriva só da subcategoria, por causa de subcategorias repetidas) e método de pagamento; `mes_referencia = date(data.year, data.month, 1)` (RN-039)
+- `criar_planejado_parcelado` (CR-049): cria a série de parcelas — ver seção "Compras parceladas" abaixo
 - `atualizar_planejado`: `expense_id` obrigatório; Expense do usuário (404 se não); status → `Pago`, valor → valor informado (RN-040)
 - Auditoria: transação confirmada grava `daily_expense_id_criado` ou `expense_id_atualizado`; status da transação → `confirmada`/`descartada`; lote → `confirmado`
-- Resposta: `{ "gastos_diarios_criados": N, "planejados_atualizados": N, "descartadas": N }`
+- Resposta: `{ "gastos_diarios_criados": N, "planejados_criados": N, "planejados_atualizados": N, "descartadas": N }`
+
+## Compras parceladas (CR-049 — item E-A do roadmap v2)
+
+Compra parcelada identificada pela numeração explícita na descrição (`3/10`, `PARC 03/10`, `PARCELA 3 DE 10`) que **não** casou com nenhum gasto planejado existente. Se houver planejado correspondente, o prompt dá precedência ao `match_planejado` — é o que evita recriar parcelas ao importar meses consecutivos.
+
+**Classificação `parcelamento`.** A IA devolve `parcela_atual`/`parcela_total` e a `descricao` já limpa da numeração (o nome precisa ser estável entre meses para a RN-046 casar). `_parse_parcelas` exige inteiros com `total > 1` e `1 <= atual <= total`; numeração incoerente rebaixa a transação para `gasto_diario`.
+
+**Ação `criar_planejado_parcelado`.** Payload:
+
+```json
+{ "id": "...", "acao": "criar_planejado_parcelado",
+  "descricao": "Netshoes", "valor": 149.90, "data": "2026-05-15",
+  "categoria": "Compras Pessoais", "subcategoria": "Roupas",
+  "parcela_atual": 3, "parcela_total": 10 }
+```
+
+- `parcela_atual`/`parcela_total` obrigatórios, entre 1 e `MAX_PARCELAS` (120), com `atual <= total` e `total >= 2` — senão 422
+- **RN-045:** `data` é a data da **compra**. A parcela k vence em `add_months(data, k-1)`; a parcela informada ancora a série nesse vencimento, e `mes_referencia` é o mês dele. Uma compra de 15/05 com "03/10" cria a parcela 3 em **julho**, não em maio
+- **RN-044:** a parcela informada nasce `Pago` (já cobrada nesta fatura); as seguintes, `Pendente` e `recorrente=False`
+- **RN-046:** parcela já existente no mês-alvo (mesmo nome + numeração) não é recriada — a informada é conciliada (status e valor atualizados) e as futuras são puladas; nenhuma delas entra em `planejados_criados`
+- Categoria é **opcional** (o modelo `Expense` permite nula), mas se vier, o par precisa ser válido. Sem fallback para o palpite da IA: limpar a categoria na revisão significa gravar sem categoria
+- Duas decisões do mesmo lote apontando para a mesma série → 422 (espelha a guarda do `atualizar_planejado`)
+- Auditoria: `expense_id_criado` recebe o id da parcela ancora
+
+A criação upfront das parcelas é feita por `services.create_expense_with_installments()`, **compartilhada com o cadastro manual** ([`routers/expenses.py`](../../backend/app/routers/expenses.py)) — o import apenas passa `status_primeira=Pago` e `skip_existing=True`.
 
 ## Arquitetura
 
@@ -93,7 +119,7 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 
 - `import_service.py`:
   - `normalize_description(texto)` — lowercase, espaços colapsados, trim
-  - `compute_fingerprint(user_id, data, valor, descricao)` — sha256 de `user_id|YYYY-MM-DD|valor 2 casas|descricao normalizada`
+  - `compute_fingerprint(user_id, data, valor, descricao, parcela_atual=None, parcela_total=None)` — sha256 de `user_id|YYYY-MM-DD|valor 2 casas|descricao normalizada`, mais `|atual/total` quando houver parcela. Sem a numeração, parcelas da mesma compra colidiriam (mesma data de compra, mesmo valor, mesma descrição limpa) e a parcela do mês seguinte nasceria `duplicada`
   - `collect_open_expenses(db, user_id)` — gastos planejados Pendente/Atrasado dos últimos 3 meses + mês seguinte (candidatos a match; também define os `expense_id` válidos para a validação)
   - `build_import_prompts(open_expenses)` — interpola no template: categorias/subcategorias válidas (`categories.py`), métodos de pagamento e a lista de planejados em aberto (id, nome, parcela, valor, vencimento, status)
   - `call_import_api(pdf_bytes, system_prompt, user_prompt)` — `client.messages.create` com content blocks `[document(base64 pdf), text(user_prompt)]`, `max_tokens=8192`, retry/backoff e `_parse_ai_json` reutilizado do padrão F06; timeout `IMPORT_TIMEOUT_SECONDS` (default 90s)
@@ -116,7 +142,9 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 
 **`import_batches`** — id (uuid str), user_id (FK CASCADE), filename, banco_detectado, tipo_documento (`extrato|fatura`), status (`pendente_revisao|confirmado|descartado`), tokens_input/output, modelo, tempo_processamento_ms, created_at, updated_at. Índice `(user_id, status)`.
 
-**`import_transactions`** — id, batch_id (FK CASCADE), user_id (FK CASCADE), data, descricao, valor Numeric(10,2), classificacao (`gasto_diario|match_planejado|ignorar`), motivo_ignorar, expense_id_sugerido, categoria, subcategoria, metodo_pagamento, fingerprint (sha256 hex, 64), status (`pendente|confirmada|descartada|duplicada`), daily_expense_id_criado, expense_id_atualizado, created_at, updated_at. Índice `(user_id, fingerprint)`.
+**`import_transactions`** — id, batch_id (FK CASCADE), user_id (FK CASCADE), data, descricao, valor Numeric(10,2), classificacao (`gasto_diario|match_planejado|parcelamento|ignorar`), motivo_ignorar, expense_id_sugerido, categoria, subcategoria, metodo_pagamento, **parcela_atual, parcela_total** (CR-049), fingerprint (sha256 hex, 64), status (`pendente|confirmada|descartada|duplicada`), daily_expense_id_criado, expense_id_atualizado, **expense_id_criado** (CR-049), created_at, updated_at. Índice `(user_id, fingerprint)`.
+
+Migration **010** (CR-049) adiciona `parcela_atual`, `parcela_total` e `expense_id_criado` via `batch_alter_table`.
 
 Sem alteração nas tabelas existentes.
 
@@ -148,6 +176,7 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - Upload não-PDF → 422; >10MB → 413; flag off / sem API key → `indisponivel`; erro da IA → `erro` sem lote
 - Dedup: segunda importação com fingerprint confirmado → `duplicada`
 - Confirm: cria DailyExpense no mês da data da compra, atualiza Expense (Pago + valor), auditoria gravada, contadores corretos
+- Parcelamentos (CR-049): série completa com meses/vencimentos corretos a partir da data da compra, parcela âncora Paga e futuras Pendentes, RN-046 (não duplica nem a âncora nem as futuras), 422 para numeração inválida/acima do teto/série repetida no lote, fingerprint distinguindo parcelas da mesma compra
 - Confirm inválido: categoria/subcategoria incompatíveis → 422; lote já confirmado → 409; expense de outro usuário → 404
 - Ownership: get/confirm/delete de lote de outro usuário → 404
 - PDF não persistido (nenhum arquivo escrito)
@@ -157,13 +186,14 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - Rota `/import` (ProtectedRoute) + aba "Importar" no ViewSelector (6ª aba)
 - `pages/ImportView.tsx` — máquina de estados do fluxo: `upload` → (processando via mutation) → `review` → `result`; oferece retomada de lotes `pendente_revisao` ao entrar
 - `components/imports/ImportUpload.tsx` — seleção de PDF com validação client-side (extensão + 10MB), estado "processando" (aviso de até ~90s), banner de lotes pendentes (retomar/descartar), exibição de `indisponivel`/`erro` sem quebrar
-- `components/imports/ImportReview.tsx` — grupos (novos gastos / conciliações / ignoradas / duplicadas), checkbox por transação (ignoradas e duplicadas nascem desmarcadas), edição inline (destino, valor, data, descrição, categoria+subcategoria em cascata, método), validação por linha antes do confirm (inclui guarda contra pagar o mesmo planejado 2x — espelho da regra do backend); conciliação mostra o planejado alvo (nome, parcela, valor, status, vencimento)
+- `components/imports/ImportReview.tsx` — grupos (novos gastos / conciliações / **compras parceladas** / ignoradas / duplicadas), checkbox por transação (ignoradas e duplicadas nascem desmarcadas), edição inline (destino, valor, data, descrição, categoria+subcategoria em cascata, método), validação por linha antes do confirm (inclui guarda contra pagar o mesmo planejado 2x — espelho da regra do backend); conciliação mostra o planejado alvo (nome, parcela, valor, status, vencimento)
 - `components/imports/ImportResult.tsx` — contadores do resultado + navegação (Gastos Diários / Planejados / importar outro)
-- `utils/importReview.ts` — helpers puros testados: `groupTransactions`, `buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`, `monthsToFetchForMatches`
+- `utils/importReview.ts` — helpers puros testados: `groupTransactions`, `buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`, `monthsToFetchForMatches`, `describeInstallmentSeries` (CR-049: prévia "cria até N parcelas … até MM/AAAA")
+- CR-049 na revisão: destino "Compra parcelada", campos de numeração `x/y` (máx. 120), rótulo "Data da compra" e prévia da série; `ImportResult` mostra o contador de parcelas criadas
 - `hooks/useImports.ts` — `usePendingImports`, `useMatchTargets` (mapa expense_id→Expense dos meses das transações + atual/anterior), `useUploadImport`, `useConfirmImport` (invalida `imports-pending`, `daily-expenses-summary`, `monthly-summary`, `dashboard`, `installments`, `alerts`), `useDiscardImport`
 - `services/api.ts`: `requestMultipart` — FormData sem Content-Type manual, Bearer token e interceptor refresh-401 com retry (erro pós-refresh expõe o `detail` do backend)
 
 ## Referências
 
-- CR-046 (backend), CR-047 (frontend), plano de brainstorming 2026-08-12
+- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
 - Padrões reutilizados de F06: `docs/specs/09-analise-ia.md`, `backend/app/ai_analysis.py`
