@@ -1,8 +1,8 @@
 # Change Request — CR-049: Importação de Compras Parceladas (F07 — E-A)
 
-**Versão:** 1.1
+**Versão:** 1.2
 **Data:** 2026-08-16
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -298,3 +298,4 @@ Obrigatória: o CR altera um endpoint existente (`/confirm`).
 | 2026-08-16 | Claude | Validação runtime — **incidente:** primeira rodada atingiu o banco de produção; dados de teste removidos e alerta adicionado ao Deploy Guide. Revalidado em SQLite isolado (HTTP + Playwright). Bug da RN-046 (parcela âncora duplicada) encontrado e corrigido |
 | 2026-08-16 | Claude | Code review pré-merge: 6 findings, todos corrigidos com testes — incluindo a ancoragem da série (RN-045 reescrita) |
 | 2026-08-16 | Claude | Docs sincronizados (PRD v3.2, Arquitetura v3.2/ADR-020, spec F07, 03-SPEC, Plano, Deploy Guide, roadmap v1.2, CLAUDE.md). Aguardando CI verde pós-merge para Status "Concluído" (CR-037) |
+| 2026-08-16 | Claude | Merge --no-ff em master + push; CI verde (run 31980946158). Status → Concluído. Validação ✅ |
