@@ -1,12 +1,13 @@
 // CR-047: testes dos helpers puros da revisao de importacao.
 import { describe, it, expect } from "vitest";
-import type { ImportBatch, ImportTransaction } from "../types";
+import type { ImportBatch, ImportBatchSummary, ImportTransaction } from "../types";
 import {
   buildConfirmPayload,
   buildInitialDecisions,
   describeInstallmentSeries,
   groupTransactions,
   monthsToFetchForMatches,
+  nextStageForBatch,
   validateDecision,
   type ReviewDecision,
 } from "./importReview";
@@ -37,6 +38,7 @@ function makeBatch(transacoes: ImportTransaction[]): ImportBatch {
     banco_detectado: "Nubank",
     tipo_documento: "fatura",
     status: "pendente_revisao",
+    erro_mensagem: null,
     created_at: "2026-08-12T10:00:00",
     transacoes,
   };
@@ -341,5 +343,39 @@ describe("describeInstallmentSeries", () => {
 
   it("retorna null para numeracao invalida", () => {
     expect(describeInstallmentSeries(parcelaDecision({ parcelaTotal: "1" }))).toBeNull();
+  });
+});
+
+describe("nextStageForBatch (CR-052)", () => {
+  function summary(status: ImportBatchSummary["status"]): ImportBatchSummary {
+    return {
+      id: "b1",
+      filename: "fatura.pdf",
+      banco_detectado: null,
+      tipo_documento: null,
+      status,
+      erro_mensagem: null,
+      created_at: "2026-08-22T10:00:00",
+    };
+  }
+
+  it("mantem na tela de processamento enquanto a IA extrai", () => {
+    expect(nextStageForBatch(summary("processando"))).toBe("processing");
+  });
+
+  it("abre a revisao quando a extracao termina", () => {
+    expect(nextStageForBatch(summary("pendente_revisao"))).toBe("review");
+  });
+
+  it.each(["erro", "confirmado", "descartado"] as const)(
+    "volta ao upload em estado terminal (%s)",
+    (status) => {
+      expect(nextStageForBatch(summary(status))).toBe("upload");
+    }
+  );
+
+  it("sem lote, fica no upload", () => {
+    expect(nextStageForBatch(null)).toBe("upload");
+    expect(nextStageForBatch(undefined)).toBe("upload");
   });
 });

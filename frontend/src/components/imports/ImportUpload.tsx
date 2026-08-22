@@ -15,6 +15,13 @@ interface ImportUploadProps {
   onDiscard: (batchId: string) => void;
 }
 
+// CR-052: o banner agora mistura lotes prontos para revisao e lotes ainda em
+// extracao — cada um com o rotulo e a acao que fazem sentido no seu estado.
+const RESUME_LABEL: Record<string, string> = {
+  processando: "Acompanhar",
+  pendente_revisao: "Retomar revisão",
+};
+
 export default function ImportUpload({
   isUploading,
   notice,
@@ -44,17 +51,15 @@ export default function ImportUpload({
     onUpload(file);
   }
 
+  // CR-052: agora e so a transferencia do arquivo — a extracao pela IA roda
+  // em background e tem tela propria (ImportProcessing)
   if (isUploading) {
     return (
       <div className="bg-surface rounded-2xl shadow-sm border border-slate-100/80 p-10
         flex flex-col items-center gap-4 text-center">
         <Loader2 className="h-10 w-10 text-primary animate-spin" />
         <div>
-          <p className="font-bold text-text">Interpretando o documento...</p>
-          <p className="text-sm text-text-muted mt-1">
-            A IA está lendo as transações do PDF. Isso pode levar até 3 minutos em
-            faturas grandes — não feche esta página.
-          </p>
+          <p className="font-bold text-text">Enviando o arquivo...</p>
         </div>
       </div>
     );
@@ -65,14 +70,17 @@ export default function ImportUpload({
       {pendingBatches.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
           <p className="text-sm font-semibold text-amber-800">
-            Você tem {pendingBatches.length === 1 ? "uma importação pendente" : `${pendingBatches.length} importações pendentes`} de revisão:
+            Você tem {pendingBatches.length === 1 ? "uma importação em aberto" : `${pendingBatches.length} importações em aberto`}:
           </p>
           {pendingBatches.map((batch) => (
             <div
               key={batch.id}
               className="flex flex-wrap items-center justify-between gap-2 bg-white/60 rounded-xl px-3 py-2"
             >
-              <span className="text-sm text-text truncate">
+              <span className="text-sm text-text truncate flex items-center gap-2">
+                {batch.status === "processando" && (
+                  <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
+                )}
                 {batch.filename}
                 {batch.banco_detectado ? ` — ${batch.banco_detectado}` : ""}
               </span>
@@ -84,7 +92,7 @@ export default function ImportUpload({
                   className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold
                     hover:bg-primary-hover transition-all duration-150 disabled:opacity-50"
                 >
-                  Retomar revisão
+                  {RESUME_LABEL[batch.status] ?? "Abrir"}
                 </button>
                 <button
                   type="button"
