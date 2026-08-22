@@ -2,6 +2,7 @@
 // Mantidos fora dos componentes para permitir teste unitario (Vitest).
 import type {
   ImportBatch,
+  ImportBatchSummary,
   ImportConfirmDecision,
   ImportConfirmRequest,
   ImportTransaction,
@@ -226,4 +227,25 @@ export function monthsToFetchForMatches(
     const [year, month] = key.split("-").map(Number);
     return { year, month };
   });
+}
+
+// CR-052: estagio do fluxo de importacao correspondente ao estado do lote.
+// Funcao pura para que a maquina de estados da ImportView seja testavel sem
+// montar o componente nem o polling.
+export type ImportStage = "upload" | "processing" | "review" | "result";
+
+export function nextStageForBatch(
+  batch: ImportBatchSummary | null | undefined
+): ImportStage {
+  if (!batch) return "upload";
+  switch (batch.status) {
+    case "processando":
+      return "processing";
+    case "pendente_revisao":
+      return "review";
+    // confirmado/descartado/erro nao tem revisao a retomar: volta pro inicio.
+    // No caso de 'erro', a ImportView exibe erro_mensagem como aviso.
+    default:
+      return "upload";
+  }
 }

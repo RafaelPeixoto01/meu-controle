@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.ai_analysis import DEFAULT_MODEL, AiRefusalError, _parse_ai_json, extract_response_text
 from app.categories import EXPENSE_CATEGORIES, PAYMENT_METHODS, is_valid_payment_method
-from app.models import ExpenseStatus
+from app.models import ExpenseStatus, ImportTransaction
 
 import anthropic as anthropic_sdk
 
@@ -37,6 +37,16 @@ CLASSIFICACOES_VALIDAS = {"gasto_diario", "match_planejado", "parcelamento", "ig
 # Janela de gastos planejados enviados no prompt: extratos/faturas cobrem
 # tipicamente o mes anterior; 3 meses para tras + mes seguinte da margem.
 PENDING_EXPENSES_MONTHS_BACK = 3
+
+# CR-052: um lote em 'processando' por mais que isso perdeu a BackgroundTasks
+# (restart do container) e e resolvido como 'erro' na leitura (RN-048).
+#
+# O teto precisa ficar ACIMA do pior caso da extracao, senao a leitura marcaria
+# como 'erro' uma task ainda viva e o `_claim_batch` jogaria fora a extracao ja
+# paga. Pior caso: o retry do `call_import_api` (3 tentativas) multiplica o do
+# SDK Anthropic (max_retries=2, tambem 3 tentativas), cada uma limitada por
+# IMPORT_TIMEOUT_SECONDS=180s → 9 x 180s ≈ 27 min.
+STALE_PROCESSING_MINUTES = 30
 
 
 def is_import_enabled() -> bool:
@@ -359,3 +369,139 @@ def mark_duplicates(db: Session, user_id: str, transacoes: list[dict]) -> list[d
     for tx in transacoes:
         tx["status"] = "duplicada" if tx["fingerprint"] in confirmados else "pendente"
     return transacoes
+
+
+# ========== Processamento assincrono (CR-052) ==========
+
+def resolve_stale_batch(db: Session, batch) -> bool:
+    """
+    RN-048: lote preso em 'processando' ha mais de STALE_PROCESSING_MINUTES vira
+    'erro' na leitura. Um restart do container mata a BackgroundTasks em voo e
+    deixaria o lote em 'processando' para sempre; resolver na leitura evita um
+    job de limpeza dedicado. Retorna True se mudou algo (o chamador commita).
+    """
+    if batch.status != "processando":
+        return False
+    limite = datetime.now() - timedelta(minutes=STALE_PROCESSING_MINUTES)
+    if batch.created_at > limite:
+        return False
+
+    batch.status = "erro"
+    batch.erro_mensagem = "O processamento foi interrompido. Envie o arquivo novamente."
+    return True
+
+
+def _claim_batch(db: Session, batch_id: str, user_id: str):
+    """
+    Relê o lote e só o devolve se ainda estiver 'processando'.
+
+    Entre o inicio e o fim da extracao o usuario pode ter descartado o lote;
+    escrever nele depois disso desfaria uma decisao ja tomada — vale tanto para
+    o resultado quanto para a mensagem de erro.
+    """
+    batch = crud.get_import_batch_by_id(db, batch_id, user_id)
+    if batch is None:
+        logger.warning(f"Lote {batch_id} desapareceu durante o processamento")
+        return None
+    if batch.status != "processando":
+        logger.info(
+            f"Lote {batch_id} saiu de 'processando' durante a extração "
+            f"(status={batch.status}); resultado descartado"
+        )
+        return None
+    return batch
+
+
+def _finish_with_error(session_factory, batch_id: str, user_id: str, mensagem: str) -> None:
+    db = session_factory()
+    try:
+        batch = _claim_batch(db, batch_id, user_id)
+        if batch is None:
+            return
+        batch.status = "erro"
+        batch.erro_mensagem = mensagem[:255]
+        db.commit()
+    finally:
+        db.close()
+
+
+def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes: bytes) -> None:
+    """
+    CR-052: extracao do PDF fora do request (BackgroundTasks do FastAPI).
+
+    O lote ja existe em 'processando' quando esta funcao roda; aqui ele caminha
+    para 'pendente_revisao' (com as transacoes) ou 'erro' (com o motivo).
+
+    A sessao e aberta em dois trechos curtos, com a chamada a IA entre eles: a
+    extracao leva minutos e segurar uma conexao do pool em transacao por todo
+    esse tempo esgotaria o pool e exporia a task a
+    `idle_in_transaction_session_timeout` no PostgreSQL.
+
+    RN-043 preservada: `pdf_bytes` chega pela closure da task e vive so em
+    memoria — nao e gravado em disco, banco nem log.
+    """
+    # 1. Contexto do prompt (sessao curta)
+    db = session_factory()
+    try:
+        if _claim_batch(db, batch_id, user_id) is None:
+            return
+        open_expenses = collect_open_expenses(db, user_id)
+        valid_ids = {e.id for e in open_expenses}
+        system_prompt, user_prompt = build_import_prompts(open_expenses)
+    except Exception:
+        logger.error(f"Falha ao montar o contexto do lote {batch_id}", exc_info=True)
+        db.rollback()
+        db.close()
+        _finish_with_error(
+            session_factory, batch_id, user_id, "Não foi possível preparar a importação"
+        )
+        return
+    finally:
+        db.close()
+
+    # 2. Chamada a IA — sem conexao de banco presa
+    try:
+        api_result = call_import_api(pdf_bytes, system_prompt, user_prompt)
+        parsed = validate_ai_result(api_result["resultado"], valid_ids)
+    except Exception as e:
+        logger.error(f"Erro ao interpretar importação {batch_id}: {e}", exc_info=True)
+        _finish_with_error(
+            session_factory,
+            batch_id,
+            user_id,
+            f"Não foi possível interpretar o documento: {type(e).__name__}",
+        )
+        return
+
+    if not parsed["transacoes"]:
+        _finish_with_error(
+            session_factory, batch_id, user_id, "Nenhuma transação foi identificada no documento"
+        )
+        return
+
+    # 3. Persistir o staging (sessao curta)
+    db = session_factory()
+    try:
+        batch = _claim_batch(db, batch_id, user_id)
+        if batch is None:
+            return
+
+        # Dedup (RN-042) + persistir staging (RN-038)
+        transacoes = mark_duplicates(db, user_id, parsed["transacoes"])
+
+        batch.banco_detectado = parsed["banco"]
+        batch.tipo_documento = parsed["tipo_documento"]
+        batch.tokens_input = api_result.get("tokens_input")
+        batch.tokens_output = api_result.get("tokens_output")
+        batch.modelo = api_result["modelo"]
+        batch.tempo_processamento_ms = api_result.get("tempo_processamento_ms")
+        for tx in transacoes:
+            batch.transacoes.append(ImportTransaction(user_id=user_id, **tx))
+        batch.status = "pendente_revisao"
+        db.commit()
+    except Exception:
+        # Task nao tem quem trate a excecao: logar e nao deixar a sessao suja
+        logger.error(f"Falha ao gravar o lote {batch_id}", exc_info=True)
+        db.rollback()
+    finally:
+        db.close()

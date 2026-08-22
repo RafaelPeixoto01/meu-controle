@@ -1,41 +1,69 @@
 // CR-047 (F07): pagina /import — fluxo upload → processando → revisao → resultado.
-import { useState } from "react";
+// CR-052: a extracao roda em background no servidor; o estagio "processing"
+// acompanha o lote por polling em vez de segurar o request do upload.
+import { useEffect, useState } from "react";
 import ViewSelector from "../components/ViewSelector";
 import ImportUpload from "../components/imports/ImportUpload";
+import ImportProcessing from "../components/imports/ImportProcessing";
 import ImportReview from "../components/imports/ImportReview";
 import ImportResult from "../components/imports/ImportResult";
 import {
   useConfirmImport,
   useDiscardImport,
+  useImportBatch,
   useMatchTargets,
   usePendingImports,
   useUploadImport,
 } from "../hooks/useImports";
-import { fetchImportBatch } from "../services/api";
+import { nextStageForBatch, type ImportStage } from "../utils/importReview";
 import type { ImportBatch, ImportConfirmRequest, ImportConfirmResponse } from "../types";
 
-type Stage = "upload" | "review" | "result";
-
 export default function ImportView() {
-  const [stage, setStage] = useState<Stage>("upload");
+  const [stage, setStage] = useState<ImportStage>("upload");
+  const [batchId, setBatchId] = useState<string | null>(null);
   const [batch, setBatch] = useState<ImportBatch | null>(null);
+  const [filename, setFilename] = useState<string | null>(null);
   const [result, setResult] = useState<ImportConfirmResponse | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [isResuming, setIsResuming] = useState(false);
 
   const pendingQuery = usePendingImports();
   const uploadMutation = useUploadImport();
   const confirmMutation = useConfirmImport();
   const discardMutation = useDiscardImport();
+  const pollQuery = useImportBatch(batchId, stage === "processing");
   const matchTargetsQuery = useMatchTargets(stage === "review" ? batch : null);
+
+  // CR-052: o lote em processamento decide sozinho o proximo estagio. Sai da
+  // tela quando a extracao termina (→ revisao) ou falha (→ upload com aviso).
+  //
+  // Efeito, e nao valor derivado: ao entrar na revisao o lote e *copiado* para
+  // o state e o polling e desligado, de modo que um refetch posterior nao troque
+  // o objeto por baixo da ImportReview e descarte as edicoes do usuario.
+  // (useQuery da v5 nao tem onSuccess — reagir ao dado que chega e via effect.)
+  const polled = pollQuery.data;
+  useEffect(() => {
+    if (stage !== "processing" || !polled) return;
+    const next = nextStageForBatch(polled);
+    if (next === "processing") return;
+
+    if (next === "review") {
+      setBatch(polled);
+    } else {
+      setNotice(polled.erro_mensagem || "Não foi possível processar o documento.");
+      setBatchId(null);
+    }
+    setStage(next);
+  }, [stage, polled]);
 
   function handleUpload(file: File) {
     setNotice(null);
+    setFilename(file.name);
     uploadMutation.mutate(file, {
       onSuccess: (response) => {
+        // 202: o lote nasce em 'processando' e so tem metadados aqui
         if (response.status === "disponivel" && response.batch) {
-          setBatch(response.batch);
-          setStage("review");
+          setBatchId(response.batch.id);
+          setStage("processing");
         } else {
           setNotice(response.reason || "Não foi possível processar o documento.");
         }
@@ -46,26 +74,23 @@ export default function ImportView() {
     });
   }
 
-  async function handleResume(batchId: string) {
+  function handleResume(id: string) {
     setNotice(null);
-    setIsResuming(true);
-    try {
-      const resumed = await fetchImportBatch(batchId);
-      setBatch(resumed);
-      setStage("review");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Erro ao retomar a importação.");
-    } finally {
-      setIsResuming(false);
-    }
+    const pending = pendingQuery.data?.find((b) => b.id === id);
+    setBatchId(id);
+    setFilename(pending?.filename ?? null);
+    // Lote ainda em extracao volta para o polling; pronto para revisao cai no
+    // effect acima assim que a primeira leitura chegar
+    setStage("processing");
   }
 
-  function handleDiscard(batchId: string) {
+  function handleDiscard(id: string) {
     setNotice(null);
-    discardMutation.mutate(batchId, {
+    discardMutation.mutate(id, {
       onSuccess: () => {
-        if (batch?.id === batchId) {
+        if (batchId === id) {
           setBatch(null);
+          setBatchId(null);
           setStage("upload");
         }
       },
@@ -84,6 +109,7 @@ export default function ImportView() {
       {
         onSuccess: (response) => {
           setResult(response);
+          setBatchId(null);
           setStage("result");
         },
       }
@@ -92,6 +118,8 @@ export default function ImportView() {
 
   function handleImportAnother() {
     setBatch(null);
+    setBatchId(null);
+    setFilename(null);
     setResult(null);
     setNotice(null);
     confirmMutation.reset();
@@ -108,10 +136,20 @@ export default function ImportView() {
           isUploading={uploadMutation.isPending}
           notice={notice}
           pendingBatches={pendingQuery.data ?? []}
-          isResuming={isResuming || discardMutation.isPending}
+          isResuming={discardMutation.isPending}
           onUpload={handleUpload}
           onResume={handleResume}
           onDiscard={handleDiscard}
+        />
+      )}
+
+      {stage === "processing" && (
+        <ImportProcessing
+          batch={polled}
+          filename={filename}
+          error={notice ?? pollQuery.error?.message ?? null}
+          isDiscarding={discardMutation.isPending}
+          onDiscard={() => batchId && handleDiscard(batchId)}
         />
       )}
 

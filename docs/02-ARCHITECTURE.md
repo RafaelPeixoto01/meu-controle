@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 3.2
-**Data:** 2026-08-12
-**PRD Ref:** 01-PRD v3.1
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018)
+**Versao:** 3.3
+**Data:** 2026-08-22
+**PRD Ref:** 01-PRD v3.3
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021)
 
 ---
 
@@ -903,6 +903,21 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
 - **Decisao:** Padronizar `claude-opus-5` nos dois servicos, via a constante compartilhada `DEFAULT_MODEL` (`app/ai_analysis.py`), sobrescritivel por `CLAUDE_MODEL`. Remover `temperature`. Ligar thinking adaptativo nos dois, com `effort: "low"` apenas na importacao. Extrair a resposta pelo **tipo** do bloco (`extract_response_text`) em vez da posicao. Tratar `stop_reason == "refusal"` com uma excecao dedicada (`AiRefusalError`) que fica **fora** do retry, porque a recusa e deterministica e repetir so gastaria chamadas — caro sobretudo na importacao, onde cada tentativa reenvia o PDF.
 - **Por que thinking ligado tambem na extracao:** desligar o raciocinio no Opus 5 tem efeito colateral conhecido de vazar tags XML internas no texto visivel, o que quebraria o parse do JSON da importacao. A forma recomendada de conter custo e latencia e **baixar o `effort`**, nao desligar o raciocinio.
 - **Consequencias:** Melhor qualidade de conciliacao e de diagnostico, ao custo de ~1,7x por chamada mais os tokens de raciocinio. `max_tokens` subiu nos dois (16000) porque o teto passa a cobrir raciocinio + resposta somados — como e um teto, e nao um consumo, a folga nao custa nada. Timeouts subiram para 120s (analise) e 180s (importacao). **`CLAUDE_MODEL` passa a exigir um modelo da geracao 4.6+**: modelos anteriores nao aceitam thinking adaptativo.
+
+---
+
+### ADR-021: Processamento assincrono da importacao com BackgroundTasks, sem broker (CR-052)
+
+- **Status:** Aceito
+- **Contexto:** `POST /api/imports` chamava a IA dentro do request, segurando a conexao HTTP por ate `IMPORT_TIMEOUT_SECONDS` (180s). Um proxy que corte antes disso, uma aba fechada ou uma rede instavel perdiam o lote inteiro — inclusive os tokens ja pagos. Alem disso, a falha da IA se perdia na resposta: nenhum lote era persistido.
+- **Decisao:** O upload valida o PDF, grava o lote em `processando` e responde **202**; a extracao vai para `BackgroundTasks` do FastAPI e o `GET /api/imports/{id}` vira canal de polling.
+- **Por que sem broker (Celery/RQ + Redis):** o Railway roda um servico unico e o volume e de uso pessoal (poucos uploads/mes). Um broker exigiria um segundo processo, um Redis e o custo correspondente, sem ganho proporcional. A contrapartida aceita e que um restart do container perde a task em voo — tratado pela RN-048 em vez de por durabilidade de fila.
+- **Consequencias:**
+  - A task abre a **propria sessao** (`database.get_session_factory()`), porque a sessao do request ja foi fechada quando ela roda. Exposta como dependency para os testes a sobrescreverem.
+  - A sessao e aberta em **dois trechos curtos**, com a chamada a IA entre eles: manter uma conexao do pool em transacao pelos minutos da extracao esgotaria o pool e exporia a task ao `idle_in_transaction_session_timeout` do PostgreSQL.
+  - Escrita sempre condicionada a o lote **ainda estar** `processando` (`_claim_batch`), para que descartar durante a extracao seja decisao final.
+  - Lote orfao e resolvido **na leitura** (RN-048), sem job de limpeza. A janela (30 min) precisa ficar acima do pior caso da extracao, senao a leitura mataria uma task viva e a extracao ja paga seria descartada.
+  - RN-043 preservada: os bytes do PDF viajam na closure da task, em memoria; `erro_mensagem` guarda so o tipo da excecao.
 
 ---
 

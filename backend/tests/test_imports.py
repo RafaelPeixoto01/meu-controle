@@ -4,7 +4,7 @@ API Anthropic sempre mockada (call_import_api).
 """
 import json
 import pytest
-from datetime import date
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from starlette.testclient import TestClient
@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import app
-from app.database import Base, get_db
+from app.database import Base, get_db, get_session_factory
 from app.auth import get_current_user
 from app.rate_limit import limiter
 from app.models import (
@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.ai_analysis import DEFAULT_MODEL, AiRefusalError
 from app.import_service import (
+    STALE_PROCESSING_MINUTES,
     call_import_api,
     compute_fingerprint,
     normalize_description,
@@ -113,6 +114,9 @@ def client(session_factory, user_a, monkeypatch):
             session.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    # CR-052: a BackgroundTasks abre a propria sessao; sem este override ela
+    # falaria com o banco real em vez do in-memory do teste
+    app.dependency_overrides[get_session_factory] = lambda: session_factory
     app.dependency_overrides[get_current_user] = lambda: user_a
     yield TestClient(app)
     app.dependency_overrides.clear()
@@ -180,6 +184,11 @@ TX_IGNORAR = {
 
 
 def upload(client, transacoes=None, **kwargs):
+    """
+    POST cru do upload. CR-052: responde 202 com o lote ainda em 'processando'
+    — o TestClient roda a BackgroundTasks antes de devolver o controle, entao
+    o lote ja esta pronto no banco quando esta funcao retorna.
+    """
     if transacoes is None:
         transacoes = [TX_PADARIA, TX_MATCH_LUZ, TX_IGNORAR]
     result = ai_result(transacoes, **kwargs)
@@ -188,6 +197,16 @@ def upload(client, transacoes=None, **kwargs):
             "/api/imports",
             files={"file": ("fatura.pdf", PDF_BYTES, "application/pdf")},
         )
+
+
+def upload_batch(client, transacoes=None, **kwargs):
+    """Upload + GET: devolve o lote ja processado (CR-052)."""
+    r = upload(client, transacoes=transacoes, **kwargs)
+    assert r.status_code == 202, r.text
+    batch_id = r.json()["batch"]["id"]
+    r = client.get(f"/api/imports/{batch_id}")
+    assert r.status_code == 200, r.text
+    return r.json()
 
 
 # ========== CR-048: parametros da geracao atual ==========
@@ -375,12 +394,19 @@ class TestValidateAiResult:
 # ========== Endpoint: upload ==========
 
 class TestUpload:
-    def test_upload_happy_path(self, client, db, open_expense):
+    def test_upload_responde_202_com_lote_processando(self, client, open_expense):
+        """CR-052: o corpo e serializado antes de a BackgroundTasks rodar."""
         r = upload(client)
-        assert r.status_code == 201
+        assert r.status_code == 202
         body = r.json()
         assert body["status"] == "disponivel"
         batch = body["batch"]
+        assert batch["status"] == "processando"
+        assert batch["transacoes"] == []
+        assert batch["erro_mensagem"] is None
+
+    def test_upload_happy_path(self, client, db, open_expense):
+        batch = upload_batch(client)
         assert batch["status"] == "pendente_revisao"
         assert batch["banco_detectado"] == "Nubank"
         assert batch["tipo_documento"] == "fatura"
@@ -425,30 +451,148 @@ class TestUpload:
         assert r.status_code == 200
         assert r.json()["status"] == "indisponivel"
 
-    def test_upload_ai_error_returns_erro_without_batch(self, client, db):
+    def test_ai_error_grava_lote_em_erro(self, client, db):
+        """CR-052: a falha da IA passa a ficar registrada no lote."""
         with patch("app.import_service.call_import_api", side_effect=TimeoutError("boom")):
             r = client.post(
                 "/api/imports",
                 files={"file": ("fatura.pdf", PDF_BYTES, "application/pdf")},
             )
-        assert r.status_code == 200
-        assert r.json()["status"] == "erro"
-        assert db.query(ImportBatch).count() == 0
+        assert r.status_code == 202
+        batch_id = r.json()["batch"]["id"]
 
-    def test_upload_no_transactions_returns_erro(self, client, db):
-        r = upload(client, transacoes=[])
+        batch = client.get(f"/api/imports/{batch_id}").json()
+        assert batch["status"] == "erro"
+        assert batch["erro_mensagem"] == "Não foi possível interpretar o documento: TimeoutError"
+        assert batch["transacoes"] == []
+        # RN-043: a mensagem nao carrega conteudo do documento
+        assert "boom" not in batch["erro_mensagem"]
+        assert db.query(ImportTransaction).count() == 0
+
+    def test_no_transactions_grava_lote_em_erro(self, client, db):
+        batch = upload_batch(client, transacoes=[])
+        assert batch["status"] == "erro"
+        assert batch["erro_mensagem"] == "Nenhuma transação foi identificada no documento"
+        assert db.query(ImportTransaction).count() == 0
+
+
+# ========== CR-052: processamento assincrono ==========
+
+class TestProcessamentoAssincrono:
+    """RN-047/RN-048: extracao em BackgroundTasks e lote orfao."""
+
+    def _batch_processando(self, db, user_id="user-a", minutos_atras=0):
+        batch = ImportBatch(
+            user_id=user_id,
+            filename="fatura.pdf",
+            status="processando",
+            modelo="claude-test",
+            created_at=datetime.now() - timedelta(minutes=minutos_atras),
+        )
+        db.add(batch)
+        db.commit()
+        return batch
+
+    def test_task_grava_metadata_da_chamada(self, client, db):
+        batch = upload_batch(client, transacoes=[TX_PADARIA])
+        row = db.query(ImportBatch).filter_by(id=batch["id"]).one()
+        assert row.tokens_input == 1000
+        assert row.tokens_output == 500
+        assert row.modelo == "claude-test"  # reescrito pela task
+        assert row.tempo_processamento_ms == 1234
+
+    def test_pending_inclui_processando(self, client, db):
+        self._batch_processando(db)
+        upload(client)  # gera um lote 'pendente_revisao'
+
+        r = client.get("/api/imports/pending")
+        assert r.status_code == 200
+        statuses = {b["status"] for b in r.json()}
+        assert statuses == {"processando", "pendente_revisao"}
+
+    def test_lote_orfao_vira_erro_na_leitura(self, client, db):
+        batch = self._batch_processando(db, minutos_atras=STALE_PROCESSING_MINUTES + 1)
+
+        r = client.get(f"/api/imports/{batch.id}")
         assert r.status_code == 200
         assert r.json()["status"] == "erro"
-        assert db.query(ImportBatch).count() == 0
+        assert "interrompido" in r.json()["erro_mensagem"]
+        # Persistido, nao so apresentado
+        db.expire_all()
+        assert db.query(ImportBatch).filter_by(id=batch.id).one().status == "erro"
+
+    def test_lote_orfao_sai_do_pending(self, client, db):
+        self._batch_processando(db, minutos_atras=STALE_PROCESSING_MINUTES + 1)
+
+        r = client.get("/api/imports/pending")
+        assert r.json() == []
+
+    def test_processando_dentro_da_janela_permanece(self, client, db):
+        batch = self._batch_processando(db, minutos_atras=STALE_PROCESSING_MINUTES - 1)
+
+        r = client.get(f"/api/imports/{batch.id}")
+        assert r.json()["status"] == "processando"
+        assert len(client.get("/api/imports/pending").json()) == 1
+
+    def test_lote_descartado_durante_extracao_nao_ressuscita(self, client, db):
+        """A task nao pode sobrescrever uma decisao que o usuario ja tomou."""
+        def descarta_durante_extracao(*args, **kwargs):
+            row = db.query(ImportBatch).filter_by(status="processando").one()
+            row.status = "descartado"
+            db.commit()
+            return ai_result([TX_PADARIA])
+
+        with patch(
+            "app.import_service.call_import_api", side_effect=descarta_durante_extracao
+        ):
+            r = client.post(
+                "/api/imports",
+                files={"file": ("fatura.pdf", PDF_BYTES, "application/pdf")},
+            )
+        assert r.status_code == 202
+
+        db.expire_all()
+        row = db.query(ImportBatch).filter_by(id=r.json()["batch"]["id"]).one()
+        assert row.status == "descartado"
+        assert db.query(ImportTransaction).count() == 0
+
+    def test_lote_descartado_nao_vira_erro_quando_a_ia_falha(self, client, db):
+        """A guarda vale tambem no caminho de erro, nao so no de sucesso."""
+        def descarta_e_falha(*args, **kwargs):
+            row = db.query(ImportBatch).filter_by(status="processando").one()
+            row.status = "descartado"
+            db.commit()
+            raise TimeoutError("boom")
+
+        with patch("app.import_service.call_import_api", side_effect=descarta_e_falha):
+            r = client.post(
+                "/api/imports",
+                files={"file": ("fatura.pdf", PDF_BYTES, "application/pdf")},
+            )
+        assert r.status_code == 202
+
+        db.expire_all()
+        row = db.query(ImportBatch).filter_by(id=r.json()["batch"]["id"]).one()
+        assert row.status == "descartado"
+        assert row.erro_mensagem is None
+
+    def test_confirm_em_lote_processando_retorna_409(self, client, db):
+        batch = self._batch_processando(db)
+
+        r = client.post(f"/api/imports/{batch.id}/confirm", json={"transacoes": []})
+        assert r.status_code == 409
+
+    def test_lote_de_outro_usuario_retorna_404(self, client, db, user_b):
+        batch = self._batch_processando(db, user_id=user_b.id)
+
+        assert client.get(f"/api/imports/{batch.id}").status_code == 404
 
 
 # ========== Endpoint: confirm ==========
 
 class TestConfirm:
     def _upload_batch(self, client):
-        r = upload(client)
-        assert r.status_code == 201
-        return r.json()["batch"]
+        return upload_batch(client)
 
     def _tx_by_class(self, batch, classificacao):
         return next(t for t in batch["transacoes"] if t["classificacao"] == classificacao)
@@ -670,9 +814,7 @@ class TestParcelamentoConfirm:
     """Confirmacao da acao criar_planejado_parcelado."""
 
     def _upload_parcelamento(self, client):
-        r = upload(client, transacoes=[TX_PARCELAMENTO])
-        assert r.status_code == 201
-        return r.json()["batch"]
+        return upload_batch(client, transacoes=[TX_PARCELAMENTO])
 
     def _decisao(self, tx_id, **overrides):
         decisao = {
@@ -893,17 +1035,17 @@ class TestParcelamentoCodeReview:
 
     def test_parcela_seguinte_nao_nasce_duplicada(self, client, db):
         """Sem o fix, a parcela 4 do mes seguinte viria marcada 'duplicada'."""
-        b1 = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        b1 = upload_batch(client, transacoes=[TX_PARCELAMENTO])
         client.post(f"/api/imports/{b1['id']}/confirm", json={"transacoes": [
             {"id": b1["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
              "parcela_atual": 3, "parcela_total": 10}]})
 
-        b2 = upload(client, transacoes=[{**TX_PARCELAMENTO, "parcela_atual": 4}]).json()["batch"]
+        b2 = upload_batch(client, transacoes=[{**TX_PARCELAMENTO, "parcela_atual": 4}])
         assert b2["transacoes"][0]["status"] == "pendente"
 
     def test_parcela_total_absurdo_rejeitado(self, client, db):
         """Teto de parcelas evita criar milhares de despesas num request."""
-        batch = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        batch = upload_batch(client, transacoes=[TX_PARCELAMENTO])
         r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
             {"id": batch["transacoes"][0]["id"], "acao": "criar_planejado_parcelado",
              "parcela_atual": 1, "parcela_total": 200000}]})
@@ -913,7 +1055,7 @@ class TestParcelamentoCodeReview:
     def test_duas_linhas_para_a_mesma_serie_retorna_422(self, client, db):
         """Sem a guarda, a segunda linha sobrescreveria a despesa da primeira."""
         tx_b = {**TX_PARCELAMENTO, "valor": 300.00}
-        batch = upload(client, transacoes=[TX_PARCELAMENTO, tx_b]).json()["batch"]
+        batch = upload_batch(client, transacoes=[TX_PARCELAMENTO, tx_b])
         ids = [t["id"] for t in batch["transacoes"]]
         r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
             {"id": ids[0], "acao": "criar_planejado_parcelado", "parcela_atual": 3, "parcela_total": 10},
@@ -924,7 +1066,7 @@ class TestParcelamentoCodeReview:
 
     def test_categoria_limpa_na_revisao_nao_volta_da_ia(self, client, db):
         """Usuario que limpa a categoria nao recebe o palpite da IA de volta."""
-        batch = upload(client, transacoes=[TX_PARCELAMENTO]).json()["batch"]
+        batch = upload_batch(client, transacoes=[TX_PARCELAMENTO])
         assert batch["transacoes"][0]["categoria"] == "Compras Pessoais"
 
         client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
@@ -940,7 +1082,7 @@ class TestParcelamentoCodeReview:
 
 class TestDedup:
     def test_confirmed_transactions_marked_duplicada_on_reupload(self, client, db, open_expense):
-        batch1 = upload(client).json()["batch"]
+        batch1 = upload_batch(client)
         tx_gasto = next(t for t in batch1["transacoes"] if t["classificacao"] == "gasto_diario")
         r = client.post(
             f"/api/imports/{batch1['id']}/confirm",
@@ -949,7 +1091,7 @@ class TestDedup:
         assert r.status_code == 200
 
         # Re-upload do mesmo documento
-        batch2 = upload(client).json()["batch"]
+        batch2 = upload_batch(client)
         by_desc = {t["descricao"]: t for t in batch2["transacoes"]}
         assert by_desc["PADARIA STELLA"]["status"] == "duplicada"
         # As nao confirmadas (descartadas no 1o lote) continuam pendentes
@@ -958,14 +1100,14 @@ class TestDedup:
 
     def test_duplicada_absent_from_confirm_stays_duplicada(self, client, db, open_expense):
         """Code review CR-046: duplicada nao resgatada permanece 'duplicada' (nao vira descartada)."""
-        batch1 = upload(client).json()["batch"]
+        batch1 = upload_batch(client)
         tx_gasto = next(t for t in batch1["transacoes"] if t["classificacao"] == "gasto_diario")
         client.post(
             f"/api/imports/{batch1['id']}/confirm",
             json={"transacoes": [{"id": tx_gasto["id"], "acao": "criar_gasto_diario"}]},
         )
 
-        batch2 = upload(client).json()["batch"]
+        batch2 = upload_batch(client)
         r = client.post(f"/api/imports/{batch2['id']}/confirm", json={"transacoes": []})
         assert r.status_code == 200
         assert r.json()["descartadas"] == 2  # duplicada nao conta como descartada
@@ -982,7 +1124,7 @@ class TestDedup:
 
 class TestOwnershipAndLifecycle:
     def test_get_batch_of_another_user_returns_404(self, client, db, user_b, open_expense):
-        batch = upload(client).json()["batch"]
+        batch = upload_batch(client)
         # Troca o usuario autenticado para user_b
         app.dependency_overrides[get_current_user] = lambda: user_b
         assert client.get(f"/api/imports/{batch['id']}").status_code == 404
@@ -992,7 +1134,7 @@ class TestOwnershipAndLifecycle:
         assert client.delete(f"/api/imports/{batch['id']}").status_code == 404
 
     def test_pending_lists_only_pending_batches(self, client, open_expense):
-        batch = upload(client).json()["batch"]
+        batch = upload_batch(client)
         r = client.get("/api/imports/pending")
         assert r.status_code == 200
         assert [b["id"] for b in r.json()] == [batch["id"]]
@@ -1001,13 +1143,13 @@ class TestOwnershipAndLifecycle:
         assert client.get("/api/imports/pending").json() == []
 
     def test_get_batch_returns_transactions(self, client, open_expense):
-        batch = upload(client).json()["batch"]
+        batch = upload_batch(client)
         r = client.get(f"/api/imports/{batch['id']}")
         assert r.status_code == 200
         assert len(r.json()["transacoes"]) == 3
 
     def test_delete_discards_pending_batch(self, client, db, open_expense):
-        batch = upload(client).json()["batch"]
+        batch = upload_batch(client)
         r = client.delete(f"/api/imports/{batch['id']}")
         assert r.status_code == 204
         db_batch = db.query(ImportBatch).one()
@@ -1015,6 +1157,6 @@ class TestOwnershipAndLifecycle:
         assert all(t.status == "descartada" for t in db_batch.transacoes)
 
     def test_delete_confirmed_batch_returns_409(self, client, open_expense):
-        batch = upload(client).json()["batch"]
+        batch = upload_batch(client)
         client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": []})
         assert client.delete(f"/api/imports/{batch['id']}").status_code == 409

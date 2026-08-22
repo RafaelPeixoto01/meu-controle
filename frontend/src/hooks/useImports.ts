@@ -46,6 +46,33 @@ export function useMatchTargets(batch: ImportBatch | null) {
   });
 }
 
+// CR-052: canal de polling do processamento assincrono. Reconsulta a cada 3s
+// enquanto o lote esta em 'processando' e para sozinho em qualquer estado
+// terminal — RN-048 garante que 'processando' nao dura para sempre.
+const POLL_INTERVAL_MS = 3000;
+
+export function useImportBatch(batchId: string | null, enabled: boolean) {
+  const { user } = useAuth();
+  return useQuery<ImportBatch>({
+    queryKey: ["import-batch", user?.id, batchId],
+    queryFn: () => api.fetchImportBatch(batchId!),
+    enabled: !!user && !!batchId && enabled,
+    staleTime: 0, // sobrescreve o default de 5 min do queryClient
+    // Com staleTime 0, o refetch por foco traria um objeto novo e resetaria as
+    // edicoes em andamento na revisao; o polling ja cobre a atualizacao
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      // Sem leitura ainda (primeira busca falhou): continuar tentando. Parar
+      // aqui deixaria o usuario preso no spinner para sempre, ja que o retry
+      // global e 1 e o refetch por foco esta desligado; o erro da tentativa
+      // aparece na tela enquanto isso.
+      if (!status) return POLL_INTERVAL_MS;
+      return status === "processando" ? POLL_INTERVAL_MS : false;
+    },
+  });
+}
+
 export function useUploadImport() {
   const queryClient = useQueryClient();
   return useMutation({

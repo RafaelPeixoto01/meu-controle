@@ -1,10 +1,10 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.2
-**Data:** 2026-08-16
+**Versão:** 1.3
+**Data:** 2026-08-22
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
-**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend)
+**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono)
 
 ---
 
@@ -88,13 +88,14 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 ---
 
-### E-B — Upload assíncrono
+### E-B — Upload assíncrono ✅ Implementada (CR-052)
 
 | Campo | Valor |
 |-------|-------|
 | Lacuna | L3 |
 | Complexidade | Média (backend + migration + polling no frontend) |
 | Depende de | — (independente da E-A) |
+| Entregue em | [CR-052](changes/CR-052-upload-assincrono-importacao.md) — migration 011 |
 
 **Problema.** `POST /api/imports` chama a IA dentro do request, com `IMPORT_TIMEOUT_SECONDS` de 180s. A conexão fica presa o tempo todo: um proxy que corte antes disso, uma aba fechada ou uma rede instável perdem o lote inteiro. A UI hoje só pode pedir ao usuário que não feche a página ([`ImportUpload.tsx:55`](../frontend/src/components/imports/ImportUpload.tsx#L55)).
 
@@ -108,9 +109,18 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 **Riscos:**
 
+> **Como ficou (CR-052).** Fonte da verdade: [spec F07](specs/10-importacao-extratos.md) e [ADR-021](02-ARCHITECTURE.md). Três pontos saíram diferentes deste desenho inicial:
+> - **A janela do lote órfão é 30 min, não "N minutos" quaisquer.** Ela precisa ficar **acima** do pior caso da extração — o retry do `call_import_api` (3 tentativas) multiplica o do SDK Anthropic (também 3), a 180s cada, ≈ 27 min. Uma janela menor mataria uma task viva e o resultado já pago seria descartado.
+> - **O lote órfão é gravado, não só apresentado.** Resolver na leitura persiste o `erro`, o que mantém `/pending` consistente sem job de limpeza — a intenção original, com a consequência explicitada.
+> - **Escrita condicionada a `_claim_batch`.** O desenho não previa o usuário descartar o lote *durante* a extração; sem a guarda, a task o ressuscitaria como `pendente_revisao` (ou o sobrescreveria com `erro`).
+>
+> Além disso: a sessão do banco é aberta em dois trechos curtos, com a chamada à IA entre eles, para não segurar conexão do pool em transação por minutos.
+
+**Riscos:**
+
 | Risco | Mitigação |
 |-------|-----------|
-| Restart do container deixa lotes órfãos em `processando` | Lote em `processando` há mais de N minutos é apresentado como `erro` na leitura; o usuário reenvia. Sem job de limpeza dedicado |
+| Restart do container deixa lotes órfãos em `processando` | RN-048: lote em `processando` há mais de 30 min é resolvido como `erro` na leitura; o usuário reenvia. Sem job de limpeza dedicado |
 | Task in-process concorre com o request loop | Volume pessoal (poucos uploads/mês) + rate limit 5/min já vigente |
 
 ---
@@ -182,8 +192,8 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 | Ordem | Item | Por quê nessa posição |
 |-------|------|----------------------|
-| 1º | **E-A** | Maior valor percebido e a única isolada no par revisão/confirm — não depende de nada |
-| 2º | **E-B** | Muda o contrato do upload; feito cedo, todo o trabalho de UI seguinte já se apoia na forma final |
+| 1º | **E-A** ✅ | Maior valor percebido e a única isolada no par revisão/confirm — não depende de nada |
+| 2º | **E-B** ✅ | Muda o contrato do upload; feito cedo, todo o trabalho de UI seguinte já se apoia na forma final |
 | 3º | **E-C** | As regras de categorização só fazem sentido depois que a classificação nova da E-A estabilizou o prompt |
 | 4º | **E-D** | O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras); antes disso garantiria retrabalho |
 
@@ -201,7 +211,7 @@ Nubank e Itaú exportam OFX e CSV. Um parser determinístico teria **custo zero 
 
 ### B-2 — Múltiplos arquivos por lote + drag & drop
 
-Hoje é um `<input>` escondido acionado por botão, um arquivo por vez ([`ImportUpload.tsx:117`](../frontend/src/components/imports/ImportUpload.tsx#L117)). Permitiria enviar fatura + extrato do mesmo mês num lote só. **Depende da E-B** — sem processamento assíncrono, três arquivos seriam três esperas de 3 minutos em série.
+Hoje é um `<input>` escondido acionado por botão, um arquivo por vez ([`ImportUpload.tsx:117`](../frontend/src/components/imports/ImportUpload.tsx#L117)). Permitiria enviar fatura + extrato do mesmo mês num lote só. Dependia da E-B — **desbloqueado pelo CR-052**: com a extração em background, o lote deixa de ser uma espera síncrona por arquivo.
 
 ### B-3 — Confiança por transação
 
@@ -234,11 +244,11 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | ID | Item | Prioridade | Depende de | Migration? |
 |----|------|-----------|------------|-----------|
 | E-A | Compras parceladas ✅ CR-049 | Alta | — | Sim (010) |
-| E-B | Upload assíncrono | Alta | — | Sim |
+| E-B | Upload assíncrono ✅ CR-052 | Alta | — | Sim (011) |
 | E-C | Memória de categorização + revisão em massa | Alta | E-A | Sim |
 | E-D | Reconciliação, histórico e desfazer | Alta | E-A | Sim |
 | B-1 | Importar OFX/CSV | Baixa | — | Talvez |
-| B-2 | Múltiplos arquivos + drag & drop | Baixa | E-B | Não |
+| B-2 | Múltiplos arquivos + drag & drop | Baixa | E-B ✅ | Não |
 | B-3 | Confiança por transação | Baixa | — | Sim |
 | B-4 | Split de transação | Baixa | — | Talvez |
 | B-5 | Chunking de PDF | Baixa | E-D | Não |
@@ -255,3 +265,4 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | 2026-08-16 | Claude | Documento criado a partir do brainstorming de evolução da F07: 4 evoluções de alta prioridade (E-A..E-D) + 8 itens de backlog (B-1..B-8) |
 | 2026-08-16 | Claude | E-A implementada no CR-049 (RN-044/045/046). Nota: a `data` da fatura e a da COMPRA — a parcela k vence em compra + (k-1) meses |
 | 2026-08-16 | Claude | E-A reduzida a compras parceladas — classificação de receitas retirada do roadmap por decisão do autor; RN-041 permanece inalterada |
+| 2026-08-22 | Claude | E-B implementada no CR-052 (RN-047/048). Nota: a janela do lote órfão é 30 min — precisa ficar acima do pior caso da extração (~27 min), senão mata task viva |

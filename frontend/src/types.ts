@@ -476,7 +476,12 @@ export type ImportClassificacao =
   | "parcelamento" // CR-049
   | "ignorar";
 export type ImportTransactionStatus = "pendente" | "confirmada" | "descartada" | "duplicada";
-export type ImportBatchStatus = "pendente_revisao" | "confirmado" | "descartado";
+export type ImportBatchStatus =
+  | "processando" // CR-052
+  | "pendente_revisao"
+  | "confirmado"
+  | "descartado"
+  | "erro"; // CR-052
 export type ImportAcao =
   | "criar_gasto_diario"
   | "atualizar_planejado"
@@ -505,6 +510,7 @@ export interface ImportBatchSummary {
   banco_detectado: string | null;
   tipo_documento: "extrato" | "fatura" | null;
   status: ImportBatchStatus;
+  erro_mensagem: string | null; // CR-052: preenchido quando status === "erro"
   created_at: string;
 }
 

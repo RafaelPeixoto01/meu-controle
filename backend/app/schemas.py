@@ -619,7 +619,9 @@ class ImportBatchSummary(BaseModel):
     filename: str
     banco_detectado: str | None = None
     tipo_documento: str | None = None  # extrato | fatura
-    status: str  # pendente_revisao | confirmado | descartado
+    # CR-052: processando | pendente_revisao | confirmado | descartado | erro
+    status: str
+    erro_mensagem: str | None = None  # CR-052: preenchido quando status == 'erro'
     created_at: datetime
 
 

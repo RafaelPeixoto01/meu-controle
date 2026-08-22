@@ -33,3 +33,15 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def get_session_factory() -> sessionmaker:
+    """
+    CR-052: factory de sessao para trabalho fora do request (BackgroundTasks).
+
+    A sessao injetada por `get_db` ja foi fechada quando a task roda, entao a
+    task precisa abrir a sua propria. Exposto como dependency (e nao usando
+    `SessionLocal` direto) para que os testes o sobrescrevam via
+    `app.dependency_overrides`, o mesmo mecanismo ja usado com `get_db`.
+    """
+    return SessionLocal
