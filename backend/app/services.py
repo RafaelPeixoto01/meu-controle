@@ -476,6 +476,7 @@ def calcular_progresso_parcelamento(installments: list[Expense], parcela_total: 
     paid_parcela_nums = [
         inst.parcela_atual or 0 for inst in installments
         if inst.status == ExpenseStatus.PAGO.value
+        and (inst.parcela_atual or 0) <= parcela_total
     ]
     progresso = max(paid_parcela_nums) if paid_parcela_nums else 0
 
@@ -487,6 +488,21 @@ def calcular_progresso_parcelamento(installments: list[Expense], parcela_total: 
         progresso = max(progresso, min(numeros_cadastrados) - 1)
 
     return progresso
+
+
+def calcular_parcelas_restantes(installments: list[Expense], parcela_total: int) -> int:
+    """
+    CR-051: Quantas parcelas de um grupo ainda serao pagas (RN-P11).
+
+    Upfront: contagem de parcelas nao pagas. Incremental: total menos o
+    progresso de `calcular_progresso_parcelamento()`.
+    """
+    if len(installments) >= parcela_total:
+        return sum(
+            1 for inst in installments
+            if inst.status != ExpenseStatus.PAGO.value
+        )
+    return parcela_total - calcular_progresso_parcelamento(installments, parcela_total)
 
 
 def get_installment_projection(db: Session, user_id: str, months: int = 12) -> dict:

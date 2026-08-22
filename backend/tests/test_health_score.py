@@ -595,3 +595,56 @@ class TestD2dProgressoParcelamento:
         sub = result["dimensoes"]["d2_parcelas"]["subfatores"]
         assert sub["d2c_pendentes"]["quantidade"] == 1
         assert sub["d2b_quantidade"]["valor"] == 0
+
+    def _grupo_nao_iniciado(self, test_user):
+        """Compra 12x cadastrada em 1/12, nada pago — realmente nao iniciada."""
+        installments = [
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 3, 1),
+                nome="Notebook",
+                valor=400.00,
+                vencimento=date(2026, 3, 10),
+                parcela_atual=1,
+                parcela_total=12,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+        ]
+        return {"nome": "Notebook", "parcela_total": 12,
+                "status_geral": "Em andamento", "installments": installments}
+
+    def test_score_conservador_ignora_compra_cadastrada_do_meio(self, test_user):
+        """CR-051: cenario conservador so soma parcelamentos que ainda nao comecaram."""
+        grupos = [self._grupo_cadastrado_do_meio(test_user), self._grupo_nao_iniciado(test_user)]
+
+        score_data = calculate_health_score(
+            renda=5000.0, expenses=[], daily_expenses=[], installment_groups=grupos,
+            daily_expense_history=[], prev_month_comprometimento=None,
+            mes_atual=date(2026, 3, 1),
+        )
+        conservador = calculate_conservative_score(score_data, grupos, renda=5000.0)
+
+        descricoes = [p["descricao"] for p in conservador["parcelas_pendentes"]]
+        assert descricoes == ["Notebook"]  # TV (10/12) ja esta em andamento
+
+    def test_acoes_nomeiam_o_parcelamento_certo(self, test_user):
+        """CR-051: a acao de pendente aponta o grupo nao iniciado, nao o ativo."""
+        grupos = [self._grupo_cadastrado_do_meio(test_user), self._grupo_nao_iniciado(test_user)]
+
+        result = calculate_health_score(
+            renda=5000.0, expenses=[], daily_expenses=[], installment_groups=grupos,
+            daily_expense_history=[], prev_month_comprometimento=None,
+            mes_atual=date(2026, 3, 1),
+        )
+        acoes = generate_actions(
+            score_data=result, renda=5000.0, expenses=[], daily_expenses=[],
+            installment_groups=grupos,
+        )
+        textos = [a["descricao"] for a in acoes]
+
+        alertas = [t for t in textos if "ainda não iniciou" in t]
+        assert alertas and all("Notebook" in t for t in alertas)
+        assert not any("TV" in t for t in alertas)
+        # E a TV (3 parcelas restantes) e reconhecida como "termina em breve"
+        assert any("TV" in t and "termina em breve" in t for t in textos)
