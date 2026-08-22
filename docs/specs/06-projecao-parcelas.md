@@ -50,7 +50,7 @@ Requer autenticacao JWT. Dados filtrados por `user_id`. Parametro `months` defin
 | parcela_total | int | Total de parcelas |
 | parcelas_restantes | int | Parcelas restantes |
 | mes_inicio | date ou null | Mes do 1o vencimento nao pago (CR-024) |
-| termina_em | date ou null | Mes do ultimo vencimento |
+| termina_em | date ou null | Mes do vencimento da ultima parcela (RN-P09) |
 | status | str | "Encerrando" ou "Ativa" |
 
 ### Regras de Negocio
@@ -63,9 +63,15 @@ Requer autenticacao JWT. Dados filtrados por `user_id`. Parametro `months` defin
 - RN-P06: Grafico de barras empilhadas mostra cada parcela como segmento colorido
 - RN-P07: Timeline Gantt mostra inicio e fim de cada parcela com barra colorida
 - RN-P08: Toggle alterna entre visualizacao de barras empilhadas e Gantt
-- RN-P09: `mes_inicio` derivado do 1o vencimento nao pago; `mes_termino` derivado do ultimo vencimento no banco (CR-024)
+- RN-P09: `mes_inicio` derivado do 1o vencimento nao pago; `mes_termino` ancorado no vencimento real de
+  cada parcela — `vencimento + (parcela_total - parcela_atual)` meses, com `max` contra o ultimo vencimento
+  no banco. Vale tambem quando a serie no banco esta incompleta (compra cadastrada a partir de 6/12, ou
+  parcelas futuras ainda nao replicadas). Sem `parcela_atual` (dado legado), estima a partir de `mes_inicio` (CR-024, CR-050)
 - RN-P10: Parcela contribui na projecao apenas nos meses entre `mes_inicio` e `mes_termino` (CR-024)
-- RN-P11: `parcelas_restantes` para upfront = contagem de parcelas nao pagas; para incremental = parcela_total - progresso (CR-024)
+- RN-P11: `parcelas_restantes` para upfront = contagem de parcelas nao pagas; para incremental =
+  parcela_total - progresso, onde progresso considera tanto a maior parcela paga quanto as parcelas
+  anteriores a primeira cadastrada (pagas fora do app, ex.: compra registrada em 6/12). Linhas com
+  `parcela_atual > parcela_total` sao ignoradas nos dois calculos (CR-024, CR-050)
 
 ### Frontend
 

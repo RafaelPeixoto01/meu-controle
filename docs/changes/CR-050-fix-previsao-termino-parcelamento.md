@@ -148,26 +148,63 @@ expandir o grupo — e `parcelas_restantes` coerente com o "Restante" do card.
 
 ## 8. Critérios de Aceite
 
-- [ ] Parcelamento cadastrado a partir da parcela N>1 exibe "Termina em" igual ao mês do vencimento da última parcela
-- [ ] Parcelamento incremental com a parcela do mês corrente Paga não perde 1 mês no término
-- [ ] `parcelas_restantes` do parcelamento cadastrado do meio bate com o "Restante" do card (7, não 12)
-- [ ] Casos upfront e de parcelas atrasadas mantêm o comportamento atual
-- [ ] Testes existentes continuam passando (regressão)
-- [ ] Novos testes cobrem a mudança
-- [ ] Fluxo afetado exercitado em runtime antes do merge — ver seção 8.1
-- [ ] Revisão de código pré-merge (`/code-review` no diff da branch) executada — ver seção 8.2
+- [x] Parcelamento cadastrado a partir da parcela N>1 exibe "Termina em" igual ao mês do vencimento da última parcela
+- [x] Parcelamento incremental com a parcela do mês corrente Paga não perde 1 mês no término
+- [x] `parcelas_restantes` do parcelamento cadastrado do meio bate com o "Restante" do card (7, não 12)
+- [x] Casos upfront e de parcelas atrasadas mantêm o comportamento atual
+- [x] Testes existentes continuam passando (regressão) — suíte completa: 186 passed
+- [x] Novos testes cobrem a mudança — 6 testes novos em `backend/tests/test_installment_projection.py`
+- [x] Fluxo afetado exercitado em runtime antes do merge — ver seção 8.1
+- [x] Revisão de código pré-merge (`/code-review` no diff da branch) executada — ver seção 8.2
 - [x] Revisão de segurança — **N/A**: sem endpoint novo ou alterado, sem mudança em auth/tokens/ownership, sem nova dependência; apenas cálculo interno num serviço já autenticado e filtrado por `user_id`
-- [ ] Documentos afetados foram atualizados
+- [x] Documentos afetados foram atualizados
+- [ ] CI verde após o push (`gh run watch`) — fecha em commit de follow-up (CR-037)
 
-> **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa.
+> **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. O CI verde depende do push, então o CR permanece "Em Implementação" até o follow-up.
 
 ### 8.1 Validação Runtime
 
-_(a preencher após a execução)_
+Backend local em SQLite descartável (`DATABASE_URL="sqlite:///./local_cr050.db"`, **nunca** o
+`.env` de produção — confirmado com `print(engine.url)` antes de qualquer escrita), usuário de teste
+criado via `POST /api/auth/register`, cenário do relato reproduzido: `POST /api/expenses/2026/8`
+com `Geladeira`, R$ 1.000,00, vencimento 22/08/2026, parcela 6/12 → 7 linhas criadas (parcelas
+6..12), última vencendo em 22/02/2027.
+
+`GET /api/expenses/installments/projection` — mesma base, código de `master` vs. código do CR:
+
+| Campo | Antes (master) | Depois (CR-050) | Esperado |
+|-------|----------------|-----------------|----------|
+| `mes_termino` | 2027-07-01 (Jul/2027) | **2027-02-01** (Fev/2027) | 2027-02-01 |
+| `parcelas_restantes` | 12 | **7** | 7 |
+| `total_restante_todas_parcelas` | 12 000,00 | **7 000,00** | 7 000,00 |
+
+O "antes" reproduz exatamente o relato do usuário (Jul/2027 no lugar de Fev/2027).
+
+UI via Playwright (`http://localhost:5173` → aba Parcelas): card exibe
+**"Termina em Fev/2027"**, "Restante R$ 7.000,00" e KPI "Total Restante R$ 7.000,00"; ao expandir o
+grupo, a parcela 12/12 vence em 02/2027 — mesma competência do "Termina em". Console do browser sem
+erros na tela de Parcelas (os dois 401 em `/api/auth/refresh` ocorrem antes do login, comportamento
+pré-existente do fluxo de refresh sem cookie).
 
 ### 8.2 Revisão de Código Pré-Merge
 
-_(a preencher após a execução)_
+`/code-review high` sobre `git diff master...HEAD`: **2 findings**, ambos investigados com script de
+sondagem antes da decisão.
+
+1. **Corrigido** — `progresso` usava `min(parcela_atual)` sem o filtro `<= parcela_total` que a
+   âncora de `mes_termino` já tinha. Como `PATCH /api/expenses/{id}` não valida os dois campos entre
+   si (`ExpenseUpdate` não tem `model_validator`), uma linha com `parcela_atual=9, parcela_total=6`
+   gerava `progresso=8` → `parcelas_restantes=-2` e o parcelamento **sumia** da projeção como se
+   estivesse quitado (sondagem: `parcelas: [('Ruim', 0)], ativas: 0`). Filtro aplicado e coberto por
+   `test_progresso_ignores_inconsistent_parcela_atual`.
+2. **Justificado (não corrigido)** — divergência entre `parcelas_restantes` (contagem de parcelas a
+   pagar, incluindo atrasadas) e a largura da janela `mes_inicio..mes_termino` quando há parcelas
+   vencidas, que faz o Gantt rotular "7 meses" numa barra de 5. **Não é introduzida por este CR**:
+   o caminho upfront, intocado aqui, já se comporta assim em `master` (sondagem com grupo 6x e 2
+   parcelas atrasadas: `restantes=6` numa janela de 4 meses). Mudar isso exige decidir se o rótulo
+   do Gantt conta parcelas ou meses — decisão de produto, fora do escopo deste bug fix. Candidato a
+   CR futuro, junto com `app/health_score.py:141`, que ainda usa o `progresso` antigo (apontado como
+   nota na revisão, também fora do escopo).
 
 ---
 
@@ -224,3 +261,5 @@ _(a preencher após a execução)_
 |------|-------|-----------|
 | 2026-08-22 | Rafael Peixoto | CR criado a partir do bug reportado em produção |
 | 2026-08-22 | Rafael Peixoto | Implementação iniciada |
+| 2026-08-22 | Rafael Peixoto | Implementação concluída — âncora de `mes_termino` + `progresso`, 6 testes novos |
+| 2026-08-22 | Rafael Peixoto | Validação runtime (API + Playwright) e `/code-review` (2 findings: 1 corrigido, 1 justificado) |

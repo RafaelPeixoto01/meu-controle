@@ -315,11 +315,11 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 ### Change Requests
 > **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-045: Skill /sdd-pipeline promovida para global (`~/.claude/skills`) — cópia local removida do repo para evitar divergência; kit /sdd-bootstrap criado para replicar o processo SDD em projetos novos (concluido)
 - CR-046: Importação de Extratos/Faturas PDF via IA — backend F07 (RF-21): tabelas import_batches/import_transactions (migration 009), import_service (Claude document block, fingerprint/dedup), router /api/imports (upload/pending/get/confirm/delete, rate limit 5/min), 34 testes; UI no CR-047 (concluido)
 - CR-047: Importação de Extratos/Faturas — frontend F07: página /import (upload → revisão → resultado) + aba Importar, requestMultipart no api.ts (FormData + refresh-401), hooks useImports, helpers importReview com 12 testes Vitest; validado E2E via Playwright (concluido)
 - CR-049: Importação de Compras Parceladas (F07, item E-A do [roadmap v2](docs/F07-v2-roadmap-importacao.md)) — classificação `parcelamento` + ação `criar_planejado_parcelado`; migration 010; `services.create_expense_with_installments()` extraído do router de expenses e compartilhado com a importação; RN-044/045/046; 31 testes novos (concluido)
 - CR-048: Migração dos serviços de IA para Claude Opus 5 — remove `temperature` (400 na geração atual), thinking adaptativo (effort low na importação), corrige leitura da resposta (`content[0]` é bloco de thinking) e trata `stop_reason=refusal` fora do retry; 11 testes novos (concluido)
+- CR-050: Fix previsão de término de parcelamento (F03) — `mes_termino` ancorado no vencimento real de cada parcela (`vencimento + parcela_total - parcela_atual`) em vez de estimado a partir do mês corrente; corrige compras cadastradas a partir do meio (ex.: 6/12), que exibiam término até 5 meses adiante, e o `progresso`/`parcelas_restantes` inflado; 6 testes novos (concluido)
 
 ---
 

@@ -702,3 +702,33 @@ class TestInstallmentProjection:
         assert p["parcela_atual"] == 5          # maior parcela paga
         assert p["parcelas_restantes"] == 5     # 6..10
         assert p["mes_termino"] == date(2026, 7, 1)
+
+    def test_progresso_ignores_inconsistent_parcela_atual(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-050: Linha solta com parcela_atual > parcela_total nao pode inflar o
+        progresso a ponto de o parcelamento sumir da projecao como se estivesse
+        quitado (PATCH /expenses nao valida parcela_atual contra parcela_total).
+        """
+        self._mock_today(mock_date)
+        db.add(Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Parcela Inconsistente",
+            valor=100.00,
+            vencimento=date(2026, 3, 10),
+            parcela_atual=9,
+            parcela_total=6,
+            recorrente=False,
+            status=ExpenseStatus.PENDENTE.value,
+        ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        assert len(result["parcelas"]) == 1
+        p = result["parcelas"][0]
+        assert p["parcelas_restantes"] == 6
+        assert result["qtd_parcelas_ativas"] == 1
+        assert result["total_restante_todas_parcelas"] == 600.0

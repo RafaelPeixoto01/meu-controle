@@ -515,9 +515,12 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
             # anteriores a primeira cadastrada foram pagas fora do app, entao contam
             # como progresso. Sem isso, "restantes" fica inflado (12 em vez de 7) e
             # diverge do valor "Restante" exibido no card do parcelamento.
+            # O filtro <= parcela_total (mesmo da ancora de mes_termino) descarta
+            # linhas inconsistentes, que senao gerariam progresso maior que o total
+            # e fariam o parcelamento sumir da projecao como se estivesse quitado
             numeros_cadastrados = [
                 inst.parcela_atual for inst in installments
-                if inst.parcela_atual is not None
+                if inst.parcela_atual is not None and inst.parcela_atual <= parcela_total
             ]
             if numeros_cadastrados:
                 progresso = max(progresso, min(numeros_cadastrados) - 1)
