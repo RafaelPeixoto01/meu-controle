@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 3.2
-**Data:** 2026-08-16
+**Versao:** 3.3
+**Data:** 2026-08-22
 **Status:** Aprovado
 **Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052
 
 ---
 
@@ -507,6 +507,8 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-044 | Parcela correspondente a transacao importada nasce com status Pago (ja cobrada na fatura); as parcelas seguintes nascem Pendente | Importacao (RF-21, CR-049) |
 | RN-045 | A data da transacao numa fatura e a da COMPRA: a parcela k vence em (data da compra + k-1 meses), e seu mes de referencia e o desse vencimento | Importacao (RF-21, CR-049) |
 | RN-046 | Parcela ja existente no mes-alvo (mesmo nome + numeracao) nao e recriada: e conciliada (status/valor atualizados), evitando duplicacao ao importar faturas de meses consecutivos | Importacao (RF-21, CR-049) |
+| RN-047 | A extracao do PDF roda fora do request: o upload responde 202 com o lote em `processando` e a IA e chamada em background. O lote so e escrito pela task se ainda estiver `processando` — descartar durante a extracao e decisao final | Importacao (RF-21, CR-052) |
+| RN-048 | Lote parado em `processando` ha mais de 30 minutos perdeu o processamento (ex.: restart do servidor) e e resolvido como `erro` na primeira leitura, sem rotina de limpeza dedicada | Importacao (RF-21, CR-052) |
 
 ---
 
@@ -632,3 +634,4 @@ Os itens abaixo **nao** estao no escopo atual:
 *Atualizado para v3.2 em 2026-08-16. CR-049: importacao de compras parceladas (F07, item E-A do roadmap v2) — RF-21 estendido com a classificacao `parcelamento` e a acao `criar_planejado_parcelado`; RN-044 a RN-046 novas; RN-042 passa a considerar a numeracao da parcela. Receitas seguem em `ignorar` (RN-041 inalterada).*
 
 *Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7. UI entregue no CR-047 (mesma data) — conteudo do RF-21 ja cobria a feature completa.*
+*Atualizado para v3.3 em 2026-08-22. CR-052: upload assincrono da importacao (F07, item E-B do roadmap v2) — `POST /api/imports` responde 202 e a extracao roda em `BackgroundTasks`; RN-047 e RN-048 novas; status de lote `processando` e `erro` com `erro_mensagem`. Nenhuma regra de classificacao ou confirmacao alterada.*

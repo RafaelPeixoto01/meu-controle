@@ -163,6 +163,8 @@ Todos os itens da secao 3.1, mais:
 
 > **Estado atual:** a migration `010` (CR-049) ja foi aplicada em producao antecipadamente, fora do fluxo de deploy. O `alembic upgrade head` do proximo deploy sera no-op para ela. Colunas nullable, sem impacto no codigo em execucao.
 
+> **Migration `011` (CR-052):** adiciona `erro_mensagem` (nullable) em `import_batches` e sera aplicada pelo `alembic upgrade head` do proximo deploy. Nao destrutiva e compativel com o codigo anterior: os valores novos de `status` (`processando`, `erro`) nao exigem DDL, e o downgrade (`alembic downgrade 010`) so remove a coluna de diagnostico. Lotes que ficarem em `processando`/`erro` sao invisiveis ao codigo antigo (o `/pending` dele filtra por `pendente_revisao`) e nunca geraram lancamentos.
+
 ---
 
 ## 4. Procedimentos de Rollback
