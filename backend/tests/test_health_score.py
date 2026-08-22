@@ -495,3 +495,156 @@ class TestActionsGenerator:
         actions = generate_actions(result, 10000.00, [], [], [])
         # With perfect score, most dimensions are at 80%+, so few actions
         assert len(actions) <= 1
+
+
+class TestD2dProgressoParcelamento:
+    """CR-051: D2d usa a mesma regra de progresso da projecao (RN-P11)."""
+
+    def _grupo_cadastrado_do_meio(self, test_user):
+        """Compra 12x cadastrada a partir da parcela 10 — 3 parcelas no banco, nenhuma paga."""
+        installments = [
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, mes, 1),
+                nome="TV",
+                valor=600.00,
+                vencimento=date(2026, mes, 10),
+                parcela_atual=num,
+                parcela_total=12,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+            for num, mes in ((10, 3), (11, 4), (12, 5))
+        ]
+        return {
+            "nome": "TV",
+            "parcela_total": 12,
+            "status_geral": "Em andamento",
+            "installments": installments,
+        }
+
+    def test_d2d_conta_parcelas_anteriores_a_primeira_cadastrada(self, test_user):
+        """
+        Restam 3 parcelas (10, 11 e 12 de 12), entao o grupo entra no alivio de
+        3 meses do D2d. Antes do CR-051 o progresso era 0 e restavam "12".
+        """
+        grupo = self._grupo_cadastrado_do_meio(test_user)
+
+        result = calculate_health_score(
+            renda=5000.0,
+            expenses=[],
+            daily_expenses=[],
+            installment_groups=[grupo],
+            daily_expense_history=[],
+            prev_month_comprometimento=None,
+            mes_atual=date(2026, 3, 1),
+        )
+
+        d2d = result["dimensoes"]["d2_parcelas"]["subfatores"]["d2d_alivio"]
+        # 600 / 5000 = 12% de liberacao → 5 pontos
+        assert d2d["percentual_liberacao"] == 12.0
+        assert d2d["pontos"] == 5
+
+    def test_compra_cadastrada_do_meio_conta_como_ativa(self, test_user):
+        """
+        CR-051: parcelamento cadastrado a partir do meio ja esta em andamento —
+        entra em D2a/D2b e nao pode levar a penalidade de D2c ("nao iniciada").
+        """
+        grupo = self._grupo_cadastrado_do_meio(test_user)
+
+        result = calculate_health_score(
+            renda=5000.0,
+            expenses=[],
+            daily_expenses=[],
+            installment_groups=[grupo],
+            daily_expense_history=[],
+            prev_month_comprometimento=None,
+            mes_atual=date(2026, 3, 1),
+        )
+
+        sub = result["dimensoes"]["d2_parcelas"]["subfatores"]
+        assert sub["d2b_quantidade"]["valor"] == 1        # contada como ativa
+        assert sub["d2c_pendentes"]["quantidade"] == 0    # nao e "nao iniciada"
+        assert sub["d2c_pendentes"]["pontos"] == 0        # sem penalidade
+        assert sub["d2a_percentual"]["valor"] == 12.0     # 600 de 5000 no comprometimento
+
+    def test_parcelamento_nao_iniciado_continua_pendente(self, test_user):
+        """CR-051: compra 1..12 sem nenhuma paga continua classificada como pendente."""
+        installments = [
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 3, 1),
+                nome="Notebook",
+                valor=400.00,
+                vencimento=date(2026, 3, 10),
+                parcela_atual=1,
+                parcela_total=12,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+        ]
+        grupo = {"nome": "Notebook", "parcela_total": 12,
+                 "status_geral": "Em andamento", "installments": installments}
+
+        result = calculate_health_score(
+            renda=5000.0, expenses=[], daily_expenses=[], installment_groups=[grupo],
+            daily_expense_history=[], prev_month_comprometimento=None,
+            mes_atual=date(2026, 3, 1),
+        )
+
+        sub = result["dimensoes"]["d2_parcelas"]["subfatores"]
+        assert sub["d2c_pendentes"]["quantidade"] == 1
+        assert sub["d2b_quantidade"]["valor"] == 0
+
+    def _grupo_nao_iniciado(self, test_user):
+        """Compra 12x cadastrada em 1/12, nada pago — realmente nao iniciada."""
+        installments = [
+            Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, 3, 1),
+                nome="Notebook",
+                valor=400.00,
+                vencimento=date(2026, 3, 10),
+                parcela_atual=1,
+                parcela_total=12,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            )
+        ]
+        return {"nome": "Notebook", "parcela_total": 12,
+                "status_geral": "Em andamento", "installments": installments}
+
+    def test_score_conservador_ignora_compra_cadastrada_do_meio(self, test_user):
+        """CR-051: cenario conservador so soma parcelamentos que ainda nao comecaram."""
+        grupos = [self._grupo_cadastrado_do_meio(test_user), self._grupo_nao_iniciado(test_user)]
+
+        score_data = calculate_health_score(
+            renda=5000.0, expenses=[], daily_expenses=[], installment_groups=grupos,
+            daily_expense_history=[], prev_month_comprometimento=None,
+            mes_atual=date(2026, 3, 1),
+        )
+        conservador = calculate_conservative_score(score_data, grupos, renda=5000.0)
+
+        descricoes = [p["descricao"] for p in conservador["parcelas_pendentes"]]
+        assert descricoes == ["Notebook"]  # TV (10/12) ja esta em andamento
+
+    def test_acoes_nomeiam_o_parcelamento_certo(self, test_user):
+        """CR-051: a acao de pendente aponta o grupo nao iniciado, nao o ativo."""
+        grupos = [self._grupo_cadastrado_do_meio(test_user), self._grupo_nao_iniciado(test_user)]
+
+        result = calculate_health_score(
+            renda=5000.0, expenses=[], daily_expenses=[], installment_groups=grupos,
+            daily_expense_history=[], prev_month_comprometimento=None,
+            mes_atual=date(2026, 3, 1),
+        )
+        acoes = generate_actions(
+            score_data=result, renda=5000.0, expenses=[], daily_expenses=[],
+            installment_groups=grupos,
+        )
+        textos = [a["descricao"] for a in acoes]
+
+        alertas = [t for t in textos if "ainda não iniciou" in t]
+        assert alertas and all("Notebook" in t for t in alertas)
+        assert not any("TV" in t for t in alertas)
+        # E a TV (3 parcelas restantes) e reconhecida como "termina em breve"
+        assert any("TV" in t and "termina em breve" in t for t in textos)

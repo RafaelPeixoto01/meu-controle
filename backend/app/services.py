@@ -449,6 +449,62 @@ def get_dashboard_data(db: Session, mes_referencia: date, user_id: str) -> dict:
     }
 
 
+def calcular_progresso_parcelamento(installments: list[Expense], parcela_total: int) -> int:
+    """
+    CR-050/CR-051: Quantas parcelas de um grupo ja foram quitadas.
+
+    Dois cenarios de cadastro:
+    - Upfront (todas as N parcelas no banco): contagem de parcelas Pagas.
+    - Incremental (serie incompleta): maior numero de parcela paga, ou as
+      parcelas anteriores a primeira cadastrada — numa compra registrada em
+      6/12, as parcelas 1..5 foram pagas fora do app e contam como progresso.
+
+    Linhas com `parcela_atual` maior que `parcela_total` sao inconsistentes
+    (o PATCH de despesas nao valida os dois campos entre si) e sao ignoradas,
+    para nao inflar o progresso a ponto de o parcelamento parecer quitado.
+
+    Fonte unica da regra RN-P11, usada pela projecao (F03) e pelo score (F04).
+    """
+    num_paid = sum(
+        1 for inst in installments
+        if inst.status == ExpenseStatus.PAGO.value
+    )
+
+    if len(installments) >= parcela_total:
+        return num_paid
+
+    paid_parcela_nums = [
+        inst.parcela_atual or 0 for inst in installments
+        if inst.status == ExpenseStatus.PAGO.value
+        and (inst.parcela_atual or 0) <= parcela_total
+    ]
+    progresso = max(paid_parcela_nums) if paid_parcela_nums else 0
+
+    numeros_cadastrados = [
+        inst.parcela_atual for inst in installments
+        if inst.parcela_atual is not None and inst.parcela_atual <= parcela_total
+    ]
+    if numeros_cadastrados:
+        progresso = max(progresso, min(numeros_cadastrados) - 1)
+
+    return progresso
+
+
+def calcular_parcelas_restantes(installments: list[Expense], parcela_total: int) -> int:
+    """
+    CR-051: Quantas parcelas de um grupo ainda serao pagas (RN-P11).
+
+    Upfront: contagem de parcelas nao pagas. Incremental: total menos o
+    progresso de `calcular_progresso_parcelamento()`.
+    """
+    if len(installments) >= parcela_total:
+        return sum(
+            1 for inst in installments
+            if inst.status != ExpenseStatus.PAGO.value
+        )
+    return parcela_total - calcular_progresso_parcelamento(installments, parcela_total)
+
+
 def get_installment_projection(db: Session, user_id: str, months: int = 12) -> dict:
     """
     CR-021: Calcula projecao de parcelas futuras para os proximos N meses.
@@ -492,38 +548,8 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
         # Valor mensal = valor da primeira parcela (todas tem mesmo valor)
         valor_mensal = float(installments[0].valor)
 
-        # CR-022: Determinar progresso considerando dois cenarios:
-        # - Upfront: todas as N parcelas existem no banco (len == parcela_total)
-        #   → usar contagem de PAGO como progresso
-        # - Incremental: apenas parcelas recentes existem (len < parcela_total)
-        #   → usar max(parcela_atual) como progresso
-        num_paid = sum(
-            1 for inst in installments
-            if inst.status == ExpenseStatus.PAGO.value
-        )
-
-        if len(installments) >= parcela_total:
-            progresso = num_paid
-        else:
-            paid_parcela_nums = [
-                inst.parcela_atual or 0 for inst in installments
-                if inst.status == ExpenseStatus.PAGO.value
-            ]
-            progresso = max(paid_parcela_nums) if paid_parcela_nums else 0
-
-            # CR-050: compra cadastrada a partir do meio (ex.: 6/12) — as parcelas
-            # anteriores a primeira cadastrada foram pagas fora do app, entao contam
-            # como progresso. Sem isso, "restantes" fica inflado (12 em vez de 7) e
-            # diverge do valor "Restante" exibido no card do parcelamento.
-            # O filtro <= parcela_total (mesmo da ancora de mes_termino) descarta
-            # linhas inconsistentes, que senao gerariam progresso maior que o total
-            # e fariam o parcelamento sumir da projecao como se estivesse quitado
-            numeros_cadastrados = [
-                inst.parcela_atual for inst in installments
-                if inst.parcela_atual is not None and inst.parcela_atual <= parcela_total
-            ]
-            if numeros_cadastrados:
-                progresso = max(progresso, min(numeros_cadastrados) - 1)
+        # CR-022/CR-050: progresso por cadastro upfront ou incremental (RN-P11)
+        progresso = calcular_progresso_parcelamento(installments, parcela_total)
 
         parcelas_restantes = parcela_total - progresso
 

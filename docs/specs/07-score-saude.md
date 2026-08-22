@@ -35,6 +35,11 @@ Score deterministico 0-100, soma de 4 dimensoes (0-25 cada):
 - D2c: penalidade por parcelas pendentes 0/Y (-5)
 - D2d: bonus por parcelas encerrando em 3 meses (+5)
 - Clamped 0-25
+- Progresso e parcelas restantes seguem a RN-P11 (spec F03), via
+  `services.calcular_progresso_parcelamento()` / `calcular_parcelas_restantes()` — fonte unica
+  compartilhada com a projecao. "Pendente" (D2c) e o parcelamento com progresso 0; uma compra
+  cadastrada a partir do meio (ex.: 10/12) ja esta em andamento e entra em D2a/D2b/D2d (CR-051).
+  A mesma regra vale para o cenario conservador e para as acoes sugeridas
 
 **D3 — Capacidade de Poupanca (25pts):**
 - Calcula saldo livre = renda - fixos - media_variaveis

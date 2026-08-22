@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import {
     ChevronDown,
     ChevronRight,
@@ -18,6 +17,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useAlerts } from "../hooks/useAlerts";
 import { useInstallmentProjection } from "../hooks/useInstallmentProjection";
 import { getMonthName } from "../utils/date";
+import { formatDateBRWithYear } from "../utils/format";
 
 // Helper para formatar moeda
 const formatMoney = (val: number) =>
@@ -324,7 +324,7 @@ function GroupCard({
                                         </td>
                                         <td className="px-4 py-2 flex items-center gap-2">
                                             <Calendar className="w-3 h-3 text-gray-400" />
-                                            {format(new Date(inst.vencimento), "dd/MM/yyyy")}
+                                            {formatDateBRWithYear(inst.vencimento)}
                                         </td>
                                         <td className="px-4 py-2">
                                             {formatMoney(inst.valor)}

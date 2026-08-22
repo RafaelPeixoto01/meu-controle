@@ -24,6 +24,18 @@ export function formatDateBR(isoDate: string | null): string {
   return `${day}/${month}`;
 }
 
+/**
+ * Formata data ISO (YYYY-MM-DD) para DD/MM/AAAA (CR-051).
+ *
+ * Faz split da string em vez de `new Date(iso)`: string ISO date-only e
+ * interpretada como UTC pelo browser, o que em UTC-3 exibia o dia anterior.
+ */
+export function formatDateBRWithYear(isoDate: string | null): string {
+  if (!isoDate) return "";
+  const [year, month, day] = isoDate.split("-");
+  return `${day}/${month}/${year}`;
+}
+
 /** Formata data ISO (YYYY-MM-DD) para "DD/MM - Dia da semana" (CR-005) */
 export function formatDateFull(isoDate: string): string {
   const [yearStr, monthStr, dayStr] = isoDate.split("-");

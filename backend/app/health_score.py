@@ -11,7 +11,11 @@ import calendar
 from datetime import date
 
 from app.models import Expense, DailyExpense, ExpenseStatus
-from app.services import get_next_month
+from app.services import (
+    calcular_parcelas_restantes,
+    calcular_progresso_parcelamento,
+    get_next_month,
+)
 
 
 # ========== Classification ==========
@@ -94,12 +98,16 @@ def _calc_d2(renda: float, installment_groups: list[dict], mes_atual: date) -> d
                 "detalhe": "Sem renda cadastrada"}
 
     # Separar parcelas ativas de pendentes (0 de Y)
+    # CR-051: "pendente" e o parcelamento que ainda nao comecou (progresso 0). Usar
+    # contagem de parcelas Pagas no app classificava errado uma compra cadastrada a
+    # partir do meio (ex.: 10/12), que ja esta em andamento — ela ficava fora de
+    # D2a/D2b/D2d e ainda levava a penalidade de D2c.
     ativas = []
     pendentes = []
     for group in installment_groups:
         installments = group.get("installments", [])
-        num_paid = sum(1 for inst in installments if inst.status == ExpenseStatus.PAGO.value)
-        if num_paid == 0 and group["status_geral"] != "Concluído":
+        progresso = calcular_progresso_parcelamento(installments, group["parcela_total"])
+        if progresso == 0 and group["status_geral"] != "Concluído":
             pendentes.append(group)
         elif group["status_geral"] == "Em andamento":
             ativas.append(group)
@@ -133,14 +141,11 @@ def _calc_d2(renda: float, installment_groups: list[dict], mes_atual: date) -> d
         if not installments:
             continue
         parcela_total = group["parcela_total"]
-        num_paid = sum(1 for inst in installments if inst.status == ExpenseStatus.PAGO.value)
 
-        if len(installments) >= parcela_total:
-            parcelas_restantes = len([inst for inst in installments if inst.status != ExpenseStatus.PAGO.value])
-        else:
-            paid_nums = [inst.parcela_atual or 0 for inst in installments if inst.status == ExpenseStatus.PAGO.value]
-            progresso = max(paid_nums) if paid_nums else 0
-            parcelas_restantes = parcela_total - progresso
+        # CR-051: mesma regra da projecao (RN-P11) — sem isso, uma compra cadastrada
+        # a partir do meio (ex.: 6/12) aparecia com todas as parcelas restantes e
+        # nunca entrava no alivio de 3 meses do D2d
+        parcelas_restantes = calcular_parcelas_restantes(installments, parcela_total)
 
         if 0 < parcelas_restantes <= 3:
             valor_liberado_3m += float(installments[0].valor)
@@ -475,9 +480,7 @@ def _build_contextual_message(dim_key: str, d1: dict, d2: dict, d3: dict, d4: di
             installments = g.get("installments", [])
             if not installments:
                 continue
-            num_paid = sum(1 for i in installments if i.status == ExpenseStatus.PAGO.value)
-            parcela_total = g["parcela_total"]
-            restantes = parcela_total - num_paid
+            restantes = calcular_parcelas_restantes(installments, g["parcela_total"])
             if 0 < restantes <= 3:
                 return f"Sua principal oportunidade: reduzir a pressão de parcelas. O {g['nome']} termina em breve."
         return "Sua principal oportunidade: reduzir a pressão de parcelas."
@@ -505,8 +508,9 @@ def calculate_conservative_score(
     pending = []
     for group in installment_groups:
         installments = group.get("installments", [])
-        num_paid = sum(1 for inst in installments if inst.status == ExpenseStatus.PAGO.value)
-        if num_paid == 0 and group["status_geral"] != "Concluído" and installments:
+        # CR-051: "pendente" = parcelamento que ainda nao comecou (mesma regra do D2c)
+        progresso = calcular_progresso_parcelamento(installments, group["parcela_total"]) if installments else 0
+        if progresso == 0 and group["status_geral"] != "Concluído" and installments:
             valor_mensal = float(installments[0].valor)
             pending.append({
                 "descricao": group["nome"],
@@ -616,8 +620,7 @@ def generate_actions(
                 installments = group.get("installments", [])
                 if not installments:
                     continue
-                num_paid = sum(1 for i in installments if i.status == ExpenseStatus.PAGO.value)
-                restantes = group["parcela_total"] - num_paid
+                restantes = calcular_parcelas_restantes(installments, group["parcela_total"])
                 if 0 < restantes <= 3:
                     valor = float(installments[0].valor)
                     actions.append({
@@ -634,8 +637,8 @@ def generate_actions(
             if subfatores.get("d2c_pendentes", {}).get("quantidade", 0) > 0:
                 for group in installment_groups:
                     installments = group.get("installments", [])
-                    num_paid = sum(1 for i in installments if i.status == ExpenseStatus.PAGO.value)
-                    if num_paid == 0 and group["status_geral"] != "Concluído" and installments:
+                    progresso = calcular_progresso_parcelamento(installments, group["parcela_total"]) if installments else 0
+                    if progresso == 0 and group["status_geral"] != "Concluído" and installments:
                         actions.append({
                             "prioridade": len(actions) + 1,
                             "dimensao_alvo": "d2_parcelas",

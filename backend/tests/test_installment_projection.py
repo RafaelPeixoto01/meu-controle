@@ -732,3 +732,39 @@ class TestInstallmentProjection:
         assert p["parcelas_restantes"] == 6
         assert result["qtd_parcelas_ativas"] == 1
         assert result["total_restante_todas_parcelas"] == 600.0
+
+    def test_progresso_ignora_parcela_paga_inconsistente(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-051: parcela PAGA com parcela_atual > parcela_total tambem nao pode
+        inflar o progresso — antes o max() cru zerava as restantes e o grupo
+        sumia da projecao.
+        """
+        self._mock_today(mock_date)
+        parcelas = [
+            (20, date(2026, 2, 10), ExpenseStatus.PAGO.value),   # inconsistente: 20 de 12
+            (3, date(2026, 3, 10), ExpenseStatus.PAGO.value),
+            (4, date(2026, 4, 10), ExpenseStatus.PENDENTE.value),
+        ]
+        for num, venc, status in parcelas:
+            db.add(Expense(
+                user_id=test_user.id,
+                mes_referencia=date(venc.year, venc.month, 1),
+                nome="Paga Inconsistente",
+                valor=100.00,
+                vencimento=venc,
+                parcela_atual=num,
+                parcela_total=12,
+                recorrente=False,
+                status=status,
+            ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        assert len(result["parcelas"]) == 1
+        p = result["parcelas"][0]
+        assert p["parcela_atual"] == 3          # a linha 20/12 e descartada
+        assert p["parcelas_restantes"] == 9
+        assert p["mes_termino"] == date(2026, 12, 1)  # parcela 4 (Abr) + 8 meses
