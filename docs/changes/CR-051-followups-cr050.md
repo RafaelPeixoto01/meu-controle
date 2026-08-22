@@ -2,7 +2,7 @@
 
 **Versão:** 1.0  
 **Data:** 2026-08-22  
-**Status:** Em Implementação  
+**Status:** Concluído  
 **Autor:** Rafael Peixoto  
 **Prioridade:** Média
 
@@ -147,7 +147,7 @@ compra 6/12 sem parcelas pagas aparece com 7 restantes na projeção e 12 no Sco
 - [x] Revisão de código pré-merge (`/code-review` no diff da branch) executada — ver seção 8.2
 - [x] Revisão de segurança — **N/A**: sem endpoint novo ou alterado, sem auth/ownership, sem dependência nova (o CR remove um uso de `date-fns`)
 - [x] Documentos afetados foram atualizados
-- [ ] CI verde após o push (CR-037) — fecha em commit de follow-up
+- [x] CI verde após o push — run 32595825979 (Backend pytest + Frontend tsc/eslint) ✅
 
 ### 8.1 Validação Runtime
 
@@ -245,3 +245,4 @@ conservador, ações nomeando o grupo certo, parcela paga inconsistente na proje
 | 2026-08-22 | Rafael Peixoto | Implementação iniciada |
 | 2026-08-22 | Rafael Peixoto | Implementação concluída — helpers compartilhados, 9 testes novos |
 | 2026-08-22 | Rafael Peixoto | Validação runtime (API + Playwright) e `/code-review` (4 findings, todos corrigidos) |
+| 2026-08-22 | Rafael Peixoto | Merge em master, CI verde (run 32595825979) — status: ✅ Concluído |
