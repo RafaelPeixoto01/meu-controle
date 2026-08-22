@@ -1,8 +1,8 @@
 # Change Request — CR-052: Upload Assíncrono da Importação de Extratos (F07)
 
-**Versão:** 1.1
+**Versão:** 1.2
 **Data:** 2026-08-22
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -189,7 +189,7 @@ Via `op.batch_alter_table` (SQLite não suporta `ALTER` com FK — CLAUDE.md).
 - [x] Revisão de código pré-merge (`/code-review` no diff da branch) executada (CR-040) — ver §12
 - [x] Revisão de segurança (checklist OWASP do CLAUDE.md) executada — ver §13
 - [x] Documentos afetados foram atualizados — PRD v3.3, ARCHITECTURE v3.3 (ADR-021), spec 10, roadmap F07, Implementation Plan, Deploy Guide, CLAUDE.md, INDEX
-- [ ] CI verde após o push (`gh run watch`) — fecha em commit de follow-up (CR-037)
+- [x] CI verde após o push (`gh run watch`) — run 32598234651
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa.
 
@@ -332,3 +332,4 @@ Obrigatória: o CR altera contrato de endpoint.
 | 2026-08-22 | Claude | Validação runtime via Playwright + HTTP — status: ✅ (§11) |
 | 2026-08-22 | Claude | Revisão de código `/code-review high`: 6 findings, 5 corrigidos e 1 justificado (§12); revisão de segurança OWASP (§13) |
 | 2026-08-22 | Claude | Documentos sincronizados: PRD v3.3 (RN-047/048), ARCHITECTURE v3.3 (ADR-021), spec 10, roadmap F07 (E-B ✅), Implementation Plan, Deploy Guide, CLAUDE.md, INDEX |
+| 2026-08-22 | Claude | Merge em `master` e CI verde (run 32598234651) — CR concluído |
