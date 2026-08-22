@@ -11,7 +11,7 @@ import calendar
 from datetime import date
 
 from app.models import Expense, DailyExpense, ExpenseStatus
-from app.services import get_next_month
+from app.services import calcular_progresso_parcelamento, get_next_month
 
 
 # ========== Classification ==========
@@ -94,12 +94,16 @@ def _calc_d2(renda: float, installment_groups: list[dict], mes_atual: date) -> d
                 "detalhe": "Sem renda cadastrada"}
 
     # Separar parcelas ativas de pendentes (0 de Y)
+    # CR-051: "pendente" e o parcelamento que ainda nao comecou (progresso 0). Usar
+    # contagem de parcelas Pagas no app classificava errado uma compra cadastrada a
+    # partir do meio (ex.: 10/12), que ja esta em andamento — ela ficava fora de
+    # D2a/D2b/D2d e ainda levava a penalidade de D2c.
     ativas = []
     pendentes = []
     for group in installment_groups:
         installments = group.get("installments", [])
-        num_paid = sum(1 for inst in installments if inst.status == ExpenseStatus.PAGO.value)
-        if num_paid == 0 and group["status_geral"] != "Concluído":
+        progresso = calcular_progresso_parcelamento(installments, group["parcela_total"])
+        if progresso == 0 and group["status_geral"] != "Concluído":
             pendentes.append(group)
         elif group["status_geral"] == "Em andamento":
             ativas.append(group)
@@ -133,13 +137,14 @@ def _calc_d2(renda: float, installment_groups: list[dict], mes_atual: date) -> d
         if not installments:
             continue
         parcela_total = group["parcela_total"]
-        num_paid = sum(1 for inst in installments if inst.status == ExpenseStatus.PAGO.value)
 
         if len(installments) >= parcela_total:
             parcelas_restantes = len([inst for inst in installments if inst.status != ExpenseStatus.PAGO.value])
         else:
-            paid_nums = [inst.parcela_atual or 0 for inst in installments if inst.status == ExpenseStatus.PAGO.value]
-            progresso = max(paid_nums) if paid_nums else 0
+            # CR-051: mesma regra de progresso da projecao (RN-P11) — sem isso, uma
+            # compra cadastrada a partir do meio (ex.: 6/12) aparecia com todas as
+            # parcelas restantes e nunca entrava no alivio de 3 meses do D2d
+            progresso = calcular_progresso_parcelamento(installments, parcela_total)
             parcelas_restantes = parcela_total - progresso
 
         if 0 < parcelas_restantes <= 3:

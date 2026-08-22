@@ -3,6 +3,7 @@ import {
   formatBRL,
   formatParcela,
   formatDateBR,
+  formatDateBRWithYear,
   formatDateFull,
 } from "./format";
 
@@ -54,5 +55,21 @@ describe("formatDateFull", () => {
   it("usa a data local (nao UTC) — sem deslocamento de um dia", () => {
     // Construida via new Date(y, m-1, d): imune ao fuso do runner
     expect(formatDateFull("2026-07-09")).toBe("09/07 - Quinta-feira");
+  });
+});
+
+describe("formatDateBRWithYear", () => {
+  it("formata data ISO como DD/MM/AAAA", () => {
+    expect(formatDateBRWithYear("2027-02-22")).toBe("22/02/2027");
+  });
+
+  it("nao desloca o dia por fuso horario (CR-051)", () => {
+    // new Date("2027-02-22") seria 22/02 00:00 UTC = 21/02 21:00 em UTC-3
+    expect(formatDateBRWithYear("2027-02-22")).not.toBe("21/02/2027");
+    expect(formatDateBRWithYear("2026-01-01")).toBe("01/01/2026");
+  });
+
+  it("retorna string vazia para null", () => {
+    expect(formatDateBRWithYear(null)).toBe("");
   });
 });
