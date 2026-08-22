@@ -19,9 +19,10 @@ export default function ImportProcessing({
   onDiscard,
 }: ImportProcessingProps) {
   const nome = batch?.filename ?? filename;
-  // Ao retomar um lote do banner ainda nao sabemos se ele esta em extracao ou
-  // ja pronto — evita anunciar "interpretando" para um lote que so vai abrir
-  const extraindo = batch === undefined || batch.status === "processando";
+  // So afirma "interpretando" com o status na mao: ao retomar um lote do banner
+  // a primeira leitura ainda nao chegou, e ele pode estar apenas pronto para
+  // abrir — anunciar extracao ali ofereceria um "Cancelar" destrutivo por engano
+  const extraindo = batch?.status === "processando";
 
   return (
     <div
@@ -32,14 +33,15 @@ export default function ImportProcessing({
       <Loader2 className="h-10 w-10 text-primary animate-spin" />
       <div>
         <p className="font-bold text-text">
-          {extraindo ? "Interpretando o documento..." : "Abrindo a importação..."}
+          {extraindo ? "Interpretando o documento..." : "Carregando importação..."}
         </p>
         {nome && <p className="text-sm text-text-muted mt-1 truncate max-w-xs">{nome}</p>}
         {extraindo && (
           <p className="text-sm text-text-muted mt-2 max-w-md">
             A IA está lendo as transações do PDF. Isso pode levar até 3 minutos em
-            faturas grandes — <strong className="font-semibold">você pode fechar esta página</strong>,
-            o processamento continua e o lote reaparece aqui quando você voltar.
+            faturas grandes — <strong className="font-semibold">você pode fechar esta página</strong>:
+            o processamento continua no servidor, e o lote fica aqui esperando a
+            revisão quando terminar.
           </p>
         )}
       </div>

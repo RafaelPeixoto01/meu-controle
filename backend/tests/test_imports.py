@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.ai_analysis import DEFAULT_MODEL, AiRefusalError
 from app.import_service import (
+    STALE_PROCESSING_MINUTES,
     call_import_api,
     compute_fingerprint,
     normalize_description,
@@ -510,7 +511,7 @@ class TestProcessamentoAssincrono:
         assert statuses == {"processando", "pendente_revisao"}
 
     def test_lote_orfao_vira_erro_na_leitura(self, client, db):
-        batch = self._batch_processando(db, minutos_atras=11)
+        batch = self._batch_processando(db, minutos_atras=STALE_PROCESSING_MINUTES + 1)
 
         r = client.get(f"/api/imports/{batch.id}")
         assert r.status_code == 200
@@ -521,13 +522,13 @@ class TestProcessamentoAssincrono:
         assert db.query(ImportBatch).filter_by(id=batch.id).one().status == "erro"
 
     def test_lote_orfao_sai_do_pending(self, client, db):
-        self._batch_processando(db, minutos_atras=11)
+        self._batch_processando(db, minutos_atras=STALE_PROCESSING_MINUTES + 1)
 
         r = client.get("/api/imports/pending")
         assert r.json() == []
 
     def test_processando_dentro_da_janela_permanece(self, client, db):
-        batch = self._batch_processando(db, minutos_atras=5)
+        batch = self._batch_processando(db, minutos_atras=STALE_PROCESSING_MINUTES - 1)
 
         r = client.get(f"/api/imports/{batch.id}")
         assert r.json()["status"] == "processando"
@@ -554,6 +555,26 @@ class TestProcessamentoAssincrono:
         row = db.query(ImportBatch).filter_by(id=r.json()["batch"]["id"]).one()
         assert row.status == "descartado"
         assert db.query(ImportTransaction).count() == 0
+
+    def test_lote_descartado_nao_vira_erro_quando_a_ia_falha(self, client, db):
+        """A guarda vale tambem no caminho de erro, nao so no de sucesso."""
+        def descarta_e_falha(*args, **kwargs):
+            row = db.query(ImportBatch).filter_by(status="processando").one()
+            row.status = "descartado"
+            db.commit()
+            raise TimeoutError("boom")
+
+        with patch("app.import_service.call_import_api", side_effect=descarta_e_falha):
+            r = client.post(
+                "/api/imports",
+                files={"file": ("fatura.pdf", PDF_BYTES, "application/pdf")},
+            )
+        assert r.status_code == 202
+
+        db.expire_all()
+        row = db.query(ImportBatch).filter_by(id=r.json()["batch"]["id"]).one()
+        assert row.status == "descartado"
+        assert row.erro_mensagem is None
 
     def test_confirm_em_lote_processando_retorna_409(self, client, db):
         batch = self._batch_processando(db)
