@@ -226,7 +226,10 @@ class ImportBatch(Base):
     tipo_documento: Mapped[str | None] = mapped_column(String(20), nullable=True)  # extrato | fatura
     status: Mapped[str] = mapped_column(
         String(20), default="pendente_revisao", nullable=False
-    )  # pendente_revisao | confirmado | descartado
+    )  # processando (CR-052) | pendente_revisao | confirmado | descartado | erro (CR-052)
+    # CR-052: motivo da falha quando status == 'erro'. Guarda so o tipo da
+    # excecao / mensagem generica — nunca conteudo do documento (RN-043).
+    erro_mensagem: Mapped[str | None] = mapped_column(String(255), nullable=True)
     tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
     modelo: Mapped[str] = mapped_column(String(50), nullable=False)

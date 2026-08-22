@@ -658,10 +658,18 @@ def get_import_batch_by_id(db: Session, batch_id: str, user_id: str) -> ImportBa
 
 
 def get_pending_import_batches(db: Session, user_id: str) -> list[ImportBatch]:
-    """Lotes pendentes de revisao do usuario, mais recentes primeiro (retomada)."""
+    """
+    Lotes do usuario aguardando acao, mais recentes primeiro.
+
+    CR-052: inclui 'processando' — o lote em extracao precisa reaparecer para
+    quem saiu da pagina no meio. Coberto pelo indice (user_id, status).
+    """
     stmt = (
         select(ImportBatch)
-        .where(ImportBatch.user_id == user_id, ImportBatch.status == "pendente_revisao")
+        .where(
+            ImportBatch.user_id == user_id,
+            ImportBatch.status.in_(["pendente_revisao", "processando"]),
+        )
         .order_by(ImportBatch.created_at.desc())
     )
     return list(db.scalars(stmt).all())

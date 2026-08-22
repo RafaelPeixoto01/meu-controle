@@ -3,12 +3,22 @@ import logging
 import os
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.ai_analysis import DEFAULT_MODEL
+from app.database import get_db, get_session_factory
 from app.auth import get_current_user
-from app.models import DailyExpense, ExpenseStatus, ImportBatch, ImportTransaction, User
+from app.models import DailyExpense, ExpenseStatus, ImportBatch, User
 from app.rate_limit import limiter
 from app.categories import EXPENSE_CATEGORIES, is_valid_payment_method
 from app.schemas import (
@@ -26,18 +36,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
 
-@router.post("", response_model=ImportUploadResponse, status_code=201)
+@router.post("", response_model=ImportUploadResponse, status_code=202)
 @limiter.limit("5/minute")
 def upload_import(
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    session_factory=Depends(get_session_factory),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Upload de extrato/fatura em PDF: valida, interpreta via IA e grava lote em
-    staging (`pendente_revisao`). O PDF e processado em memoria e descartado (RN-043).
+    CR-052 (RN-047): upload de extrato/fatura em PDF. Valida o arquivo, grava o
+    lote em `processando` e responde 202 na hora — a interpretacao pela IA roda
+    em BackgroundTasks e o frontend acompanha por `GET /api/imports/{id}`.
+
+    O PDF e processado em memoria e descartado (RN-043).
     """
     # 1. Feature flag / API key (padrao F06: indisponibilidade nunca e 5xx)
     if not import_service.is_import_enabled():
@@ -63,46 +78,25 @@ def upload_import(
     if not pdf_bytes.startswith(b"%PDF-"):
         raise HTTPException(status_code=422, detail="Arquivo não é um PDF válido")
 
-    # 3. Interpretar via IA
-    try:
-        open_expenses = import_service.collect_open_expenses(db, current_user.id)
-        system_prompt, user_prompt = import_service.build_import_prompts(open_expenses)
-        api_result = import_service.call_import_api(pdf_bytes, system_prompt, user_prompt)
-
-        valid_ids = {e.id for e in open_expenses}
-        parsed = import_service.validate_ai_result(api_result["resultado"], valid_ids)
-    except Exception as e:
-        logger.error(f"Erro ao interpretar importação: {e}", exc_info=True)
-        response.status_code = 200
-        return ImportUploadResponse(
-            status="erro",
-            reason=f"Não foi possível interpretar o documento: {type(e).__name__}",
-        )
-
-    if not parsed["transacoes"]:
-        response.status_code = 200
-        return ImportUploadResponse(
-            status="erro",
-            reason="Nenhuma transação foi identificada no documento",
-        )
-
-    # 4. Dedup (RN-042) + persistir staging (RN-038)
-    transacoes = import_service.mark_duplicates(db, current_user.id, parsed["transacoes"])
-
+    # 3. Persistir o lote vazio e devolver o controle ao usuario. `modelo` e
+    # NOT NULL e ja e conhecido aqui (vem do env); a task o reescreve com o
+    # valor que a API efetivamente usou.
     batch = ImportBatch(
         user_id=current_user.id,
         filename=filename[:255],
-        banco_detectado=parsed["banco"],
-        tipo_documento=parsed["tipo_documento"],
-        status="pendente_revisao",
-        tokens_input=api_result.get("tokens_input"),
-        tokens_output=api_result.get("tokens_output"),
-        modelo=api_result["modelo"],
-        tempo_processamento_ms=api_result.get("tempo_processamento_ms"),
+        status="processando",
+        modelo=os.getenv("CLAUDE_MODEL", DEFAULT_MODEL),
     )
-    for tx in transacoes:
-        batch.transacoes.append(ImportTransaction(user_id=current_user.id, **tx))
-    crud.create_import_batch(db, batch)
+    crud.create_import_batch(db, batch)  # commit antes de a task enxergar a linha
+
+    # 4. Interpretacao via IA fora do request (RN-047)
+    background_tasks.add_task(
+        import_service.process_import_batch,
+        session_factory,
+        batch.id,
+        current_user.id,
+        pdf_bytes,
+    )
 
     return ImportUploadResponse(
         status="disponivel",
@@ -115,8 +109,17 @@ def get_pending_imports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lotes pendentes de revisao do usuario (retomada da revisao)."""
-    return crud.get_pending_import_batches(db, current_user.id)
+    """
+    Lotes do usuario aguardando alguma acao: `pendente_revisao` (retomada da
+    revisao) e `processando` (CR-052 — o usuario pode sair da pagina durante a
+    extracao e reencontrar o lote aqui).
+    """
+    batches = crud.get_pending_import_batches(db, current_user.id)
+    resolvidos = [b for b in batches if import_service.resolve_stale_batch(db, b)]
+    if resolvidos:
+        db.commit()  # RN-048
+        batches = [b for b in batches if b not in resolvidos]
+    return batches
 
 
 @router.get("/{batch_id}", response_model=ImportBatchResponse)
@@ -125,10 +128,15 @@ def get_import_batch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Detalhes de um lote de importacao com suas transacoes."""
+    """
+    Detalhes de um lote com suas transacoes. E tambem o canal de polling do
+    processamento assincrono (CR-052).
+    """
     batch = crud.get_import_batch_by_id(db, batch_id, current_user.id)
     if not batch:
         raise HTTPException(status_code=404, detail="Lote de importação não encontrado")
+    if import_service.resolve_stale_batch(db, batch):
+        db.commit()  # RN-048
     return batch
 
 
