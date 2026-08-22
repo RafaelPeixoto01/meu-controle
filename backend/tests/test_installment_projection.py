@@ -530,3 +530,205 @@ class TestInstallmentProjection:
         # Nao aparece (concluida antes de Mar)
         assert len(result["parcelas"]) == 0
         assert result["total_comprometido_mes_atual"] == 0.0
+
+    # ===== CR-050: termino ancorado no vencimento real da ultima parcela =====
+
+    def test_installment_registered_mid_series(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-050: Compra cadastrada a partir da parcela 6/12 (compra ja em andamento).
+
+        Só as parcelas 6..12 existem no banco (Mar..Set/2026). O termino e o
+        vencimento da parcela 12 (Set/2026) — nao a estimativa
+        mes_atual + parcela_total - 1 (Fev/2027), que era o bug reportado.
+        """
+        self._mock_today(mock_date)
+        for i in range(6, 13):
+            month = i - 5  # parcela 6 -> Mar/2026 ... parcela 12 -> Set/2026
+            db.add(Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, month + 2, 1),
+                nome="Geladeira",
+                valor=1000.00,
+                vencimento=date(2026, month + 2, 22),
+                parcela_atual=i,
+                parcela_total=12,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        p = result["parcelas"][0]
+        assert p["mes_termino"] == date(2026, 9, 1)  # venc. da parcela 12/12
+        # Restantes = as 7 parcelas realmente cadastradas (nao 12)
+        assert p["parcelas_restantes"] == 7
+        assert p["parcela_atual"] == 5  # 1..5 pagas fora do app
+        assert result["total_restante_todas_parcelas"] == 7000.0
+
+        # Projecao: contribui de Mar ate Set, e nada em Out
+        projecao = result["projecao_mensal"]
+        assert projecao[0]["total_comprometido"] == 1000.0   # Mar
+        assert projecao[6]["total_comprometido"] == 1000.0   # Set
+        assert projecao[7]["total_comprometido"] == 0.0      # Out
+        assert "Geladeira" in projecao[6]["parcelas_encerrando"]
+
+    def test_incremental_termino_uses_parcela_atual_anchor(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-050: Incremental legado com a parcela do mes corrente ja PAGA.
+
+        Parcelas 12 (Mar, Paga) e 13 (Abr, Pendente) de 24. A parcela 24 vence
+        em Mar/2027 (13 -> Abr/2026, +11 meses). A estimativa antiga ancorava em
+        mes_inicio = Mar/2026 e perdia 1 mes (Fev/2027).
+        """
+        self._mock_today(mock_date)
+        parcelas = [
+            (12, date(2026, 3, 14), ExpenseStatus.PAGO.value),
+            (13, date(2026, 4, 14), ExpenseStatus.PENDENTE.value),
+        ]
+        for num, venc, status in parcelas:
+            db.add(Expense(
+                user_id=test_user.id,
+                mes_referencia=date(venc.year, venc.month, 1),
+                nome="Emprestimo Longo",
+                valor=500.00,
+                vencimento=venc,
+                parcela_atual=num,
+                parcela_total=24,
+                recorrente=False,
+                status=status,
+            ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        p = result["parcelas"][0]
+        assert p["mes_termino"] == date(2027, 3, 1)
+        assert p["parcelas_restantes"] == 12  # 24 - 12 pagas
+
+    def test_termino_ignores_inconsistent_parcela_atual(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-050: Linha com parcela_atual > parcela_total (dado inconsistente) nao
+        pode puxar o termino para tras — o ultimo vencimento no banco prevalece.
+        """
+        self._mock_today(mock_date)
+        parcelas = [
+            (1, date(2026, 3, 10), 3),
+            (2, date(2026, 4, 10), 3),
+            (9, date(2026, 5, 10), 3),  # inconsistente: 9 de 3
+        ]
+        for num, venc, total in parcelas:
+            db.add(Expense(
+                user_id=test_user.id,
+                mes_referencia=date(venc.year, venc.month, 1),
+                nome="Dado Ruim",
+                valor=100.00,
+                vencimento=venc,
+                parcela_atual=num,
+                parcela_total=total,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        p = result["parcelas"][0]
+        assert p["mes_termino"] == date(2026, 5, 1)  # ultimo vencimento no banco
+
+    def test_termino_fallback_without_parcela_atual(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-050: Sem parcela_atual em nenhuma linha (dado legado), mantem a
+        estimativa a partir de mes_inicio.
+        """
+        self._mock_today(mock_date)
+        for month in (3, 4):
+            db.add(Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, month, 1),
+                nome="Legado Sem Numero",
+                valor=250.00,
+                vencimento=date(2026, month, 12),
+                parcela_atual=None,
+                parcela_total=6,
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
+            ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        p = result["parcelas"][0]
+        assert p["parcelas_restantes"] == 6
+        # Estimativa: Mar + (6 - 1) = Ago/2026
+        assert p["mes_termino"] == date(2026, 8, 1)
+
+    def test_mid_series_with_paid_installments(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-050: Cadastro a partir do meio com parcelas ja pagas dentro do app —
+        o progresso segue a maior parcela paga, nao a primeira cadastrada.
+        """
+        self._mock_today(mock_date)
+        # Parcelas 4..10 de 10; 4 e 5 (Jan/Fev) pagas, 6..10 (Mar..Jul) pendentes
+        for i in range(4, 11):
+            month = i - 3  # 4 -> Jan ... 10 -> Jul
+            status = ExpenseStatus.PAGO.value if i <= 5 else ExpenseStatus.PENDENTE.value
+            db.add(Expense(
+                user_id=test_user.id,
+                mes_referencia=date(2026, month, 1),
+                nome="Sofa Novo",
+                valor=300.00,
+                vencimento=date(2026, month, 8),
+                parcela_atual=i,
+                parcela_total=10,
+                recorrente=False,
+                status=status,
+            ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        p = result["parcelas"][0]
+        assert p["parcela_atual"] == 5          # maior parcela paga
+        assert p["parcelas_restantes"] == 5     # 6..10
+        assert p["mes_termino"] == date(2026, 7, 1)
+
+    def test_progresso_ignores_inconsistent_parcela_atual(
+        self, mock_date, db, test_user, income_march
+    ):
+        """
+        CR-050: Linha solta com parcela_atual > parcela_total nao pode inflar o
+        progresso a ponto de o parcelamento sumir da projecao como se estivesse
+        quitado (PATCH /expenses nao valida parcela_atual contra parcela_total).
+        """
+        self._mock_today(mock_date)
+        db.add(Expense(
+            user_id=test_user.id,
+            mes_referencia=date(2026, 3, 1),
+            nome="Parcela Inconsistente",
+            valor=100.00,
+            vencimento=date(2026, 3, 10),
+            parcela_atual=9,
+            parcela_total=6,
+            recorrente=False,
+            status=ExpenseStatus.PENDENTE.value,
+        ))
+        db.commit()
+
+        result = get_installment_projection(db, test_user.id)
+
+        assert len(result["parcelas"]) == 1
+        p = result["parcelas"][0]
+        assert p["parcelas_restantes"] == 6
+        assert result["qtd_parcelas_ativas"] == 1
+        assert result["total_restante_todas_parcelas"] == 600.0

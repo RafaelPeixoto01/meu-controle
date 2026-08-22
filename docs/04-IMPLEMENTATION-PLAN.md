@@ -5,7 +5,7 @@
 **PRD Ref:** 01-PRD v3.1
 **Arquitetura Ref:** 02-ARCHITECTURE v2.9
 **Spec Ref:** 03-SPEC v3.2
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046 (Importacao de Extratos — backend F07), CR-047 (Importacao de Extratos — frontend F07), CR-049 (Importacao de Compras Parceladas — F07 E-A)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-004 (Totalizadores por Status), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-011 (Calculadora de Selecao de Despesas), CR-012 (Responsividade Frontend), CR-015 (Agrupamento de Parcelas por Status), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-020 (Card Gastos Planejados), CR-021 (Visao Consolidada de Parcelas Futuras), CR-023 (Remover Pendente da Projecao), CR-024 (Projecao com Datas Reais), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046 (Importacao de Extratos — backend F07), CR-047 (Importacao de Extratos — frontend F07), CR-049 (Importacao de Compras Parceladas — F07 E-A), CR-050 (Fix Previsao de Termino de Parcelamento)
 
 ---
 
@@ -44,6 +44,7 @@
 | CR-047 | Importacao de Extratos/Faturas — frontend (F07; tarefas no CR)                   | CR-T-01 a CR-T-08     | Concluido |
 | CR-048 | Migracao dos servicos de IA para Claude Opus 5 (F06 + F07; tarefas no CR)        | CR-T-01 a CR-T-08     | Concluido |
 | CR-049 | Importacao de Compras Parceladas (F07, item E-A do roadmap v2; tarefas no CR)    | CR-T-01 a CR-T-11     | Concluido |
+| CR-050 | Fix previsao de termino de parcelamento cadastrado do meio (F03; tarefas no CR) | CR-T-01 a CR-T-06     | Concluido |
 
 ---
 
