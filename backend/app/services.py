@@ -511,6 +511,17 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
             ]
             progresso = max(paid_parcela_nums) if paid_parcela_nums else 0
 
+            # CR-050: compra cadastrada a partir do meio (ex.: 6/12) — as parcelas
+            # anteriores a primeira cadastrada foram pagas fora do app, entao contam
+            # como progresso. Sem isso, "restantes" fica inflado (12 em vez de 7) e
+            # diverge do valor "Restante" exibido no card do parcelamento.
+            numeros_cadastrados = [
+                inst.parcela_atual for inst in installments
+                if inst.parcela_atual is not None
+            ]
+            if numeros_cadastrados:
+                progresso = max(progresso, min(numeros_cadastrados) - 1)
+
         parcelas_restantes = parcela_total - progresso
 
         if parcelas_restantes <= 0:
@@ -548,12 +559,30 @@ def get_installment_projection(db: Session, user_id: str, months: int = 12) -> d
             last_venc = max(inst.vencimento for inst in installments)
             mes_termino_from_db = date(last_venc.year, last_venc.month, 1)
 
-            if len(installments) >= parcela_total:
-                # Upfront: todas as parcelas existem, usar último vencimento do banco
+            # CR-050: cada parcela sabe seu proprio numero, entao o mes da ultima
+            # parcela e derivavel de qualquer linha do grupo — inclusive quando a
+            # serie no banco esta incompleta (compra cadastrada a partir de 6/12,
+            # ou parcelas futuras ainda nao replicadas). Ancorar nos dados reais
+            # evita a estimativa a partir do mes corrente, que jogava o termino
+            # para frente em (parcela_atual_inicial - 1) meses.
+            meses_termino_ancorados = [
+                add_months(
+                    date(inst.vencimento.year, inst.vencimento.month, 1),
+                    parcela_total - inst.parcela_atual,
+                )
+                for inst in installments
+                if inst.parcela_atual is not None and inst.parcela_atual <= parcela_total
+            ]
+
+            if meses_termino_ancorados:
+                # max com o banco: cobre grupos homonimos (mesmo nome e mesmo
+                # parcela_total) cujas linhas se somaram no agrupamento
+                mes_termino = max(max(meses_termino_ancorados), mes_termino_from_db)
+            elif len(installments) >= parcela_total:
+                # Upfront sem parcela_atual: usar último vencimento do banco
                 mes_termino = mes_termino_from_db
             else:
-                # Incremental: parcelas futuras podem não estar no banco ainda
-                # Estimar mes_termino = mes_inicio + parcelas_restantes - 1 meses
+                # Dado legado sem parcela_atual: estimar a partir do mes_inicio
                 mes_termino = mes_inicio
                 for _ in range(parcelas_restantes - 1):
                     mes_termino = get_next_month(mes_termino)
