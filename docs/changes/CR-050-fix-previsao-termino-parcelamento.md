@@ -2,7 +2,7 @@
 
 **Versão:** 1.0  
 **Data:** 2026-08-22  
-**Status:** Em Implementação  
+**Status:** Concluído  
 **Autor:** Rafael Peixoto  
 **Prioridade:** Alta
 
@@ -158,9 +158,9 @@ expandir o grupo — e `parcelas_restantes` coerente com o "Restante" do card.
 - [x] Revisão de código pré-merge (`/code-review` no diff da branch) executada — ver seção 8.2
 - [x] Revisão de segurança — **N/A**: sem endpoint novo ou alterado, sem mudança em auth/tokens/ownership, sem nova dependência; apenas cálculo interno num serviço já autenticado e filtrado por `user_id`
 - [x] Documentos afetados foram atualizados
-- [ ] CI verde após o push (`gh run watch`) — fecha em commit de follow-up (CR-037)
+- [x] CI verde após o push — run 32594828107 (Backend pytest + Frontend tsc/eslint) ✅
 
-> **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. O CI verde depende do push, então o CR permanece "Em Implementação" até o follow-up.
+> **Regra de conclusão (CR-037):** todos os critérios acima fechados — CR marcado como Concluído.
 
 ### 8.1 Validação Runtime
 
@@ -263,3 +263,4 @@ sondagem antes da decisão.
 | 2026-08-22 | Rafael Peixoto | Implementação iniciada |
 | 2026-08-22 | Rafael Peixoto | Implementação concluída — âncora de `mes_termino` + `progresso`, 6 testes novos |
 | 2026-08-22 | Rafael Peixoto | Validação runtime (API + Playwright) e `/code-review` (2 findings: 1 corrigido, 1 justificado) |
+| 2026-08-22 | Rafael Peixoto | Merge em master, CI verde (run 32594828107) — status: ✅ Concluído |
