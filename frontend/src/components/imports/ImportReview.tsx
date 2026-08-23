@@ -25,6 +25,11 @@ import { useDailyExpensesCategories } from "../../hooks/useDailyExpenses";
 import ImportReviewGroup from "./ImportReviewGroup";
 import ImportReviewToolbar from "./ImportReviewToolbar";
 
+// Referencias estaveis: `?? {}` inline criaria um objeto novo a cada render
+// enquanto a query de categorias nao resolve, anulando o memo da linha.
+const EMPTY_CATEGORIAS: Record<string, string[]> = {};
+const EMPTY_METODOS: string[] = [];
+
 interface ImportReviewProps {
   batch: ImportBatch;
   matchTargets: Record<string, Expense>;
@@ -45,8 +50,8 @@ export default function ImportReview({
   isDiscarding,
 }: ImportReviewProps) {
   const { data: categoriesData } = useDailyExpensesCategories();
-  const categorias = categoriesData?.categorias ?? {};
-  const metodosPagamento = categoriesData?.metodos_pagamento ?? [];
+  const categorias = categoriesData?.categorias ?? EMPTY_CATEGORIAS;
+  const metodosPagamento = categoriesData?.metodos_pagamento ?? EMPTY_METODOS;
 
   const [decisions, setDecisions] = useState<Record<string, ReviewDecision>>(() =>
     buildInitialDecisions(batch)
@@ -174,6 +179,20 @@ export default function ImportReview({
         onBulkIncluir={handleBulkIncluir}
       />
 
+      {filtroAtivo && visiveisTx.length === 0 ? (
+        <div className="bg-surface rounded-2xl shadow-sm border border-slate-100/80 p-8 text-center space-y-3">
+          <p className="text-sm text-text-muted">Nenhuma transação corresponde ao filtro.</p>
+          <button
+            type="button"
+            onClick={() => setFilter(EMPTY_FILTER)}
+            className="px-4 py-2 text-sm font-semibold text-primary border border-primary-light
+              rounded-lg hover:bg-primary/10 transition-colors duration-100"
+          >
+            Limpar filtro
+          </button>
+        </div>
+      ) : (
+        <>
       <ImportReviewGroup
         titulo="Novos gastos diários"
         hint={null}
@@ -209,6 +228,8 @@ export default function ImportReview({
         totalItens={groups.duplicadas.length}
         {...groupProps}
       />
+        </>
+      )}
 
       <div className="bg-surface rounded-2xl shadow-sm border border-slate-100/80 p-5 space-y-3">
         {confirmError && (
@@ -221,7 +242,7 @@ export default function ImportReview({
         )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold text-text-muted">
-            {incluidas} de {batch.transacoes.length} transações selecionadas
+            {incluidas} de {batch.transacoes.length} transações serão importadas
           </p>
           <div className="flex flex-wrap justify-end gap-3">
             <button
