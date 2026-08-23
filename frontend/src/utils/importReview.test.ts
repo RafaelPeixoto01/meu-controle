@@ -10,6 +10,17 @@ import {
   nextStageForBatch,
   validateDecision,
   type ReviewDecision,
+  // CR-053
+  EMPTY_FILTER,
+  applyBulkPatch,
+  bulkTargetIds,
+  decisionValor,
+  filterGroups,
+  isFilterActive,
+  matchesFilter,
+  normalizeForSearch,
+  sumTransactions,
+  type ReviewGroupKey,
 } from "./importReview";
 
 function makeTx(overrides: Partial<ImportTransaction>): ImportTransaction {
@@ -377,5 +388,261 @@ describe("nextStageForBatch (CR-052)", () => {
   it("sem lote, fica no upload", () => {
     expect(nextStageForBatch(null)).toBe("upload");
     expect(nextStageForBatch(undefined)).toBe("upload");
+  });
+});
+
+// ========== CR-053: filtro, totais e edicao em massa ==========
+
+describe("normalizeForSearch", () => {
+  it.each([
+    ["PADARIA", "padaria"],
+    ["Alimentação", "alimentacao"],
+    ["  UBER   *TRIP  ", "uber *trip"],
+    ["Cartão de Crédito", "cartao de credito"],
+    ["", ""],
+  ])("normaliza %j em %j", (entrada, esperado) => {
+    expect(normalizeForSearch(entrada)).toBe(esperado);
+  });
+});
+
+describe("matchesFilter", () => {
+  const tx = makeTx({ id: "tx-1", descricao: "PADARIA STELLA*SP" });
+  const decision = (descricao: string): ReviewDecision =>
+    buildInitialDecisions(makeBatch([makeTx({ id: "tx-1", descricao })]))["tx-1"];
+
+  it("query vazia casa tudo", () => {
+    expect(matchesFilter(tx, decision("qualquer"), "")).toBe(true);
+    expect(matchesFilter(tx, decision("qualquer"), "   ")).toBe(true);
+  });
+
+  it("casa a descricao original da IA", () => {
+    expect(matchesFilter(tx, decision("Padaria Stella"), "stella*sp")).toBe(true);
+  });
+
+  it("casa a descricao editada pelo usuario", () => {
+    expect(matchesFilter(tx, decision("Padaria da esquina"), "esquina")).toBe(true);
+  });
+
+  it("e insensivel a acento e caixa", () => {
+    const comAcento = makeTx({ id: "tx-1", descricao: "MERCADO ALIMENTAÇÃO" });
+    expect(matchesFilter(comAcento, undefined, "alimentacao")).toBe(true);
+    expect(matchesFilter(comAcento, undefined, "ALIMENTAÇÃO")).toBe(true);
+  });
+
+  it("nao casa o que nao existe em nenhuma das duas descricoes", () => {
+    expect(matchesFilter(tx, decision("Padaria Stella"), "netshoes")).toBe(false);
+  });
+
+  it("funciona sem decisao (linha ainda nao inicializada)", () => {
+    expect(matchesFilter(tx, undefined, "padaria")).toBe(true);
+  });
+});
+
+describe("filterGroups", () => {
+  const padaria = makeTx({ id: "t1", descricao: "PADARIA STELLA" });
+  const uber = makeTx({ id: "t2", descricao: "UBER *TRIP" });
+  const luz = makeTx({
+    id: "t3",
+    descricao: "ENEL LUZ",
+    classificacao: "match_planejado",
+    expense_id_sugerido: "e1",
+  });
+  const duplicada = makeTx({ id: "t4", descricao: "UBER *TRIP", status: "duplicada" });
+  const batch = makeBatch([padaria, uber, luz, duplicada]);
+  const groups = groupTransactions(batch);
+  const decisions = buildInitialDecisions(batch);
+
+  it("sem filtro, devolve todos os grupos intactos", () => {
+    const out = filterGroups(groups, decisions, EMPTY_FILTER);
+    expect(out.novos.map((t) => t.id)).toEqual(["t1", "t2"]);
+    expect(out.matches.map((t) => t.id)).toEqual(["t3"]);
+    expect(out.duplicadas.map((t) => t.id)).toEqual(["t4"]);
+  });
+
+  it("filtra por texto atravessando todos os grupos", () => {
+    const out = filterGroups(groups, decisions, { query: "uber", grupos: [] });
+    expect(out.novos.map((t) => t.id)).toEqual(["t2"]);
+    expect(out.matches).toEqual([]);
+    expect(out.duplicadas.map((t) => t.id)).toEqual(["t4"]);
+  });
+
+  it("filtra por grupo", () => {
+    const out = filterGroups(groups, decisions, { query: "", grupos: ["matches"] });
+    expect(out.matches.map((t) => t.id)).toEqual(["t3"]);
+    expect(out.novos).toEqual([]);
+    expect(out.duplicadas).toEqual([]);
+  });
+
+  it("combina texto e grupo", () => {
+    const out = filterGroups(groups, decisions, { query: "uber", grupos: ["novos"] });
+    expect(out.novos.map((t) => t.id)).toEqual(["t2"]);
+    expect(out.duplicadas).toEqual([]);
+  });
+
+  it("nao muta nem os grupos nem as decisoes", () => {
+    const antes = JSON.stringify({ groups, decisions });
+    filterGroups(groups, decisions, { query: "uber", grupos: ["novos"] });
+    expect(JSON.stringify({ groups, decisions })).toBe(antes);
+  });
+});
+
+describe("isFilterActive", () => {
+  it.each([
+    [{ query: "", grupos: [] as ReviewGroupKey[] }, false],
+    [{ query: "   ", grupos: [] as ReviewGroupKey[] }, false],
+    [{ query: "uber", grupos: [] as ReviewGroupKey[] }, true],
+    [{ query: "", grupos: ["novos"] as ReviewGroupKey[] }, true],
+  ])("%j resulta em %s", (filtro, esperado) => {
+    expect(isFilterActive(filtro)).toBe(esperado);
+  });
+});
+
+describe("decisionValor", () => {
+  const tx = makeTx({ id: "t1", valor: 23.5 });
+  const comValor = (valor: string): ReviewDecision => ({
+    ...buildInitialDecisions(makeBatch([tx]))["t1"],
+    valor,
+  });
+
+  it.each([
+    ["42.90", 42.9],
+    ["", 23.5],
+    ["abc", 23.5],
+    ["0", 23.5],
+    ["-5", 23.5],
+  ])("valor %j resulta em %s", (valor, esperado) => {
+    expect(decisionValor(tx, comValor(valor))).toBe(esperado);
+  });
+
+  it("sem decisao, usa o valor da IA", () => {
+    expect(decisionValor(tx, undefined)).toBe(23.5);
+  });
+});
+
+describe("sumTransactions", () => {
+  const t1 = makeTx({ id: "t1", valor: 10.1 });
+  const t2 = makeTx({ id: "t2", valor: 20.2 });
+  const ignorada = makeTx({ id: "t3", valor: 99, classificacao: "ignorar" });
+  const batch = makeBatch([t1, t2, ignorada]);
+  const decisions = buildInitialDecisions(batch);
+
+  it("soma todas quando onlyIncluded nao e pedido", () => {
+    expect(sumTransactions(batch.transacoes, decisions)).toBe(129.3);
+  });
+
+  it("soma so as incluidas quando pedido (ignorada nasce desmarcada)", () => {
+    expect(sumTransactions(batch.transacoes, decisions, { onlyIncluded: true })).toBe(30.3);
+  });
+
+  it("usa o valor editado", () => {
+    const editado = { ...decisions, t1: { ...decisions.t1, valor: "100" } };
+    expect(sumTransactions([t1, t2], editado)).toBe(120.2);
+  });
+
+  it("lista vazia soma zero", () => {
+    expect(sumTransactions([], decisions)).toBe(0);
+  });
+});
+
+describe("bulkTargetIds", () => {
+  const t1 = makeTx({ id: "t1", descricao: "UBER A" });
+  const t2 = makeTx({ id: "t2", descricao: "UBER B" });
+  const ignorada = makeTx({ id: "t3", descricao: "UBER C", classificacao: "ignorar" });
+  const batch = makeBatch([t1, t2, ignorada]);
+  const groups = groupTransactions(batch);
+  const decisions = buildInitialDecisions(batch);
+
+  it("pega so as incluidas", () => {
+    expect(bulkTargetIds(groups, decisions)).toEqual(["t1", "t2"]);
+  });
+
+  it("respeita o filtro aplicado antes", () => {
+    const visiveis = filterGroups(groups, decisions, { query: "uber a", grupos: [] });
+    expect(bulkTargetIds(visiveis, decisions)).toEqual(["t1"]);
+  });
+
+  it("linha resgatada pelo usuario entra no alvo", () => {
+    const resgatada = { ...decisions, t3: { ...decisions.t3, incluida: true } };
+    expect(bulkTargetIds(groups, resgatada)).toEqual(["t1", "t2", "t3"]);
+  });
+
+  it("nenhuma incluida devolve lista vazia", () => {
+    const nenhuma = Object.fromEntries(
+      Object.entries(decisions).map(([id, d]) => [id, { ...d, incluida: false }])
+    );
+    expect(bulkTargetIds(groups, nenhuma)).toEqual([]);
+  });
+});
+
+describe("applyBulkPatch", () => {
+  const t1 = makeTx({ id: "t1" });
+  const t2 = makeTx({ id: "t2" });
+  const t3 = makeTx({ id: "t3" });
+  const base = buildInitialDecisions(makeBatch([t1, t2, t3]));
+
+  it("aplica categoria e subcategoria juntas", () => {
+    const out = applyBulkPatch(base, ["t1", "t2"], {
+      categoria: "Lazer e Entretenimento",
+      subcategoria: "Streaming",
+    });
+    expect(out.t1.categoria).toBe("Lazer e Entretenimento");
+    expect(out.t1.subcategoria).toBe("Streaming");
+    expect(out.t2.subcategoria).toBe("Streaming");
+  });
+
+  it("categoria sozinha zera a subcategoria (cascata)", () => {
+    const out = applyBulkPatch(base, ["t1"], { categoria: "Lazer e Entretenimento" });
+    expect(out.t1.categoria).toBe("Lazer e Entretenimento");
+    expect(out.t1.subcategoria).toBe("");
+  });
+
+  it("subcategoria sozinha nao mexe na categoria", () => {
+    const out = applyBulkPatch(base, ["t1"], { subcategoria: "Supermercado" });
+    expect(out.t1.categoria).toBe("Alimentação");
+    expect(out.t1.subcategoria).toBe("Supermercado");
+  });
+
+  it("aplica metodo de pagamento sem tocar na categoria", () => {
+    const out = applyBulkPatch(base, ["t1"], { metodoPagamento: "Pix" });
+    expect(out.t1.metodoPagamento).toBe("Pix");
+    expect(out.t1.subcategoria).toBe("Padaria");
+  });
+
+  it("aplica acao criar_gasto_diario", () => {
+    const comMatch = {
+      ...base,
+      t1: { ...base.t1, acao: "atualizar_planejado" as const, expenseId: "e1" },
+    };
+    const out = applyBulkPatch(comMatch, ["t1"], { acao: "criar_gasto_diario" });
+    expect(out.t1.acao).toBe("criar_gasto_diario");
+  });
+
+  it("aplica incluida em lote nos dois sentidos", () => {
+    const desmarcada = applyBulkPatch(base, ["t1"], { incluida: false });
+    expect(desmarcada.t1.incluida).toBe(false);
+    expect(applyBulkPatch(desmarcada, ["t1"], { incluida: true }).t1.incluida).toBe(true);
+  });
+
+  it("nao toca em ids fora da lista", () => {
+    const out = applyBulkPatch(base, ["t1"], { metodoPagamento: "Pix" });
+    expect(out.t2).toBe(base.t2);
+    expect(out.t3).toBe(base.t3);
+  });
+
+  it("nao muta o objeto original", () => {
+    const antes = JSON.stringify(base);
+    applyBulkPatch(base, ["t1", "t2"], { categoria: "Lazer e Entretenimento" });
+    expect(JSON.stringify(base)).toBe(antes);
+  });
+
+  it("patch vazio ou sem ids devolve o mesmo objeto", () => {
+    expect(applyBulkPatch(base, [], { metodoPagamento: "Pix" })).toBe(base);
+    expect(applyBulkPatch(base, ["t1"], {})).toBe(base);
+    expect(applyBulkPatch(base, ["t1"], { categoria: undefined })).toBe(base);
+  });
+
+  it("id inexistente e ignorado sem quebrar", () => {
+    const out = applyBulkPatch(base, ["nao-existe"], { metodoPagamento: "Pix" });
+    expect(out["nao-existe"]).toBeUndefined();
   });
 });
