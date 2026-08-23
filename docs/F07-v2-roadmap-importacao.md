@@ -1,10 +1,10 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.3
+**Versão:** 1.4
 **Data:** 2026-08-22
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
-**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono)
+**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa)
 
 ---
 
@@ -125,13 +125,17 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 ---
 
-### E-C — Memória de categorização e revisão em massa
+### E-C — Memória de categorização e revisão em massa 🟡 Parcial
 
 | Campo | Valor |
 |-------|-------|
 | Lacuna | L2 |
 | Complexidade | Alta (migration + serviço + retrabalho da tela de revisão) |
 | Depende de | E-A (a classificação nova precisa estar estável no prompt) |
+| Frente **revisão em massa** | ✅ [CR-053](changes/CR-053-revisao-em-massa-importacao.md) — frontend puro, sem migration |
+| Frente **memória de categorização** | ⬜ Aberta — próximo CR |
+
+> **Por que dividido.** As duas frentes são independentes: a revisão em massa é frontend puro (busca, filtro, edição em lote, totais) e a memória é backend + migration. Separá-las manteve cada CR em complexidade Média, entregou valor na importação seguinte sem risco de banco, e deixou a tela de revisão já refatorada em Row/Group/Toolbar para o badge "aprendido" da memória pousar em cima.
 
 **Problema.** A IA erra as mesmas descrições todo mês, e a revisão de uma fatura com 40–80 linhas é feita uma a uma.
 
@@ -142,11 +146,18 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 - Aplicação dentro de `validate_ai_result`, depois da IA: regra com match sobrescreve categoria/subcategoria/método e marca a origem do palpite, para a revisão sinalizar "aprendido" — o usuário precisa saber quando o valor não veio do modelo.
 - Sinergia barata: injetar as top-N regras no prompt como few-shot, cobrindo o que o match exato não pega.
 
-**Desenho — revisão em massa:**
+**Desenho — revisão em massa:** ✅ entregue no CR-053
 
 - Seleção múltipla de linhas → aplicar categoria/método/ação em lote.
 - Busca e filtro por texto/grupo.
 - Total por grupo e total selecionado (hoje não há nenhum somatório na revisão) — permite bater a soma com o valor da fatura de olho, enquanto a reconciliação automática da E-D não existe.
+
+> **Como ficou (CR-053).** Fonte da verdade: [spec F07 — Frontend](specs/10-importacao-extratos.md). Três pontos saíram diferentes deste desenho inicial:
+> - **Não há seleção múltipla; o filtro É a seleção.** O checkbox da linha já significa "incluir na importação"; um segundo checkbox criaria dois eixos concorrentes em telas de até 80 linhas, e um "selecionar todas" varreria ignoradas e duplicadas que nascem desmarcadas de propósito. O bulk atua sobre as linhas **visíveis e incluídas**, e a barra diz esse número antes de aplicar.
+> - **`acao` em lote só aceita `criar_gasto_diario`.** As outras duas exigem dado por linha (`expenseId`, numeração da parcela) e em lote produziriam N linhas que não validam.
+> - **"Marcar em lote" nunca atinge duplicadas.** Elas costumam vir com categoria e método completos da importação anterior, então passariam na validação e seriam regravadas — dobrando o lançamento. Resgate de duplicada continua linha a linha.
+>
+> Além disso: os cinco subtotais somam exatamente o total do cabeçalho (só linhas incluídas), o valor exibido na linha é o editado, e um confirm que falha com linha de erro oculta pelo filtro **limpa o filtro sozinho**.
 
 **Riscos:**
 
@@ -194,7 +205,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 |-------|------|----------------------|
 | 1º | **E-A** ✅ | Maior valor percebido e a única isolada no par revisão/confirm — não depende de nada |
 | 2º | **E-B** ✅ | Muda o contrato do upload; feito cedo, todo o trabalho de UI seguinte já se apoia na forma final |
-| 3º | **E-C** | As regras de categorização só fazem sentido depois que a classificação nova da E-A estabilizou o prompt |
+| 3º | **E-C** 🟡 | Dividida: a revisão em massa saiu no CR-053 (frontend puro, sem dependência real da E-A). A memória de categorização segue aberta e essa sim depende da E-A, porque as regras só fazem sentido depois que a classificação nova estabilizou o prompt |
 | 4º | **E-D** | O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras); antes disso garantiria retrabalho |
 
 Cada evolução vira um CR próprio no momento da implementação (numeração sequencial a partir de CR-049, via `/sdd-pipeline`). Este roadmap **não** reserva os números: CRs criados com antecedência envelhecem antes de serem executados.
@@ -245,7 +256,8 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 |----|------|-----------|------------|-----------|
 | E-A | Compras parceladas ✅ CR-049 | Alta | — | Sim (010) |
 | E-B | Upload assíncrono ✅ CR-052 | Alta | — | Sim (011) |
-| E-C | Memória de categorização + revisão em massa | Alta | E-A | Sim |
+| E-C | Revisão em massa ✅ CR-053 | Alta | E-A | Não |
+| E-C | Memória de categorização | Alta | E-A | Sim |
 | E-D | Reconciliação, histórico e desfazer | Alta | E-A | Sim |
 | B-1 | Importar OFX/CSV | Baixa | — | Talvez |
 | B-2 | Múltiplos arquivos + drag & drop | Baixa | E-B ✅ | Não |
@@ -266,3 +278,4 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | 2026-08-16 | Claude | E-A implementada no CR-049 (RN-044/045/046). Nota: a `data` da fatura e a da COMPRA — a parcela k vence em compra + (k-1) meses |
 | 2026-08-16 | Claude | E-A reduzida a compras parceladas — classificação de receitas retirada do roadmap por decisão do autor; RN-041 permanece inalterada |
 | 2026-08-22 | Claude | E-B implementada no CR-052 (RN-047/048). Nota: a janela do lote órfão é 30 min — precisa ficar acima do pior caso da extração (~27 min), senão mata task viva |
+| 2026-08-22 | Claude | E-C dividida em duas frentes; a de revisão em massa saiu no CR-053 (frontend puro, sem migration). Nota: o filtro é a seleção — não há checkbox de seleção por linha —, e "marcar em lote" exclui duplicadas para não dobrar lançamento. A frente de memória de categorização segue aberta |

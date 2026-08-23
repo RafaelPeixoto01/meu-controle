@@ -4,7 +4,7 @@
 **Data:** 2026-08-22
 **Status:** Aprovado
 **Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052, CR-053
 
 ---
 
@@ -635,3 +635,5 @@ Os itens abaixo **nao** estao no escopo atual:
 
 *Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7. UI entregue no CR-047 (mesma data) — conteudo do RF-21 ja cobria a feature completa.*
 *Atualizado para v3.3 em 2026-08-22. CR-052: upload assincrono da importacao (F07, item E-B do roadmap v2) — `POST /api/imports` responde 202 e a extracao roda em `BackgroundTasks`; RN-047 e RN-048 novas; status de lote `processando` e `erro` com `erro_mensagem`. Nenhuma regra de classificacao ou confirmacao alterada.*
+
+*Atualizado para v3.4 em 2026-08-22. CR-053: revisao em massa da importacao (F07, item E-C do roadmap v2 — frente frontend). A tela de revisao ganhou busca por descricao, filtro por grupo, edicao em lote de categoria/subcategoria/metodo/acao e totais por grupo, por alvo e por lote. **Sem RN nova**: e afordancia de UI, nao regra de negocio — nenhum endpoint, schema ou contrato de confirmacao foi alterado, e toda a validacao do backend segue valendo.*
