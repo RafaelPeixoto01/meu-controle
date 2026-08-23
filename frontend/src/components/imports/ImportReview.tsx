@@ -1,18 +1,29 @@
 // CR-047 (F07): tela de revisao de uma importacao — o usuario confere,
 // edita e escolhe o destino de cada transacao antes de gravar.
-// CR-053: linha e grupo viraram componentes proprios; aqui ficam so estado e layout.
-import { useCallback, useState } from "react";
+// CR-053: linha e grupo viraram componentes proprios; aqui ficam so estado e
+// layout, mais o filtro (que e a selecao) e a edicao em massa.
+import { useCallback, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { Expense, ImportBatch, ImportConfirmRequest } from "../../types";
 import {
+  EMPTY_FILTER,
+  applyBulkPatch,
   buildConfirmPayload,
   buildInitialDecisions,
+  bulkTargetIds,
+  filterGroups,
+  flattenGroups,
   groupTransactions,
+  isFilterActive,
+  sumTransactions,
   validateDecision,
+  type BulkPatch,
   type ReviewDecision,
+  type ReviewFilter,
 } from "../../utils/importReview";
 import { useDailyExpensesCategories } from "../../hooks/useDailyExpenses";
 import ImportReviewGroup from "./ImportReviewGroup";
+import ImportReviewToolbar from "./ImportReviewToolbar";
 
 interface ImportReviewProps {
   batch: ImportBatch;
@@ -41,9 +52,25 @@ export default function ImportReview({
     buildInitialDecisions(batch)
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState<ReviewFilter>(EMPTY_FILTER);
 
-  const groups = groupTransactions(batch);
-  const included = Object.values(decisions).filter((d) => d.incluida).length;
+  const groups = useMemo(() => groupTransactions(batch), [batch]);
+  const filtroAtivo = isFilterActive(filter);
+  // filterGroups filtra so a lista de render: `decisions` nunca e tocado, entao
+  // linha escondida preserva a decisao e continua indo no payload do confirm.
+  const visibleGroups = useMemo(
+    () => (filtroAtivo ? filterGroups(groups, decisions, filter) : groups),
+    [filtroAtivo, groups, decisions, filter]
+  );
+
+  const incluidas = Object.values(decisions).filter((d) => d.incluida).length;
+  const totalIncluidas = sumTransactions(batch.transacoes, decisions, { onlyIncluded: true });
+  const visiveisTx = flattenGroups(visibleGroups);
+  const alvoIds = bulkTargetIds(visibleGroups, decisions);
+  const totalAlvo = sumTransactions(
+    visiveisTx.filter((tx) => decisions[tx.id]?.incluida),
+    decisions
+  );
 
   // CR-053: estavel (so usa updaters de setState), para o React.memo da linha valer
   const updateDecision = useCallback((txId: string, patch: Partial<ReviewDecision>) => {
@@ -56,6 +83,27 @@ export default function ImportReview({
       return next;
     });
   }, []);
+
+  function applyToIds(ids: string[], patch: BulkPatch) {
+    if (ids.length === 0) return;
+    setDecisions((prev) => applyBulkPatch(prev, ids, patch));
+    // Editar em lote invalida os erros das linhas afetadas, como na edicao unitaria
+    setErrors((prev) => {
+      const next = { ...prev };
+      for (const id of ids) delete next[id];
+      return next;
+    });
+  }
+
+  function handleBulkApply(patch: BulkPatch) {
+    applyToIds(alvoIds, patch);
+  }
+
+  function handleBulkIncluir(incluida: boolean) {
+    // Marcar atinge TODAS as visiveis; desmarcar, so as que estao incluidas
+    const ids = incluida ? visiveisTx.map((tx) => tx.id) : alvoIds;
+    applyToIds(ids, { incluida });
+  }
 
   function handleConfirm() {
     const newErrors: Record<string, string> = {};
@@ -78,11 +126,20 @@ export default function ImportReview({
       }
     }
     setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+    if (Object.keys(newErrors).length > 0) {
+      // CR-053: sem isso o usuario leria "corrija os campos destacados" sem
+      // nenhum campo destacado na tela, porque o filtro escondeu a linha.
+      const oculta = Object.keys(newErrors).some(
+        (id) => !visiveisTx.some((tx) => tx.id === id)
+      );
+      if (oculta) setFilter(EMPTY_FILTER);
+      return;
+    }
     onConfirm(buildConfirmPayload(batch, decisions));
   }
 
   const groupProps = {
+    filtroAtivo,
     decisions,
     errors,
     categorias,
@@ -94,44 +151,62 @@ export default function ImportReview({
   return (
     <div className="space-y-6">
       <div className="bg-surface rounded-2xl shadow-sm border border-slate-100/80 p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-bold text-text">Revisar importação</h2>
-            <p className="text-sm text-text-muted">
-              {batch.filename}
-              {batch.banco_detectado ? ` · ${batch.banco_detectado}` : ""}
-              {batch.tipo_documento ? ` · ${batch.tipo_documento}` : ""}
-            </p>
-          </div>
-          <p className="text-sm font-semibold text-text-muted">
-            {included} de {batch.transacoes.length} transações selecionadas
-          </p>
-        </div>
+        <h2 className="text-lg font-bold text-text">Revisar importação</h2>
+        <p className="text-sm text-text-muted">
+          {batch.filename}
+          {batch.banco_detectado ? ` · ${batch.banco_detectado}` : ""}
+          {batch.tipo_documento ? ` · ${batch.tipo_documento}` : ""}
+        </p>
       </div>
 
-      <ImportReviewGroup titulo="Novos gastos diários" hint={null} itens={groups.novos} {...groupProps} />
+      <ImportReviewToolbar
+        filter={filter}
+        onFilterChange={setFilter}
+        incluidas={incluidas}
+        totalTransacoes={batch.transacoes.length}
+        totalIncluidas={totalIncluidas}
+        alvoIds={alvoIds}
+        totalAlvo={totalAlvo}
+        visiveis={visiveisTx.length}
+        categorias={categorias}
+        metodosPagamento={metodosPagamento}
+        onBulkApply={handleBulkApply}
+        onBulkIncluir={handleBulkIncluir}
+      />
+
+      <ImportReviewGroup
+        titulo="Novos gastos diários"
+        hint={null}
+        itens={visibleGroups.novos}
+        totalItens={groups.novos.length}
+        {...groupProps}
+      />
       <ImportReviewGroup
         titulo="Conciliações com gastos planejados"
         hint="Ao confirmar, o gasto planejado escolhido é marcado como Pago com o valor da transação."
-        itens={groups.matches}
+        itens={visibleGroups.matches}
+        totalItens={groups.matches.length}
         {...groupProps}
       />
       <ImportReviewGroup
         titulo="Compras parceladas"
         hint="Viram gastos planejados com todas as parcelas. A parcela desta fatura entra como Paga; as futuras, como Pendentes."
-        itens={groups.parcelamentos}
+        itens={visibleGroups.parcelamentos}
+        totalItens={groups.parcelamentos.length}
         {...groupProps}
       />
       <ImportReviewGroup
         titulo="Ignoradas pela IA"
         hint="Receitas, transferências e pagamento de fatura. Marque para resgatar alguma."
-        itens={groups.ignoradas}
+        itens={visibleGroups.ignoradas}
+        totalItens={groups.ignoradas.length}
         {...groupProps}
       />
       <ImportReviewGroup
         titulo="Duplicadas"
         hint="Já importadas em uploads anteriores. Ficam de fora, a menos que você marque."
-        itens={groups.duplicadas}
+        itens={visibleGroups.duplicadas}
+        totalItens={groups.duplicadas.length}
         {...groupProps}
       />
 
@@ -144,29 +219,34 @@ export default function ImportReview({
             Corrija os campos destacados antes de confirmar.
           </p>
         )}
-        <div className="flex flex-wrap justify-end gap-3">
-          <button
-            type="button"
-            onClick={onDiscard}
-            disabled={isConfirming || isDiscarding}
-            className="px-5 py-2.5 text-text-muted border border-border rounded-xl
-              hover:bg-slate-50 active:scale-[0.98] transition-all duration-150 font-semibold
-              disabled:opacity-50"
-          >
-            Descartar importação
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={isConfirming || isDiscarding}
-            className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold
-              hover:bg-primary-hover hover:shadow-md hover:shadow-primary/20
-              active:scale-[0.98] transition-all duration-150 disabled:opacity-50
-              inline-flex items-center gap-2"
-          >
-            {isConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
-            Confirmar importação
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-text-muted">
+            {incluidas} de {batch.transacoes.length} transações selecionadas
+          </p>
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onDiscard}
+              disabled={isConfirming || isDiscarding}
+              className="px-5 py-2.5 text-text-muted border border-border rounded-xl
+                hover:bg-slate-50 active:scale-[0.98] transition-all duration-150 font-semibold
+                disabled:opacity-50"
+            >
+              Descartar importação
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={isConfirming || isDiscarding}
+              className="px-6 py-2.5 bg-primary text-white rounded-xl font-semibold
+                hover:bg-primary-hover hover:shadow-md hover:shadow-primary/20
+                active:scale-[0.98] transition-all duration-150 disabled:opacity-50
+                inline-flex items-center gap-2"
+            >
+              {isConfirming && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirmar importação
+            </button>
+          </div>
         </div>
       </div>
     </div>
