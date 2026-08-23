@@ -155,6 +155,8 @@ export default function ImportView() {
 
       {stage === "review" && batch && (
         <ImportReview
+          // Garante decisions reinicializadas se o lote trocar sem desmontar
+          key={batch.id}
           batch={batch}
           matchTargets={matchTargetsQuery.data ?? {}}
           isConfirming={confirmMutation.isPending}

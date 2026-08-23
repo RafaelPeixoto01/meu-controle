@@ -249,3 +249,162 @@ export function nextStageForBatch(
       return "upload";
   }
 }
+
+// ========== CR-053: filtro, totais e edicao em massa ==========
+
+export type ReviewGroupKey = keyof ReviewGroups;
+
+export const REVIEW_GROUP_KEYS: ReviewGroupKey[] = [
+  "novos",
+  "matches",
+  "parcelamentos",
+  "ignoradas",
+  "duplicadas",
+];
+
+// grupos vazio significa "todos" — evita o estado inutil de nenhum grupo visivel.
+export interface ReviewFilter {
+  query: string;
+  grupos: ReviewGroupKey[];
+}
+
+export const EMPTY_FILTER: ReviewFilter = { query: "", grupos: [] };
+
+export function isFilterActive(filter: ReviewFilter): boolean {
+  return filter.query.trim() !== "" || filter.grupos.length > 0;
+}
+
+// Caixa-baixa, sem acento e com espacos colapsados: numa fatura o usuario digita
+// "alimentacao" e espera casar "Alimentação".
+export function normalizeForSearch(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
+}
+
+// Casa contra a descricao da IA OU a editada pelo usuario: as duas ficam
+// visiveis em momentos diferentes, e filtrar so por uma delas confunde.
+export function matchesFilter(
+  tx: ImportTransaction,
+  decision: ReviewDecision | undefined,
+  query: string
+): boolean {
+  const alvo = normalizeForSearch(query);
+  if (!alvo) return true;
+  const texto = normalizeForSearch(`${tx.descricao} ${decision?.descricao ?? ""}`);
+  return texto.includes(alvo);
+}
+
+// Filtra apenas a lista de RENDER. Nunca toca em `decisions`: uma linha escondida
+// mantem a decisao e continua indo no payload do confirm se estiver incluida.
+export function filterGroups(
+  groups: ReviewGroups,
+  decisions: Record<string, ReviewDecision>,
+  filter: ReviewFilter
+): ReviewGroups {
+  const permitidos = filter.grupos.length > 0 ? new Set(filter.grupos) : null;
+  const out: ReviewGroups = {
+    novos: [],
+    matches: [],
+    parcelamentos: [],
+    ignoradas: [],
+    duplicadas: [],
+  };
+  for (const key of REVIEW_GROUP_KEYS) {
+    if (permitidos && !permitidos.has(key)) continue;
+    out[key] = groups[key].filter((tx) => matchesFilter(tx, decisions[tx.id], filter.query));
+  }
+  return out;
+}
+
+// Valor efetivo da linha: o editado quando e numero finito e positivo, senao o
+// da IA. Campo vazio ou meio-digitado e estado transitorio, nao zero — trata-lo
+// como zero faria os totais piscarem durante a digitacao.
+export function decisionValor(
+  tx: ImportTransaction,
+  decision: ReviewDecision | undefined
+): number {
+  const valor = Number(decision?.valor);
+  return Number.isFinite(valor) && valor > 0 ? valor : tx.valor;
+}
+
+export function sumTransactions(
+  txs: ImportTransaction[],
+  decisions: Record<string, ReviewDecision>,
+  opts: { onlyIncluded?: boolean } = {}
+): number {
+  let total = 0;
+  for (const tx of txs) {
+    const decision = decisions[tx.id];
+    if (opts.onlyIncluded && !decision?.incluida) continue;
+    total += decisionValor(tx, decision);
+  }
+  // Arredonda em centavos para nao acumular drift de ponto flutuante no total
+  return Math.round(total * 100) / 100;
+}
+
+export function flattenGroups(groups: ReviewGroups): ImportTransaction[] {
+  return REVIEW_GROUP_KEYS.flatMap((key) => groups[key]);
+}
+
+// Alvo da edicao em massa: as linhas visiveis (pos-filtro) E incluidas.
+// O filtro E a selecao — nao existe checkbox de selecao separada (CR-053).
+export function bulkTargetIds(
+  visibleGroups: ReviewGroups,
+  decisions: Record<string, ReviewDecision>
+): string[] {
+  return flattenGroups(visibleGroups)
+    .filter((tx) => decisions[tx.id]?.incluida)
+    .map((tx) => tx.id);
+}
+
+// Alvo do "marcar em lote": as visiveis, MENOS as duplicadas. Duplicada costuma
+// vir com categoria/metodo completos da importacao anterior, entao passaria na
+// validacao e seria regravada — dobrando o lancamento. Resgate de duplicada
+// continua sendo linha a linha, que e onde o usuario ve o aviso "ja importada".
+export function bulkIncludeTargetIds(visibleGroups: ReviewGroups): string[] {
+  return flattenGroups(visibleGroups)
+    .filter((tx) => tx.status !== "duplicada")
+    .map((tx) => tx.id);
+}
+
+// `acao` so aceita criar_gasto_diario: as outras duas exigem dado por linha
+// (expenseId / numeracao da parcela) e em lote produziriam N linhas invalidas.
+// `categoria` so entra acompanhada de `subcategoria`: categoria sozinha nunca e
+// valida (o par e obrigatorio no gasto diario e, no parcelado, categoria sem
+// subcategoria invalida uma linha que era valida com as duas vazias).
+export interface BulkPatch {
+  categoria?: string;
+  subcategoria?: string;
+  metodoPagamento?: string;
+  acao?: "criar_gasto_diario";
+  incluida?: boolean;
+}
+
+export function applyBulkPatch(
+  decisions: Record<string, ReviewDecision>,
+  ids: string[],
+  patch: BulkPatch
+): Record<string, ReviewDecision> {
+  const campos = Object.entries(patch).filter(([, valor]) => valor !== undefined);
+  if (ids.length === 0 || campos.length === 0) return decisions;
+
+  const limpo = Object.fromEntries(campos) as Partial<ReviewDecision>;
+  const next = { ...decisions };
+  for (const id of ids) {
+    const atual = next[id];
+    if (!atual) continue;
+    const merged = { ...atual, ...limpo };
+    // Mesma cascata dos selects da linha: trocar de categoria sem informar a
+    // subcategoria zera a subcategoria, que pertence a outra categoria.
+    if (limpo.categoria !== undefined && limpo.subcategoria === undefined) {
+      merged.subcategoria = "";
+    }
+    next[id] = merged;
+  }
+  return next;
+}
