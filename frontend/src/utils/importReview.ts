@@ -362,8 +362,21 @@ export function bulkTargetIds(
     .map((tx) => tx.id);
 }
 
+// Alvo do "marcar em lote": as visiveis, MENOS as duplicadas. Duplicada costuma
+// vir com categoria/metodo completos da importacao anterior, entao passaria na
+// validacao e seria regravada — dobrando o lancamento. Resgate de duplicada
+// continua sendo linha a linha, que e onde o usuario ve o aviso "ja importada".
+export function bulkIncludeTargetIds(visibleGroups: ReviewGroups): string[] {
+  return flattenGroups(visibleGroups)
+    .filter((tx) => tx.status !== "duplicada")
+    .map((tx) => tx.id);
+}
+
 // `acao` so aceita criar_gasto_diario: as outras duas exigem dado por linha
 // (expenseId / numeracao da parcela) e em lote produziriam N linhas invalidas.
+// `categoria` so entra acompanhada de `subcategoria`: categoria sozinha nunca e
+// valida (o par e obrigatorio no gasto diario e, no parcelado, categoria sem
+// subcategoria invalida uma linha que era valida com as duas vazias).
 export interface BulkPatch {
   categoria?: string;
   subcategoria?: string;

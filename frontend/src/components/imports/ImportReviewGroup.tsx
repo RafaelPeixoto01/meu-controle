@@ -38,7 +38,9 @@ export default function ImportReviewGroup({
   // fica visivel dizendo que nao casou nada — some-lo esconderia o motivo.
   if (totalItens === 0) return null;
 
-  const subtotal = sumTransactions(itens, decisions);
+  // onlyIncluded para os cinco subtotais somarem exatamente o total do cabecalho:
+  // sem isso, Ignoradas/Duplicadas exibiriam em negrito dinheiro que nao entra.
+  const subtotal = sumTransactions(itens, decisions, { onlyIncluded: true });
 
   return (
     <section className="space-y-2">

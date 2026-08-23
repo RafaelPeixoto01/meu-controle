@@ -4,7 +4,7 @@
 // deve re-renderizar as outras 79, cada uma com seus selects de categoria.
 import { memo } from "react";
 import type { Expense, ImportTransaction } from "../../types";
-import { describeInstallmentSeries, type ReviewDecision } from "../../utils/importReview";
+import { decisionValor, describeInstallmentSeries, type ReviewDecision } from "../../utils/importReview";
 import { formatBRL, formatDateBR } from "../../utils/format";
 import { inputClass } from "./fieldStyles";
 
@@ -55,7 +55,8 @@ function ImportReviewRowBase({
               {tx.descricao}
             </span>
             <span className="text-sm font-bold text-text tabular-nums">
-              {formatBRL(tx.valor)}
+              {/* CR-053: valor efetivo, para a linha bater com o subtotal do grupo */}
+              {formatBRL(decisionValor(tx, decision))}
             </span>
           </div>
           <p className="text-xs text-text-muted mt-0.5">

@@ -30,7 +30,7 @@ export interface ImportReviewToolbarProps {
   metodosPagamento: string[];
   // Alvo: as linhas visiveis E incluidas
   onBulkApply: (patch: BulkPatch) => void;
-  // Alvo: TODAS as visiveis — marcar so as ja incluidas seria no-op
+  // Alvo: as visiveis menos as duplicadas (ver bulkIncludeTargetIds)
   onBulkIncluir: (incluida: boolean) => void;
 }
 
@@ -54,7 +54,11 @@ export default function ImportReviewToolbar({
 
   const subcategorias = categoria ? categorias[categoria] ?? [] : [];
   const alvo = alvoIds.length;
-  const temPatch = categoria !== "" || metodo !== "";
+  // Categoria sozinha nunca e valida: o par e obrigatorio no gasto diario e, no
+  // parcelado, categoria sem subcategoria invalida uma linha que era valida com
+  // as duas vazias. Entao so habilita quando o par esta completo.
+  const parIncompleto = categoria !== "" && subcategoria === "";
+  const temPatch = (categoria !== "" && subcategoria !== "") || metodo !== "";
 
   function toggleGrupo(key: ReviewGroupKey) {
     const ativos = filter.grupos.includes(key)
@@ -65,9 +69,9 @@ export default function ImportReviewToolbar({
 
   function handleAplicar() {
     const patch: BulkPatch = {};
-    if (categoria) {
+    if (categoria && subcategoria) {
       patch.categoria = categoria;
-      if (subcategoria) patch.subcategoria = subcategoria;
+      patch.subcategoria = subcategoria;
     }
     if (metodo) patch.metodoPagamento = metodo;
     onBulkApply(patch);
@@ -192,6 +196,11 @@ export default function ImportReviewToolbar({
           >
             Aplicar a {alvo} {alvo === 1 ? "linha" : "linhas"}
           </button>
+          {parIncompleto && (
+            <p className="w-full text-xs text-text-muted">
+              Escolha também a subcategoria — categoria sozinha deixaria as linhas inválidas.
+            </p>
+          )}
           <button
             type="button"
             onClick={() => onBulkApply({ acao: "criar_gasto_diario" })}

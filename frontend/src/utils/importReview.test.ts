@@ -13,6 +13,7 @@ import {
   // CR-053
   EMPTY_FILTER,
   applyBulkPatch,
+  bulkIncludeTargetIds,
   bulkTargetIds,
   decisionValor,
   filterGroups,
@@ -644,5 +645,55 @@ describe("applyBulkPatch", () => {
   it("id inexistente e ignorado sem quebrar", () => {
     const out = applyBulkPatch(base, ["nao-existe"], { metodoPagamento: "Pix" });
     expect(out["nao-existe"]).toBeUndefined();
+  });
+});
+
+describe("bulkIncludeTargetIds (finding do code review)", () => {
+  const nova = makeTx({ id: "t1", descricao: "PADARIA" });
+  const ignorada = makeTx({ id: "t2", descricao: "SALARIO", classificacao: "ignorar" });
+  const duplicada = makeTx({ id: "t3", descricao: "PADARIA", status: "duplicada" });
+  const groups = groupTransactions(makeBatch([nova, ignorada, duplicada]));
+
+  it("marcar em lote inclui ignoradas mas NAO duplicadas", () => {
+    // Duplicada costuma vir com categoria/metodo completos: passaria na validacao
+    // e seria regravada, dobrando o lancamento.
+    expect(bulkIncludeTargetIds(groups)).toEqual(["t1", "t2"]);
+  });
+
+  it("resgate de duplicada continua linha a linha", () => {
+    expect(bulkIncludeTargetIds(groups)).not.toContain("t3");
+  });
+
+  it("respeita o filtro aplicado antes", () => {
+    const decisions = buildInitialDecisions(makeBatch([nova, ignorada, duplicada]));
+    const visiveis = filterGroups(groups, decisions, { query: "salario", grupos: [] });
+    expect(bulkIncludeTargetIds(visiveis)).toEqual(["t2"]);
+  });
+});
+
+describe("applyBulkPatch: par categoria+subcategoria (finding do code review)", () => {
+  // Categoria sozinha invalidaria um parcelado que era valido com as duas vazias.
+  // A toolbar so monta o patch com o par completo; este teste fixa o contrato.
+  const parcelado = makeTx({
+    id: "p1", classificacao: "parcelamento", parcela_atual: 3, parcela_total: 10,
+    categoria: null, subcategoria: null,
+  });
+  const base = buildInitialDecisions(makeBatch([parcelado]));
+
+  it("parcelado sem categoria e valido antes do lote", () => {
+    expect(validateDecision(base.p1, CATEGORIAS)).toBeNull();
+  });
+
+  it("par completo mantem o parcelado valido", () => {
+    const out = applyBulkPatch(base, ["p1"], {
+      categoria: "Alimentação",
+      subcategoria: "Padaria",
+    });
+    expect(validateDecision(out.p1, CATEGORIAS)).toBeNull();
+  });
+
+  it("categoria sozinha invalidaria — por isso a toolbar exige o par", () => {
+    const out = applyBulkPatch(base, ["p1"], { categoria: "Alimentação" });
+    expect(validateDecision(out.p1, CATEGORIAS)).not.toBeNull();
   });
 });

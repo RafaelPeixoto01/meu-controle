@@ -10,6 +10,7 @@ import {
   applyBulkPatch,
   buildConfirmPayload,
   buildInitialDecisions,
+  bulkIncludeTargetIds,
   bulkTargetIds,
   filterGroups,
   flattenGroups,
@@ -72,6 +73,7 @@ export default function ImportReview({
   const totalIncluidas = sumTransactions(batch.transacoes, decisions, { onlyIncluded: true });
   const visiveisTx = flattenGroups(visibleGroups);
   const alvoIds = bulkTargetIds(visibleGroups, decisions);
+  const incluiveisIds = bulkIncludeTargetIds(visibleGroups);
   const totalAlvo = sumTransactions(
     visiveisTx.filter((tx) => decisions[tx.id]?.incluida),
     decisions
@@ -105,8 +107,9 @@ export default function ImportReview({
   }
 
   function handleBulkIncluir(incluida: boolean) {
-    // Marcar atinge TODAS as visiveis; desmarcar, so as que estao incluidas
-    const ids = incluida ? visiveisTx.map((tx) => tx.id) : alvoIds;
+    // Marcar atinge as visiveis MENOS as duplicadas (que voltariam a ser gravadas,
+    // dobrando o lancamento); desmarcar atinge so as que estao incluidas.
+    const ids = incluida ? incluiveisIds : alvoIds;
     applyToIds(ids, { incluida });
   }
 
@@ -172,7 +175,7 @@ export default function ImportReview({
         totalIncluidas={totalIncluidas}
         alvoIds={alvoIds}
         totalAlvo={totalAlvo}
-        visiveis={visiveisTx.length}
+        visiveis={incluiveisIds.length}
         categorias={categorias}
         metodosPagamento={metodosPagamento}
         onBulkApply={handleBulkApply}
