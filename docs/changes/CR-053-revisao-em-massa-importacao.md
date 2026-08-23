@@ -1,8 +1,8 @@
 # Change Request — CR-053: Revisão em Massa da Importação de Extratos (F07)
 
-**Versão:** 1.0
+**Versão:** 1.1
 **Data:** 2026-08-22
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -170,7 +170,7 @@ O usuário digita "uber" na busca, sobram 8 linhas, escolhe categoria + subcateg
 - [x] Revisão de código pré-merge (CR-040) — ver §12
 - [x] Revisão de segurança — ver §13
 - [x] Documentos afetados foram atualizados — spec 10, roadmap F07, PRD v3.4, Implementation Plan, CLAUDE.md, INDEX
-- [ ] CI verde após o push (`gh run watch`)
+- [x] CI verde após o push — run 32611094129 (a linha `exit code 1` no watch é anotação do passo `pip-audit`, que roda com `continue-on-error: true`; ambos os jobs concluíram com sucesso)
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (ex: CI verde após push) mantém o CR "Em Implementação" até o follow-up.
 
@@ -307,3 +307,4 @@ O CLAUDE.md permite pular com justificativa quando o CR é exclusivamente mudan�
 | 2026-08-22 | Claude | Validação runtime via Playwright — 13 cenários (§11) |
 | 2026-08-22 | Claude | Code review: 4 findings, 4 corrigidos + 6 testes de regressão; revalidação runtime (cenários 14–17) |
 | 2026-08-22 | Claude | Revisão de segurança (§13) e documentação sincronizada |
+| 2026-08-22 | Claude | Merge em master + CI verde (run 32611094129) — status: ✅ Concluído |
