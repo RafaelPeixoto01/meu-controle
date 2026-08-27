@@ -501,6 +501,12 @@ export interface ImportTransaction {
   metodo_pagamento: string | null;
   parcela_atual: number | null; // CR-049
   parcela_total: number | null; // CR-049
+  // CR-054: "aprendido" quando a sugestao veio de uma regra do proprio usuario,
+  // e nao do modelo. Nulo em todo o historico anterior a memoria.
+  origem_sugestao: string | null;
+  // CR-054: descritor como veio do documento — `descricao` pode ter sido
+  // reescrita por uma regra aprendida. Nulo no historico anterior.
+  descricao_original: string | null;
   status: ImportTransactionStatus;
 }
 

@@ -13,7 +13,9 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
+import unicodedata
 from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -48,6 +50,26 @@ PENDING_EXPENSES_MONTHS_BACK = 3
 # IMPORT_TIMEOUT_SECONDS=180s → 9 x 180s ≈ 27 min.
 STALE_PROCESSING_MINUTES = 30
 
+# CR-054: intermediarios de pagamento que prefixam o nome real do estabelecimento
+# na fatura ("PG *PADARIA STELLA"). Removidos da chave de match para que a mesma
+# loja gere a mesma regra tenha a cobranca passado por maquininha ou gateway.
+# So sao removidos quando seguidos de "*" — sem esse marcador, "pg"/"pp" podem
+# ser as iniciais do proprio estabelecimento.
+ACQUIRER_PREFIXES = (
+    "pg", "pag", "pags", "pagseguro", "pagsegur", "pagbank",
+    "mp", "mercadopago", "mercpago", "mercadolivre",
+    "stone", "cielo", "getnet", "sumup", "picpay", "pp", "paypal", "ebw", "ifd",
+)
+# Mais longo primeiro: a alternancia do `re` e leftmost-first, entao "pag" antes
+# de "pagseguro" dependeria de backtracking para casar o prefixo inteiro.
+ACQUIRER_PREFIX_RE = re.compile(
+    r"^(?:" + "|".join(sorted(ACQUIRER_PREFIXES, key=len, reverse=True)) + r")\s*\*+\s*"
+)
+
+# CR-054: marca a procedencia da sugestao que chega ao staging. Nulo = palpite
+# da IA (comportamento anterior); "aprendido" = regra do proprio usuario.
+ORIGEM_APRENDIDO = "aprendido"
+
 
 def is_import_enabled() -> bool:
     return os.getenv("IMPORT_ENABLED", "true").lower() == "true"
@@ -56,6 +78,47 @@ def is_import_enabled() -> bool:
 def normalize_description(descricao: str) -> str:
     """Normaliza descricao para fingerprint: lowercase + espacos colapsados."""
     return " ".join(descricao.lower().split())
+
+
+def normalize_pattern(descricao: str) -> str:
+    """
+    CR-054: chave de match da memoria de categorizacao.
+
+    Diferente de `normalize_description` — que NAO pode mudar, porque alimenta
+    os fingerprints ja persistidos (RN-042) — esta funcao busca um padrao
+    ESTAVEL ENTRE MESES. O mesmo estabelecimento aparece com data e codigo de
+    sequencia variaveis a cada fatura:
+
+        "PG *PADARIA STELLA*SP 12/07"  ─┐
+        "PG *PADARIA STELLA*SP 15/08"  ─┴─►  "padaria stella sp"
+
+    Sem isso o match exato quase nunca casaria e a memoria nasceria inerte.
+    """
+    texto = descricao.lower().strip()
+
+    # 1. Intermediario/adquirente colado ao nome (o "*" e o marcador; exigi-lo
+    #    evita comer o inicio de um nome que por acaso comece com "pg"/"pp")
+    for _ in range(2):  # "PG *PAGSEGURO *LOJA" tem dois niveis
+        novo = ACQUIRER_PREFIX_RE.sub("", texto, count=1)
+        if novo == texto:
+            break
+        texto = novo
+
+    # 2. Acentos: "acai" e "açaí" sao o mesmo estabelecimento
+    texto = "".join(
+        c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c)
+    )
+
+    # 3. Pontuacao vira separador ("12/07" → "12 07", isolando os digitos)
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+
+    # 4. Tokens puramente numericos sao data/sequencia — a parte instavel
+    tokens = [t for t in texto.split() if not t.isdigit()]
+    padrao = " ".join(tokens)[:255].strip()
+
+    # Descritor sem nenhuma parte alfabetica (so numeros) perderia tudo aqui;
+    # nesse caso o texto original ja e a chave mais estavel disponivel
+    return padrao or normalize_description(descricao)[:255]
 
 
 def compute_fingerprint(
@@ -255,7 +318,73 @@ def _parse_parcelas(tx: dict) -> tuple[int | None, int | None]:
     return atual, total
 
 
-def validate_ai_result(resultado: dict, valid_expense_ids: set[str]) -> dict:
+def load_rules(db: Session, user_id: str) -> dict[str, dict]:
+    """
+    CR-054: memoria do usuario como dados puros, indexada pelo padrao.
+
+    Devolve dicts e nao objetos ORM de proposito: `process_import_batch` fecha
+    a sessao antes de chamar a IA, e instancias desanexadas dependeriam de os
+    atributos continuarem carregados para nao estourar na leitura minutos
+    depois. Como efeito colateral, `validate_ai_result` segue pura e testavel
+    sem banco.
+    """
+    return {
+        padrao: {
+            "descricao_sugerida": regra.descricao_sugerida,
+            "categoria": regra.categoria,
+            "subcategoria": regra.subcategoria,
+            "metodo_pagamento": regra.metodo_pagamento,
+        }
+        for padrao, regra in crud.get_import_rules_map(db, user_id).items()
+    }
+
+
+def _apply_rule(
+    regra: dict,
+    descricao: str,
+    categoria: str | None,
+    subcategoria: str | None,
+    metodo: str | None,
+) -> tuple[str, str | None, str | None, str | None, bool]:
+    """
+    CR-054: sobrepoe o palpite da IA com a decisao que o usuario ja tomou para
+    este padrao. A regra vence mesmo quando a IA devolveu um par valido — o
+    ponto da memoria e justamente parar de recorrigir o mesmo erro todo mes.
+
+    Cada campo e revalidado aqui, e nao so na escrita (D7): `categories.py`
+    pode ter perdido uma subcategoria desde que a regra foi gravada, e uma
+    regra defasada nao pode injetar par invalido no staging.
+    """
+    aplicou = False
+
+    sugerida = (regra.get("descricao_sugerida") or "").strip()[:255]
+    if sugerida:
+        descricao = sugerida
+        aplicou = True
+
+    r_categoria = regra.get("categoria")
+    r_subcategoria = regra.get("subcategoria")
+    if (
+        r_categoria in EXPENSE_CATEGORIES
+        and r_subcategoria in EXPENSE_CATEGORIES.get(r_categoria, [])
+    ):
+        categoria = r_categoria
+        subcategoria = r_subcategoria
+        aplicou = True
+
+    r_metodo = regra.get("metodo_pagamento")
+    if r_metodo and is_valid_payment_method(r_metodo):
+        metodo = r_metodo
+        aplicou = True
+
+    return descricao, categoria, subcategoria, metodo, aplicou
+
+
+def validate_ai_result(
+    resultado: dict,
+    valid_expense_ids: set[str],
+    rules: dict[str, dict] | None = None,
+) -> dict:
     """
     Sanitiza o JSON da IA: descarta transacoes malformadas e normaliza campos.
 
@@ -265,6 +394,8 @@ def validate_ai_result(resultado: dict, valid_expense_ids: set[str]) -> dict:
     - parcelamento sem numeracao coerente (CR-049) → vira gasto_diario
     - par categoria/subcategoria invalido → ambos None (usuario define na revisao)
     - metodo_pagamento invalido → None; fatura sem metodo → "Cartão de Crédito"
+    - CR-054: `rules` (memoria do usuario) sobrepoe a sugestao da IA em
+      gasto_diario e marca a transacao como 'aprendido'
     """
     banco = str(resultado.get("banco") or "")[:50] or None
     tipo_documento = resultado.get("tipo_documento")
@@ -326,9 +457,29 @@ def validate_ai_result(resultado: dict, valid_expense_ids: set[str]) -> dict:
         if classificacao != "ignorar":
             motivo = None
 
+        # CR-054: a memoria so atua em gasto_diario (D4). Em 'parcelamento' a
+        # descricao precisa continuar sendo a que a IA limpou da numeracao — e
+        # ela que casa a parcela com a serie ja criada (RN-046); um nome
+        # aprendido no lugar quebraria a conciliacao. 'match_planejado' e
+        # 'ignorar' nao usam categoria/metodo.
+        descricao_original = descricao
+        origem_sugestao = None
+        if rules and classificacao == "gasto_diario":
+            regra = rules.get(normalize_pattern(descricao))
+            if regra is not None:
+                descricao, categoria, subcategoria, metodo, aplicou = _apply_rule(
+                    regra, descricao, categoria, subcategoria, metodo
+                )
+                if aplicou:
+                    origem_sugestao = ORIGEM_APRENDIDO
+
         transacoes_limpas.append({
             "data": data_tx,
             "descricao": descricao,
+            # Persistida: o fingerprint (RN-042) e a realimentacao da memoria no
+            # confirm dependem do texto do documento, nunca do nome aprendido
+            "descricao_original": descricao_original,
+            "origem_sugestao": origem_sugestao,
             "valor": valor,
             "classificacao": classificacao,
             "expense_id_sugerido": str(expense_id) if expense_id else None,
@@ -352,13 +503,19 @@ def mark_duplicates(db: Session, user_id: str, transacoes: list[dict]) -> list[d
     Calcula fingerprint de cada transacao e marca como 'duplicada' as que ja
     foram confirmadas em lotes anteriores (RN-042). Adiciona chaves
     'fingerprint' e 'status' em cada dict.
+
+    CR-054: usa 'descricao_original' — o texto como veio do documento. O
+    fingerprint PRECISA ser calculado sobre ele: quando uma regra aprendida
+    renomeia a transacao, usar o nome novo faria o mesmo documento reimportado
+    gerar outro hash e escapar da dedup, permitindo lancar o gasto duas vezes.
     """
     for tx in transacoes:
+        descricao_fingerprint = tx.get("descricao_original") or tx["descricao"]
         tx["fingerprint"] = compute_fingerprint(
             user_id,
             tx["data"],
             tx["valor"],
-            tx["descricao"],
+            descricao_fingerprint,
             tx.get("parcela_atual"),
             tx.get("parcela_total"),
         )
@@ -448,6 +605,7 @@ def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes
         open_expenses = collect_open_expenses(db, user_id)
         valid_ids = {e.id for e in open_expenses}
         system_prompt, user_prompt = build_import_prompts(open_expenses)
+        rules = load_rules(db, user_id)  # CR-054
     except Exception:
         logger.error(f"Falha ao montar o contexto do lote {batch_id}", exc_info=True)
         db.rollback()
@@ -462,7 +620,7 @@ def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes
     # 2. Chamada a IA — sem conexao de banco presa
     try:
         api_result = call_import_api(pdf_bytes, system_prompt, user_prompt)
-        parsed = validate_ai_result(api_result["resultado"], valid_ids)
+        parsed = validate_ai_result(api_result["resultado"], valid_ids, rules)
     except Exception as e:
         logger.error(f"Erro ao interpretar importação {batch_id}: {e}", exc_info=True)
         _finish_with_error(

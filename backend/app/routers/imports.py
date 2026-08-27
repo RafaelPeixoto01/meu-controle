@@ -229,6 +229,28 @@ def confirm_import(
             tx.status = "confirmada"
             criados += 1
 
+            # CR-054 (RN-049): aprende a decisao do usuario para este padrao.
+            # A chave sai do texto BRUTO do documento, nunca da descricao
+            # editada: o extrato do mes seguinte trara o descritor cru de novo,
+            # e uma regra indexada por "Padaria Stella" jamais casaria com
+            # "PG *PADARIA STELLA*SP 15/08".
+            #
+            # `descricao_original` e obrigatorio aqui e nao um detalhe: se a
+            # linha ja chegou renomeada por uma regra, `tx.descricao` E o nome
+            # aprendido, e aprender dele criaria uma regra paralela — a original
+            # nunca mais receberia correcao. Fallback para o historico anterior.
+            padrao = import_service.normalize_pattern(tx.descricao_original or tx.descricao)
+            if padrao:
+                crud.upsert_import_rule(
+                    db,
+                    current_user.id,
+                    padrao,
+                    descricao_sugerida=descricao,
+                    categoria=categoria,
+                    subcategoria=subcategoria,
+                    metodo_pagamento=metodo,
+                )
+
         elif acao == "criar_planejado_parcelado":
             # CR-049: materializa a compra parcelada como serie de gastos planejados
             descricao = (decision.descricao or tx.descricao).strip()

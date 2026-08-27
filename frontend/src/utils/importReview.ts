@@ -385,6 +385,34 @@ export interface BulkPatch {
   incluida?: boolean;
 }
 
+/**
+ * CR-054: a sugestao desta linha veio da memoria de categorizacao do usuario,
+ * nao do modelo.
+ *
+ * O backend manda `origem_sugestao: "aprendido"` so quando a regra realmente
+ * alterou algum campo; qualquer outro valor (inclusive o `null` de todo o
+ * historico anterior a memoria) significa palpite da IA.
+ */
+export function isLearnedSuggestion(tx: Pick<ImportTransaction, "origem_sugestao">): boolean {
+  return tx.origem_sugestao === "aprendido";
+}
+
+/**
+ * CR-054: texto do tooltip do badge "aprendido".
+ *
+ * Quando a regra renomeou a linha, mostrar o descritor do documento e o que
+ * torna o badge util: sem ele o usuario ve "Padaria Stella" e nao tem como
+ * saber a que linha da fatura aquilo corresponde.
+ */
+export function learnedTitle(
+  tx: Pick<ImportTransaction, "descricao" | "descricao_original">
+): string {
+  const base =
+    "Preenchido por uma regra aprendida das suas importações anteriores. Confira e edite se precisar.";
+  const original = tx.descricao_original?.trim();
+  return original && original !== tx.descricao ? `${base}\nNo documento: ${original}` : base;
+}
+
 export function applyBulkPatch(
   decisions: Record<string, ReviewDecision>,
   ids: string[],
