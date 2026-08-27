@@ -1,8 +1,8 @@
 # Change Request — CR-054: Memória de Categorização da Importação
 
-**Versão:** 1.1
+**Versão:** 1.2
 **Data:** 2026-08-27
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -191,7 +191,7 @@ ALTER TABLE import_transactions ADD COLUMN descricao_original VARCHAR(255);
 - [x] Revisão de código pré-merge executada — complexidade Média (CR-040) — ver §8.2
 - [x] Revisão de segurança (checklist OWASP) executada — ver §8.3
 - [x] Documentos afetados foram atualizados — os 8 documentos da §5
-- [ ] CI verde após o push (`gh run watch`) — fecha no follow-up
+- [x] CI verde após o push — run 33119324816 (`conclusion: success`; o exit 1 no log e do passo informativo `pip-audit`, que nao bloqueia)
 
 ### 8.1 Validação runtime (CR-037)
 
@@ -294,3 +294,4 @@ Aplicável: o CR cria tabela com dados de usuário e altera o comportamento de u
 | 2026-08-27 | Claude | Implementação concluída: migration 012, `normalize_pattern`, aprendizado no confirm, aplicação em `validate_ai_result`, badge na revisão |
 | 2026-08-27 | Claude | Revisão de código (12 findings): 8 corrigidos, 2 documentados, 2 aceitos. D8..D11 nasceram daqui. Revalidado em runtime |
 | 2026-08-27 | Claude | Documentação sincronizada: PRD v3.4 (RN-049, glossário), Architecture (tabela nova), spec F07, plano, deploy guide, roadmap (E-C fechada, B-9 criado), CLAUDE.md e INDEX |
+| 2026-08-27 | Claude | Validação realizada — status: ✅ CI verde (run 33119324816), CR concluído |
