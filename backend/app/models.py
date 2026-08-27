@@ -40,6 +40,7 @@ class User(Base):
     alertas = relationship("AlertaEstado", back_populates="user", cascade="all, delete-orphan")  # CR-033
     configuracao_alertas = relationship("ConfiguracaoAlertas", back_populates="user", uselist=False, cascade="all, delete-orphan")  # CR-033
     import_batches = relationship("ImportBatch", back_populates="user", cascade="all, delete-orphan")  # CR-046
+    import_category_rules = relationship("ImportCategoryRule", back_populates="user", cascade="all, delete-orphan")  # CR-054
 
 
 class Expense(Base):
@@ -266,6 +267,13 @@ class ImportTransaction(Base):
     )
     data: Mapped[date] = mapped_column(Date, nullable=False)
     descricao: Mapped[str] = mapped_column(String(255), nullable=False)
+    # CR-054: o descritor como veio do documento. `descricao` pode ter sido
+    # reescrita por uma regra aprendida, e duas coisas dependem do texto cru:
+    # o fingerprint da dedup (RN-042) e a chave com que o confirm realimenta a
+    # memoria — sem esta coluna, a segunda importacao aprenderia com o proprio
+    # nome aprendido e criaria uma regra paralela, deixando a original orfa.
+    # Nulo no historico anterior ao CR-054 (equivale a `descricao`).
+    descricao_original: Mapped[str | None] = mapped_column(String(255), nullable=True)
     valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     classificacao: Mapped[str] = mapped_column(
         String(20), nullable=False
@@ -286,12 +294,56 @@ class ImportTransaction(Base):
     expense_id_atualizado: Mapped[str | None] = mapped_column(String(36), nullable=True)
     # CR-049: id da parcela criada (a 'atual' da serie) — auditoria do parcelamento
     expense_id_criado: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # CR-054: procedencia da sugestao. Nulo = palpite da IA (todo o historico
+    # anterior); 'aprendido' = regra de categorizacao do proprio usuario.
+    origem_sugestao: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.now, onupdate=datetime.now
     )
 
     batch = relationship("ImportBatch", back_populates="transacoes")
+
+
+class ImportCategoryRule(Base):
+    """
+    CR-054 (F07): memoria de categorizacao da importacao (RN-049).
+
+    Uma regra por padrao de descritor, por usuario. Aprendida no confirm a
+    partir do texto BRUTO extraido do documento — nunca da descricao ja editada
+    pelo usuario. A distincao e o ponto central da feature: o `DailyExpense`
+    guarda "Padaria Stella", enquanto o documento do mes seguinte trara
+    "PG *PADARIA STELLA*SP 15/08"; derivar as regras dos gastos ja gravados
+    nunca casaria com o proximo extrato.
+    """
+    __tablename__ = "import_category_rules"
+    __table_args__ = (
+        # Chave do upsert: reconfirmar o mesmo padrao sobrescreve a regra em vez
+        # de acumular duplicatas divergentes
+        UniqueConstraint("user_id", "padrao", name="uq_import_rule_user_padrao"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # Saida de import_service.normalize_pattern() sobre o descritor do documento
+    padrao: Mapped[str] = mapped_column(String(255), nullable=False)
+    descricao_sugerida: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    categoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subcategoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    metodo_pagamento: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Quantas vezes o padrao foi confirmado; base da ordenacao para o few-shot
+    # no prompt, se ele vier num CR futuro
+    hits: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=datetime.now, onupdate=datetime.now
+    )
+
+    user = relationship("User", back_populates="import_category_rules")
 
 
 class AlertaEstado(Base):

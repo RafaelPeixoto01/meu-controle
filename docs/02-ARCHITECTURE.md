@@ -3,7 +3,7 @@
 **Versao:** 3.3
 **Data:** 2026-08-22
 **PRD Ref:** 01-PRD v3.3
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao)
 
 ---
 
@@ -524,7 +524,7 @@ erDiagram
 
 > **Index:** `ix_import_batches_user_status (user_id, status)`
 
-#### ImportTransaction (`import_transactions`) — CR-046 / CR-049
+#### ImportTransaction (`import_transactions`) — CR-046 / CR-049 / CR-054
 
 | Campo                    | Tipo         | Restricoes                              | Descricao                                        |
 |--------------------------|--------------|------------------------------------------|---------------------------------------------------|
@@ -532,7 +532,8 @@ erDiagram
 | batch_id                 | String(36)   | NOT NULL, FK→import_batches.id, CASCADE | Lote de origem                                    |
 | user_id                  | String(36)   | NOT NULL, FK→users.id, CASCADE          | Usuario dono (isolamento)                         |
 | data                     | Date         | NOT NULL                                 | Data real da transacao/compra                     |
-| descricao                | String(255)  | NOT NULL                                 | Descricao extraida do documento                   |
+| descricao                | String(255)  | NOT NULL                                 | Descricao exibida (pode ter sido reescrita por regra aprendida) |
+| descricao_original       | String(255)  | Nullable                                 | CR-054: texto como veio do documento — base do fingerprint e da memoria |
 | valor                    | Numeric(10,2)| NOT NULL                                 | Valor da transacao                                |
 | classificacao            | String(20)   | NOT NULL                                 | gasto_diario, match_planejado, parcelamento, ignorar |
 | motivo_ignorar           | String(255)  | Nullable                                 | Justificativa quando classificacao=ignorar        |
@@ -545,9 +546,29 @@ erDiagram
 | daily_expense_id_criado  | String(36)   | Nullable                                 | Auditoria: DailyExpense criado na confirmacao     |
 | expense_id_atualizado    | String(36)   | Nullable                                 | Auditoria: Expense conciliado na confirmacao      |
 | expense_id_criado        | String(36)   | Nullable                                 | CR-049: Expense ancora da serie de parcelas criada |
+| origem_sugestao          | String(20)   | Nullable                                 | CR-054: "aprendido" quando uma regra atuou; nulo = palpite da IA |
 | created_at/updated_at    | DateTime     | NOT NULL, default now()                  | Timestamps                                        |
 
 > **Index:** `ix_import_tx_user_fingerprint (user_id, fingerprint)`, `ix_import_transactions_batch_id (batch_id)`
+
+#### ImportCategoryRule (`import_category_rules`) — CR-054
+
+Memoria de categorizacao: o que o usuario decidiu na revisao para um padrao de descritor (RN-049).
+
+| Campo                    | Tipo         | Restricoes                              | Descricao                                        |
+|--------------------------|--------------|------------------------------------------|---------------------------------------------------|
+| id                       | String(36)   | PK, UUID                                 | Identificador unico                               |
+| user_id                  | String(36)   | NOT NULL, FK→users.id, CASCADE          | Usuario dono (isolamento)                         |
+| padrao                   | String(255)  | NOT NULL                                 | Descritor normalizado por `normalize_pattern` — chave de match |
+| descricao_sugerida       | String(255)  | Nullable                                 | Nome que o usuario escreveu (nulo se ele nao editou) |
+| categoria/subcategoria   | String(50)   | Nullable                                 | Par revalidado tambem na aplicacao                |
+| metodo_pagamento         | String(30)   | Nullable                                 | Nao sobrescreve o metodo em documento do tipo fatura |
+| hits                     | Integer      | NOT NULL, default 1                      | Confirmacoes do padrao (nao linhas da fatura)     |
+| created_at/updated_at    | DateTime     | NOT NULL, default now()                  | Timestamps                                        |
+
+> **Unique:** `uq_import_rule_user_padrao (user_id, padrao)` — chave do upsert e do lookup, que e sempre filtrado por `user_id`.
+>
+> A tabela e derivada: apagar tudo nao perde dado financeiro nenhum, so a memoria, que volta a ser aprendida no uso seguinte.
 
 ### Relacionamentos
 
@@ -560,6 +581,7 @@ Usuario (1) ---- possui ----> ScoreHistorico (N)
 Usuario (1) ---- possui ----> AlertaEstado (N)
 Usuario (1) ---- possui ----> ConfiguracaoAlertas (1)
 Usuario (1) ---- possui ----> ImportBatch (N)
+Usuario (1) ---- possui ----> ImportCategoryRule (N)
 ImportBatch (1) ---- possui ----> ImportTransaction (N)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
 Receita (N) ---- pertence a ----> Mes de referencia (1)

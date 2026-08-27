@@ -295,7 +295,13 @@ export function matchesFilter(
 ): boolean {
   const alvo = normalizeForSearch(query);
   if (!alvo) return true;
-  const texto = normalizeForSearch(`${tx.descricao} ${decision?.descricao ?? ""}`);
+  // CR-054: `descricao_original` entra na busca porque uma regra aprendida pode
+  // ter renomeado a linha — sem ela, quem procura pelo texto que esta vendo no
+  // PDF nao acha a transacao, e como o filtro E a selecao (CR-053) a linha
+  // tambem ficaria fora da edicao em massa.
+  const texto = normalizeForSearch(
+    `${tx.descricao} ${tx.descricao_original ?? ""} ${decision?.descricao ?? ""}`
+  );
   return texto.includes(alvo);
 }
 
@@ -383,6 +389,34 @@ export interface BulkPatch {
   metodoPagamento?: string;
   acao?: "criar_gasto_diario";
   incluida?: boolean;
+}
+
+/**
+ * CR-054: a sugestao desta linha veio da memoria de categorizacao do usuario,
+ * nao do modelo.
+ *
+ * O backend manda `origem_sugestao: "aprendido"` so quando a regra realmente
+ * alterou algum campo; qualquer outro valor (inclusive o `null` de todo o
+ * historico anterior a memoria) significa palpite da IA.
+ */
+export function isLearnedSuggestion(tx: Pick<ImportTransaction, "origem_sugestao">): boolean {
+  return tx.origem_sugestao === "aprendido";
+}
+
+/**
+ * CR-054: texto do tooltip do badge "aprendido".
+ *
+ * Quando a regra renomeou a linha, mostrar o descritor do documento e o que
+ * torna o badge util: sem ele o usuario ve "Padaria Stella" e nao tem como
+ * saber a que linha da fatura aquilo corresponde.
+ */
+export function learnedTitle(
+  tx: Pick<ImportTransaction, "descricao" | "descricao_original">
+): string {
+  const base =
+    "Preenchido por uma regra aprendida das suas importações anteriores. Confira e edite se precisar.";
+  const original = tx.descricao_original?.trim();
+  return original && original !== tx.descricao ? `${base}\nNo documento: ${original}` : base;
 }
 
 export function applyBulkPatch(

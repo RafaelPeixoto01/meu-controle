@@ -610,6 +610,10 @@ class ImportTransactionResponse(BaseModel):
     metodo_pagamento: str | None = None
     parcela_atual: int | None = None  # CR-049
     parcela_total: int | None = None  # CR-049
+    origem_sugestao: str | None = None  # CR-054: 'aprendido' | nulo (palpite da IA)
+    # CR-054: texto cru do documento, para a revisao mostrar o que a regra
+    # substituiu quando renomeia a linha
+    descricao_original: str | None = None
     status: str  # pendente | confirmada | descartada | duplicada
 
 

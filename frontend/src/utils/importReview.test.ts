@@ -20,6 +20,8 @@ import {
   isFilterActive,
   matchesFilter,
   normalizeForSearch,
+  isLearnedSuggestion, // CR-054
+  learnedTitle, // CR-054
   sumTransactions,
   type ReviewGroupKey,
 } from "./importReview";
@@ -38,6 +40,8 @@ function makeTx(overrides: Partial<ImportTransaction>): ImportTransaction {
     metodo_pagamento: "Cartão de Crédito",
     parcela_atual: null,
     parcela_total: null,
+    origem_sugestao: null, // CR-054
+    descricao_original: null, // CR-054
     status: "pendente",
     ...overrides,
   };
@@ -695,5 +699,72 @@ describe("applyBulkPatch: par categoria+subcategoria (finding do code review)", 
   it("categoria sozinha invalidaria — por isso a toolbar exige o par", () => {
     const out = applyBulkPatch(base, ["p1"], { categoria: "Alimentação" });
     expect(validateDecision(out.p1, CATEGORIAS)).not.toBeNull();
+  });
+});
+
+// ========== CR-054: memoria de categorizacao ==========
+
+describe("isLearnedSuggestion", () => {
+  it("marca a linha cuja sugestao veio de uma regra do usuario", () => {
+    expect(isLearnedSuggestion(makeTx({ origem_sugestao: "aprendido" }))).toBe(true);
+  });
+
+  it("nao marca o palpite da IA", () => {
+    expect(isLearnedSuggestion(makeTx({ origem_sugestao: null }))).toBe(false);
+  });
+
+  it("nao marca transacao anterior a memoria (campo ausente no historico)", () => {
+    expect(isLearnedSuggestion({ origem_sugestao: null })).toBe(false);
+  });
+
+  it("valor desconhecido nao vira badge", () => {
+    // O tipo literal impede isso em compilacao, mas o JSON vem da rede: se o
+    // backend renomear o sentinela, o badge tem que sumir e nao virar `true`
+    const inesperado = { origem_sugestao: "ia" } as unknown as ImportTransaction;
+    expect(isLearnedSuggestion(inesperado)).toBe(false);
+  });
+});
+
+describe("learnedTitle", () => {
+  it("mostra o descritor do documento quando a regra renomeou a linha", () => {
+    const title = learnedTitle(
+      makeTx({ descricao: "Padaria Stella", descricao_original: "PG *PADARIA STELLA*SP 15/08" })
+    );
+    expect(title).toContain("No documento: PG *PADARIA STELLA*SP 15/08");
+  });
+
+  it("omite a linha extra quando o nome nao mudou", () => {
+    const title = learnedTitle(
+      makeTx({ descricao: "PADARIA STELLA", descricao_original: "PADARIA STELLA" })
+    );
+    expect(title).not.toContain("No documento");
+  });
+
+  it("omite a linha extra no historico sem descricao_original", () => {
+    expect(learnedTitle(makeTx({ descricao_original: null }))).not.toContain("No documento");
+  });
+});
+
+describe("matchesFilter com descricao renomeada (CR-054)", () => {
+  it("acha a linha pelo texto do documento apos a regra renomea-la", () => {
+    const tx = makeTx({
+      descricao: "Padaria Stella",
+      descricao_original: "PG *PADARIA STELLA*SP 15/08",
+    });
+    // o usuario esta lendo o PDF e busca pelo que ve la
+    expect(matchesFilter(tx, undefined, "PADARIA STELLA*SP")).toBe(true);
+  });
+
+  it("continua achando pelo nome exibido", () => {
+    const tx = makeTx({
+      descricao: "Padaria Stella",
+      descricao_original: "PG *PADARIA STELLA*SP 15/08",
+    });
+    expect(matchesFilter(tx, undefined, "stella")).toBe(true);
+  });
+
+  it("nao casa texto que nao esta em nenhum dos campos", () => {
+    const tx = makeTx({ descricao: "Padaria Stella", descricao_original: "PG *PADARIA*SP" });
+    expect(matchesFilter(tx, undefined, "posto")).toBe(false);
   });
 });

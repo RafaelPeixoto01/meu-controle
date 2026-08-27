@@ -1,6 +1,6 @@
-# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa)
+# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa / CR-054 memória de categorização)
 
-**PRD Ref:** RF-21, US-29, RN-038..RN-048
+**PRD Ref:** RF-21, US-29, RN-038..RN-049
 
 ## Visão Geral
 
@@ -123,6 +123,31 @@ Compra parcelada identificada pela numeração explícita na descrição (`3/10`
 
 A criação upfront das parcelas é feita por `services.create_expense_with_installments()`, **compartilhada com o cadastro manual** ([`routers/expenses.py`](../../backend/app/routers/expenses.py)) — o import apenas passa `status_primeira=Pago` e `skip_existing=True`.
 
+## Memória de categorização (CR-054 — item E-C do roadmap v2, frente backend)
+
+A IA erra as mesmas descrições todo mês. A memória grava a decisão do usuário por **padrão de descritor** e a reaplica na importação seguinte, antes da revisão.
+
+**O ponto central é de onde a regra é aprendida.** A chave sai do texto que veio do **documento** (`import_transactions.descricao_original`, com fallback para `descricao`), nunca da descrição editada: o `DailyExpense` guarda "Padaria Stella", enquanto o extrato do mês seguinte trará "PG \*PADARIA STELLA\*SP 15/08". Derivar as regras dos gastos já gravados nunca casaria com o próximo documento.
+
+**Chave de match — `normalize_pattern(texto)`.** Função **nova e independente** de `normalize_description`, que não pode mudar por alimentar fingerprints já persistidos (RN-042). Remove, nesta ordem: prefixo de adquirente seguido de `*` (`PG *`, `MERCADOPAGO*`, `PAGSEGURO *`...), acentos, pontuação e **tokens puramente numéricos** (data e código de sequência — a parte instável). `PG *PADARIA STELLA*SP 12/07` e `PG *PADARIA STELLA*SP 15/08` convergem para `padaria stella sp`.
+
+- **Match exato, sem fallback por prefixo ou token.** A regra sobrescreve o acerto da IA, então um falso positivo é silencioso e recorrente: `UBER *TRIP` (Transporte) e `UBER *EATS` (Alimentação) colidiriam sob o prefixo `uber`.
+- **Descritores genéricos não viram regra** (`PADROES_GENERICOS`). "PIX ENVIADO 12/07" e "PIX ENVIADO 19/07" colapsam em `pix enviado` — o que os distingue é exatamente o número removido. Uma regra aí recategorizaria todos os Pix do mês seguinte. A lista casa o padrão **inteiro**: "PIX ENVIADO PADARIA STELLA" continua valendo.
+
+**Aprendizado (no confirm).** Só de `acao == "criar_gasto_diario"` — é a única ação em que o trio categoria+subcategoria+método é obrigatório e validado (`criar_planejado_parcelado` tem categoria opcional e nenhum método; `atualizar_planejado`, nenhum dos dois). Upsert por `(user_id, padrao)`, com `hits += 1`. A última decisão vence: é assim que uma regra errada se corrige, sem tela de gestão.
+
+- **A descrição só é aprendida se o usuário realmente reescreveu.** Aceitar o descritor como veio gravaria a data do mês corrente como nome sugerido, e o mês seguinte chegaria renomeado com a data velha.
+- `hits` conta **confirmações do padrão**, não linhas: seis corridas de Uber numa fatura valem 1.
+- As regras são carregadas **uma vez** antes do laço do confirm. Além de evitar um SELECT por linha numa fatura de 80, a sessão roda com `autoflush=False` — duas linhas do mesmo estabelecimento não se enxergariam num SELECT por linha e emitiriam dois INSERTs para a mesma chave, estourando a unique constraint e abortando o confirm inteiro.
+
+**Aplicação (em `validate_ai_result`, depois da IA).** Só em `classificacao == "gasto_diario"`. A regra vence o palpite da IA mesmo quando ele é válido — é o objetivo da memória. Cada campo é **revalidado na aplicação**, não só na escrita: `categories.py` pode ter perdido uma subcategoria desde que a regra foi gravada, e uma regra defasada não pode injetar par inválido no staging.
+
+- **Em `parcelamento` a regra não atua:** a descrição precisa continuar sendo a que a IA limpou da numeração, porque é ela que casa a parcela com a série já criada (RN-046).
+- **Em fatura, `metodo_pagamento` não é sobrescrito:** ali o meio de pagamento é propriedade do documento (a compra está lá porque foi no cartão). Uma regra aprendida num extrato — "Pix" na padaria — forçaria o usuário a recorrigir todo mês.
+- Quando a regra altera algum campo, a transação recebe `origem_sugestao = "aprendido"`.
+
+**Limitação conhecida.** `descricao_original` é o texto que **a IA extraiu** do documento, não o byte cru do PDF (que nunca é persistido — RN-043). O prompt pede a descrição "limpa de códigos irrelevantes", então a transcrição pode variar entre importações; quando varia, o match falha e a linha simplesmente volta ao comportamento anterior ao CR-054 (palpite da IA), podendo gerar uma segunda regra para a variante. Nenhuma perda de correção — só cobertura menor.
+
 ## Arquitetura
 
 ```
@@ -133,7 +158,9 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 ```
 
 - `import_service.py`:
-  - `normalize_description(texto)` — lowercase, espaços colapsados, trim
+  - `normalize_description(texto)` — lowercase, espaços colapsados, trim. **Contrato congelado** (CR-054): alimenta fingerprints já persistidos
+  - `normalize_pattern(texto)` (CR-054) — chave de match da memória; devolve `""` para descritor genérico (`PADROES_GENERICOS`)
+  - `_apply_rule(regra, ..., tipo_documento)` (CR-054) — sobrepõe o palpite da IA, revalidando cada campo
   - `compute_fingerprint(user_id, data, valor, descricao, parcela_atual=None, parcela_total=None)` — sha256 de `user_id|YYYY-MM-DD|valor 2 casas|descricao normalizada`, mais `|atual/total` quando houver parcela. Sem a numeração, parcelas da mesma compra colidiriam (mesma data de compra, mesmo valor, mesma descrição limpa) e a parcela do mês seguinte nasceria `duplicada`
   - `collect_open_expenses(db, user_id)` — gastos planejados Pendente/Atrasado dos últimos 3 meses + mês seguinte (candidatos a match; também define os `expense_id` válidos para a validação)
   - `build_import_prompts(open_expenses)` — interpola no template: categorias/subcategorias válidas (`categories.py`), métodos de pagamento e a lista de planejados em aberto (id, nome, parcela, valor, vencimento, status)
@@ -157,6 +184,7 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 | PDF nunca persistido | RN-043 |
 | Extração assíncrona: upload responde 202 e o lote nasce `processando` | RN-047 (CR-052) |
 | Lote `processando` há mais de 30 min é resolvido como `erro` na leitura | RN-048 (CR-052) |
+| Confirmar um gasto diário grava/atualiza uma regra de categorização do usuário, indexada pelo padrão do descritor do documento; a regra é reaplicada na importação seguinte e sobrescreve a sugestão da IA | RN-049 (CR-054) |
 
 ## Persistência (migration 009)
 
@@ -164,8 +192,11 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 
 **`import_transactions`** — id, batch_id (FK CASCADE), user_id (FK CASCADE), data, descricao, valor Numeric(10,2), classificacao (`gasto_diario|match_planejado|parcelamento|ignorar`), motivo_ignorar, expense_id_sugerido, categoria, subcategoria, metodo_pagamento, **parcela_atual, parcela_total** (CR-049), fingerprint (sha256 hex, 64), status (`pendente|confirmada|descartada|duplicada`), daily_expense_id_criado, expense_id_atualizado, **expense_id_criado** (CR-049), created_at, updated_at. Índice `(user_id, fingerprint)`.
 
+**`import_category_rules`** (CR-054) — id, user_id (FK CASCADE), `padrao` (saída de `normalize_pattern`), `descricao_sugerida`, `categoria`, `subcategoria`, `metodo_pagamento`, `hits`, created_at, updated_at. Unique `(user_id, padrao)` — chave do upsert e do lookup, que é **sempre** filtrado por `user_id`.
+
 Migration **010** (CR-049) adiciona `parcela_atual`, `parcela_total` e `expense_id_criado` via `batch_alter_table`.
 Migration **011** (CR-052) adiciona `erro_mensagem` em `import_batches`. Os valores novos de `status` não exigem DDL — a coluna é `String(20)` sem constraint.
+Migration **012** (CR-054) cria `import_category_rules` e adiciona em `import_transactions`: `origem_sugestao` (`aprendido` | nulo) e `descricao_original` (texto do documento — `descricao` pode ter sido reescrita por uma regra, e tanto o fingerprint quanto a realimentação da memória dependem do original). Ambas nullable; nulo equivale ao comportamento anterior, sem backfill.
 
 Sem alteração nas tabelas existentes.
 
@@ -202,6 +233,7 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - Confirm inválido: categoria/subcategoria incompatíveis → 422; lote já confirmado → 409; expense de outro usuário → 404
 - Ownership: get/confirm/delete de lote de outro usuário → 404
 - PDF não persistido (nenhum arquivo escrito)
+- Memória de categorização (CR-054): `normalize_pattern` converge descritores do mesmo estabelecimento entre meses e mantém `UBER *TRIP`/`UBER *EATS` distintos; descritor genérico não produz padrão; confirm grava a regra a partir do texto do documento; reconfirmar sobrescreve e incrementa `hits` (uma vez por confirmação); linha já renomeada realimenta a regra **original**; regra vence palpite válido da IA; par inválido é ignorado na aplicação; método aprendido vale em extrato mas não em fatura; nome só é aprendido se editado; parcelamento/conciliação/ignorada não geram nem recebem regra; regra de outro usuário nunca alcança o lote; reimportar o mesmo documento depois da regra continua marcando `duplicada`
 
 ## Frontend (CR-047)
 
@@ -210,16 +242,17 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - `components/imports/ImportUpload.tsx` — seleção de PDF com validação client-side (extensão + 10MB), estado "enviando o arquivo" (só a transferência), banner de lotes em aberto que distingue `processando` (spinner + "Acompanhar") de `pendente_revisao` ("Retomar revisão"), exibição de `indisponivel`/`erro` sem quebrar
 - `components/imports/ImportProcessing.tsx` (CR-052) — tela do estágio assíncrono: "você pode fechar esta página", cancelamento do lote, e título neutro enquanto o status ainda não chegou
 - `components/imports/ImportReview.tsx` — estado (decisões, erros, filtro) e layout. Grupos (novos gastos / conciliações / **compras parceladas** / ignoradas / duplicadas), checkbox por transação (ignoradas e duplicadas nascem desmarcadas), validação por linha antes do confirm (inclui guarda contra pagar o mesmo planejado 2x — espelho da regra do backend). CR-053: quando o confirm falha e alguma linha com erro está oculta pelo filtro, o filtro é **limpo automaticamente** — senão o usuário leria "corrija os campos destacados" sem nenhum campo destacado na tela
+- **CR-054 na revisão:** badge "aprendido" na linha cuja sugestão veio de uma regra (`isLearnedSuggestion`), com tooltip que mostra o descritor do documento quando a regra renomeou a linha (`learnedTitle`) — sem ele o usuário vê "Padaria Stella" e não sabe a que linha da fatura aquilo corresponde. `matchesFilter` passa a buscar também em `descricao_original`: como **o filtro é a seleção** (CR-053), uma linha renomeada e não encontrável também ficaria fora da edição em massa
 - `components/imports/ImportReviewRow.tsx` (CR-053) — a linha e seus editores inline (destino, valor, data, descrição, categoria+subcategoria em cascata, método); conciliação mostra o planejado alvo (nome, parcela, valor, status, vencimento). Em `React.memo`: antes era um `renderRow` de 255 linhas recriado a cada tecla, e numa fatura de 80 linhas digitar um caractere re-renderizava as 80
 - `components/imports/ImportReviewGroup.tsx` (CR-053) — cabeçalho do grupo com contagem ("X de N" sob filtro), subtotal das linhas incluídas, e mensagem própria quando o filtro não casou nada no grupo
 - `components/imports/ImportReviewToolbar.tsx` (CR-053) — busca por descrição (insensível a caixa e acento, casando o texto da IA **ou** o editado), chips de grupo, barra de edição em massa e total das incluídas. **O filtro é a seleção**: não há checkbox de seleção por linha; o bulk atua sobre as linhas visíveis **e** incluídas e a barra informa esse número antes de aplicar. `acao` em lote aceita só `criar_gasto_diario` (as outras exigem dado por linha); categoria só viaja com subcategoria (categoria sozinha nunca é válida); "marcar em lote" exclui duplicadas, que seriam regravadas dobrando o lançamento
 - `components/imports/ImportResult.tsx` — contadores do resultado + navegação (Gastos Diários / Planejados / importar outro)
-- `utils/importReview.ts` — helpers puros testados: `groupTransactions`, `buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`, `monthsToFetchForMatches`, `describeInstallmentSeries` (CR-049: prévia "cria até N parcelas … até MM/AAAA"), `nextStageForBatch` (CR-052: estágio correspondente ao status do lote). CR-053: `normalizeForSearch`/`matchesFilter`/`filterGroups`/`isFilterActive` (filtro), `decisionValor`/`sumTransactions` (totais — valor efetivo é o editado quando finito e positivo, senão o da IA), `bulkTargetIds`/`bulkIncludeTargetIds`/`applyBulkPatch` (edição em massa). **`filterGroups` filtra só a lista de render**: `decisions` nunca é tocado, então linha escondida preserva a decisão e continua indo no payload do confirm
+- `utils/importReview.ts` — helpers puros testados: `groupTransactions`, `buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`, `monthsToFetchForMatches`, `describeInstallmentSeries` (CR-049: prévia "cria até N parcelas … até MM/AAAA"), `nextStageForBatch` (CR-052: estágio correspondente ao status do lote), `isLearnedSuggestion`/`learnedTitle` (CR-054). CR-053: `normalizeForSearch`/`matchesFilter`/`filterGroups`/`isFilterActive` (filtro), `decisionValor`/`sumTransactions` (totais — valor efetivo é o editado quando finito e positivo, senão o da IA), `bulkTargetIds`/`bulkIncludeTargetIds`/`applyBulkPatch` (edição em massa). **`filterGroups` filtra só a lista de render**: `decisions` nunca é tocado, então linha escondida preserva a decisão e continua indo no payload do confirm
 - CR-049 na revisão: destino "Compra parcelada", campos de numeração `x/y` (máx. 120), rótulo "Data da compra" e prévia da série; `ImportResult` mostra o contador de parcelas criadas
 - `hooks/useImports.ts` — `useImportBatch` (CR-052: polling de 3s enquanto `processando`, `refetchOnWindowFocus` desligado, e segue tentando enquanto não houver status conhecido para não travar o spinner numa falha de rede), `usePendingImports`, `useMatchTargets` (mapa expense_id→Expense dos meses das transações + atual/anterior), `useUploadImport`, `useConfirmImport` (invalida `imports-pending`, `daily-expenses-summary`, `monthly-summary`, `dashboard`, `installments`, `alerts`), `useDiscardImport`
 - `services/api.ts`: `requestMultipart` — FormData sem Content-Type manual, Bearer token e interceptor refresh-401 com retry (erro pós-refresh expõe o `detail` do backend)
 
 ## Referências
 
-- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
+- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), CR-054 (memória de categorização — item E-C, frente backend), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
 - Padrões reutilizados de F06: `docs/specs/09-analise-ia.md`, `backend/app/ai_analysis.py`

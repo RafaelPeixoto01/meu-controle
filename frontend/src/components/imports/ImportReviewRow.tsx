@@ -4,7 +4,13 @@
 // deve re-renderizar as outras 79, cada uma com seus selects de categoria.
 import { memo } from "react";
 import type { Expense, ImportTransaction } from "../../types";
-import { decisionValor, describeInstallmentSeries, type ReviewDecision } from "../../utils/importReview";
+import {
+  decisionValor,
+  describeInstallmentSeries,
+  isLearnedSuggestion,
+  learnedTitle,
+  type ReviewDecision,
+} from "../../utils/importReview";
 import { formatBRL, formatDateBR } from "../../utils/format";
 import { inputClass } from "./fieldStyles";
 
@@ -51,8 +57,20 @@ function ImportReviewRowBase({
         />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-            <span className={`font-semibold text-sm truncate ${decision.incluida ? "text-text" : "text-text-muted"}`}>
-              {tx.descricao}
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className={`font-semibold text-sm truncate ${decision.incluida ? "text-text" : "text-text-muted"}`}>
+                {tx.descricao}
+              </span>
+              {/* CR-054: o usuario precisa saber quando o valor nao veio do
+                  modelo, e sim de uma correcao que ele mesmo fez antes */}
+              {isLearnedSuggestion(tx) && (
+                <span
+                  title={learnedTitle(tx)}
+                  className="shrink-0 rounded-full bg-primary-light px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                >
+                  aprendido
+                </span>
+              )}
             </span>
             <span className="text-sm font-bold text-text tabular-nums">
               {/* CR-053: valor efetivo, para a linha bater com o subtotal do grupo */}

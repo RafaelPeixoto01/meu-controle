@@ -1,10 +1,10 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.4
-**Data:** 2026-08-22
+**Versão:** 1.5
+**Data:** 2026-08-27
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
-**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa)
+**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa) / CR-054 (memória de categorização)
 
 ---
 
@@ -125,7 +125,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 ---
 
-### E-C — Memória de categorização e revisão em massa 🟡 Parcial
+### E-C — Memória de categorização e revisão em massa ✅ Implementada (CR-053 + CR-054)
 
 | Campo | Valor |
 |-------|-------|
@@ -133,7 +133,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 | Complexidade | Alta (migration + serviço + retrabalho da tela de revisão) |
 | Depende de | E-A (a classificação nova precisa estar estável no prompt) |
 | Frente **revisão em massa** | ✅ [CR-053](changes/CR-053-revisao-em-massa-importacao.md) — frontend puro, sem migration |
-| Frente **memória de categorização** | ⬜ Aberta — próximo CR |
+| Frente **memória de categorização** | ✅ [CR-054](changes/CR-054-memoria-categorizacao-importacao.md) — migration 012 |
 
 > **Por que dividido.** As duas frentes são independentes: a revisão em massa é frontend puro (busca, filtro, edição em lote, totais) e a memória é backend + migration. Separá-las manteve cada CR em complexidade Média, entregou valor na importação seguinte sem risco de banco, e deixou a tela de revisão já refatorada em Row/Group/Toolbar para o badge "aprendido" da memória pousar em cima.
 
@@ -145,6 +145,14 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 - Alimentada no confirm a partir do **texto bruto** da transação importada (`import_transactions.descricao`), **não** da descrição editada pelo usuário. Essa distinção é o ponto central do desenho: derivar as regras de `daily_expenses` não funcionaria, porque lá está gravado "Padaria Stella" (já editado) enquanto o extrato do mês seguinte trará "PADARIA STELLA*SP 12/07". Reusa [`normalize_description`](../backend/app/import_service.py#L44).
 - Aplicação dentro de `validate_ai_result`, depois da IA: regra com match sobrescreve categoria/subcategoria/método e marca a origem do palpite, para a revisão sinalizar "aprendido" — o usuário precisa saber quando o valor não veio do modelo.
 - Sinergia barata: injetar as top-N regras no prompt como few-shot, cobrindo o que o match exato não pega.
+
+> **Como ficou (CR-054).** Fonte da verdade: [spec F07 — Memória de categorização](specs/10-importacao-extratos.md). Quatro pontos saíram diferentes deste desenho inicial:
+> - **`normalize_description` NÃO foi reusada.** Ela é `lowercase + espaços` e alimenta fingerprints **já persistidos** (RN-042): mudá-la invalidaria a dedup do histórico, e usá-la como está deixaria o match exato quase inerte, porque o descritor real varia de mês a mês na data. Entrou uma função nova, `normalize_pattern`, que remove acentos, pontuação, prefixo de adquirente e tokens numéricos.
+> - **Descritores genéricos não viram regra.** Sem digitos, "PIX ENVIADO 12/07" e "PIX ENVIADO 19/07" colapsam no mesmo padrão — uma regra ali recategorizaria todos os Pix do mês seguinte. É o mesmo falso positivo que motivou recusar o match por prefixo; a lista `PADROES_GENERICOS` fecha a porta.
+> - **A coluna `descricao_original` é estrutural, não conveniência.** Depois que uma regra renomeia a linha, `tx.descricao` **é** o nome aprendido: sem guardar o texto do documento, o fingerprint mudaria (a mesma fatura reimportada escaparia da dedup) e o confirm seguinte aprenderia do próprio nome aprendido, criando uma regra paralela e deixando a original órfã.
+> - **Em fatura o método de pagamento do documento vence a regra.** Uma regra aprendida num extrato ("Pix" na padaria) sobrescreveria o "Cartão de Crédito" que a fatura impõe, e o usuário recorrigiria todo mês — o inverso do objetivo.
+>
+> Além disso: o nome só é aprendido quando o usuário realmente reescreveu (senão a data do mês corrente viraria nome sugerido), `hits` conta confirmações e não linhas, e as regras são carregadas uma vez antes do laço do confirm — com `autoflush=False`, um SELECT por linha faria duas linhas do mesmo estabelecimento colidirem na unique constraint e abortarem o confirm inteiro.
 
 **Desenho — revisão em massa:** ✅ entregue no CR-053
 
@@ -205,7 +213,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 |-------|------|----------------------|
 | 1º | **E-A** ✅ | Maior valor percebido e a única isolada no par revisão/confirm — não depende de nada |
 | 2º | **E-B** ✅ | Muda o contrato do upload; feito cedo, todo o trabalho de UI seguinte já se apoia na forma final |
-| 3º | **E-C** 🟡 | Dividida: a revisão em massa saiu no CR-053 (frontend puro, sem dependência real da E-A). A memória de categorização segue aberta e essa sim depende da E-A, porque as regras só fazem sentido depois que a classificação nova estabilizou o prompt |
+| 3º | **E-C** ✅ | Dividida: a revisão em massa saiu no CR-053 (frontend puro, sem dependência real da E-A) e a memória de categorização no CR-054 (backend + migration 012). O few-shot ficou de fora e virou o B-9 |
 | 4º | **E-D** | O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras); antes disso garantiria retrabalho |
 
 Cada evolução vira um CR próprio no momento da implementação (numeração sequencial a partir de CR-049, via `/sdd-pipeline`). Este roadmap **não** reserva os números: CRs criados com antecedência envelhecem antes de serem executados.
@@ -244,6 +252,10 @@ Hoje a IA sugere no máximo um `expense_id`, restrito a Pendente/Atrasado dos ú
 
 `tokens_input`, `tokens_output`, `modelo` e `tempo_processamento_ms` já são gravados em cada `ImportBatch` e nunca exibidos. Mostrar por lote — e acumulado no histórico da E-D — dá visibilidade do gasto com a API sem nenhuma coleta de dado nova.
 
+### B-9 — Few-shot das regras aprendidas no prompt
+
+Injetar as top-N `import_category_rules` (por `hits`) no prompt de extração, para cobrir descritores que o match exato do CR-054 não pega — a variação de transcrição que a própria IA introduz. Ficou fora do CR-054 de propósito: a tabela nascia vazia, o ganho só aparece com volume, e misturar as duas coisas impediria medir o efeito do match exato isolado. Reavaliar depois de alguns meses de uso, olhando quantas linhas ainda chegam sem `origem_sugestao`.
+
 ### B-8 — Limite de páginas do PDF
 
 Defesa em profundidade adicional contra prompt injection via documento e contra PDFs patologicamente grandes: além do teto de 10MB, um teto de páginas. A mitigação principal (sanitização da saída da IA em `validate_ai_result`, matches restritos aos planejados do próprio usuário, staging + revisão obrigatória) já está no lugar desde o CR-046.
@@ -257,7 +269,8 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | E-A | Compras parceladas ✅ CR-049 | Alta | — | Sim (010) |
 | E-B | Upload assíncrono ✅ CR-052 | Alta | — | Sim (011) |
 | E-C | Revisão em massa ✅ CR-053 | Alta | E-A | Não |
-| E-C | Memória de categorização | Alta | E-A | Sim |
+| E-C | Memória de categorização ✅ CR-054 | Alta | E-A | Sim (012) |
+| B-9 | Few-shot das regras aprendidas no prompt | Baixa | E-C ✅ | Não |
 | E-D | Reconciliação, histórico e desfazer | Alta | E-A | Sim |
 | B-1 | Importar OFX/CSV | Baixa | — | Talvez |
 | B-2 | Múltiplos arquivos + drag & drop | Baixa | E-B ✅ | Não |
@@ -279,3 +292,4 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | 2026-08-16 | Claude | E-A reduzida a compras parceladas — classificação de receitas retirada do roadmap por decisão do autor; RN-041 permanece inalterada |
 | 2026-08-22 | Claude | E-B implementada no CR-052 (RN-047/048). Nota: a janela do lote órfão é 30 min — precisa ficar acima do pior caso da extração (~27 min), senão mata task viva |
 | 2026-08-22 | Claude | E-C dividida em duas frentes; a de revisão em massa saiu no CR-053 (frontend puro, sem migration). Nota: o filtro é a seleção — não há checkbox de seleção por linha —, e "marcar em lote" exclui duplicadas para não dobrar lançamento. A frente de memória de categorização segue aberta |
+| 2026-08-27 | Claude | E-C concluída: memória de categorização no CR-054 (RN-049, migration 012). Notas: `normalize_description` não pôde ser reusada (alimenta fingerprints persistidos); descritor genérico não vira regra; `descricao_original` é estrutural para dedup e realimentação; em fatura o método do documento vence a regra. O few-shot virou o B-9 |

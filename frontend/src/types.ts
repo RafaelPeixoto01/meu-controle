@@ -501,6 +501,14 @@ export interface ImportTransaction {
   metodo_pagamento: string | null;
   parcela_atual: number | null; // CR-049
   parcela_total: number | null; // CR-049
+  // CR-054: "aprendido" quando a sugestao veio de uma regra do proprio usuario,
+  // e nao do modelo. Nulo em todo o historico anterior a memoria. Tipado como
+  // literal (e nao `string`) para que uma renomeacao do sentinela no backend
+  // vire erro de compilacao aqui, em vez de um badge que some em silencio.
+  origem_sugestao: "aprendido" | null;
+  // CR-054: descritor como veio do documento — `descricao` pode ter sido
+  // reescrita por uma regra aprendida. Nulo no historico anterior.
+  descricao_original: string | null;
   status: ImportTransactionStatus;
 }
 
