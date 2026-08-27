@@ -1230,6 +1230,15 @@ class TestNormalizePattern:
     def test_descritor_so_de_digitos_cai_no_fallback_em_vez_de_esvaziar(self):
         assert normalize_pattern("1234 5678") == normalize_description("1234 5678")
 
+    def test_descritor_generico_nao_produz_padrao(self):
+        assert normalize_pattern("PIX ENVIADO 12/07") == ""
+        assert normalize_pattern("COMPRA CARTAO 1234") == ""
+        assert normalize_pattern("Pagamento de Fatura") == ""
+
+    def test_estabelecimento_com_termo_generico_no_nome_continua_valendo(self):
+        # a lista casa o padrao INTEIRO, nao pedaco: nao pode matar loja real
+        assert normalize_pattern("PIX ENVIADO PADARIA STELLA") == "pix enviado padaria stella"
+
     def test_nao_altera_normalize_description(self):
         # normalize_description alimenta fingerprints ja persistidos (RN-042);
         # este teste trava o contrato dela contra mudanca acidental
@@ -1328,8 +1337,45 @@ class TestAprendizadoNoConfirm:
         )
         assert r.status_code == 200, r.text
 
+        # hits conta CONFIRMACOES do padrao, nao linhas da fatura: 6 corridas
+        # de Uber num mes nao podem superar um padrao recorrente de 5 meses
         regra = db.query(ImportCategoryRule).one()
-        assert regra.hits == 2
+        assert regra.hits == 1
+
+    def test_descricao_nao_editada_nao_vira_nome_aprendido(self, client, db):
+        """
+        Sem esta guarda a regra gravaria o descritor COM a data do mes corrente
+        como nome sugerido, e o mes seguinte chegaria renomeado com a data
+        velha ("...12/07" numa transacao de agosto).
+        """
+        batch = upload_batch(client, [tx_gasto("PG *PADARIA STELLA*SP 12/07")])
+        confirmar_gasto(
+            client,
+            batch,
+            batch["transacoes"][0]["id"],
+            descricao="PG *PADARIA STELLA*SP 12/07",  # inalterada
+        )
+
+        regra = db.query(ImportCategoryRule).one()
+        assert regra.descricao_sugerida is None
+        assert regra.categoria == "Alimentação"  # a classificacao foi aprendida
+
+        batch2 = upload_batch(client, [tx_gasto("PG *PADARIA STELLA*SP 15/08", valor=31.0)])
+        tx = batch2["transacoes"][0]
+        assert tx["descricao"] == "PG *PADARIA STELLA*SP 15/08"  # nao renomeou
+        assert tx["categoria"] == "Alimentação"
+        assert tx["origem_sugestao"] == "aprendido"
+
+    def test_descritor_generico_nunca_vira_regra(self, client, db):
+        """
+        "PIX ENVIADO 12/07" e "PIX ENVIADO 19/07" colapsam no mesmo padrao. Uma
+        regra ai renomearia e recategorizaria TODOS os Pix do mes seguinte —
+        o falso positivo silencioso que o D1 recusou ao descartar match por
+        prefixo.
+        """
+        batch = upload_batch(client, [tx_gasto("PIX ENVIADO 12/07")])
+        confirmar_gasto(client, batch, batch["transacoes"][0]["id"])
+        assert db.query(ImportCategoryRule).count() == 0
 
     def test_conciliacao_e_parcelamento_nao_geram_regra(self, client, db, open_expense):
         # D3: so `criar_gasto_diario` tem o trio categoria+subcategoria+metodo
@@ -1391,8 +1437,28 @@ class TestAplicacaoDaMemoria:
         assert tx["descricao"] == "Padaria Stella"
         assert tx["categoria"] == "Alimentação"
         assert tx["subcategoria"] == "Padaria"
-        assert tx["metodo_pagamento"] == "Pix"
+        # numa FATURA o meio de pagamento e do documento, nao do historico:
+        # a compra esta ali porque foi no cartao
+        assert tx["metodo_pagamento"] == "Cartão de Crédito"
         assert tx["origem_sugestao"] == "aprendido"
+
+    def test_em_extrato_o_metodo_aprendido_vale(self, client, db, user_a):
+        db.add(
+            ImportCategoryRule(
+                user_id=user_a.id,
+                padrao="padaria stella sp",
+                descricao_sugerida="Padaria Stella",
+                categoria="Alimentação",
+                subcategoria="Padaria",
+                metodo_pagamento="Pix",
+            )
+        )
+        db.commit()
+
+        batch = upload_batch(
+            client, [tx_gasto("PG *PADARIA STELLA*SP 12/07")], tipo_documento="extrato"
+        )
+        assert batch["transacoes"][0]["metodo_pagamento"] == "Pix"
 
     def test_sem_regra_a_transacao_segue_com_o_palpite_da_ia(self, client):
         batch = upload_batch(client, [tx_gasto("LOJA NOVA XYZ")])
@@ -1437,7 +1503,6 @@ class TestAplicacaoDaMemoria:
         batch = upload_batch(client, [tx_gasto("LOJA ANTIGA 12/07")])
         tx = batch["transacoes"][0]
         assert tx["descricao"] == "Loja Antiga"  # o resto da regra ainda vale
-        assert tx["metodo_pagamento"] == "Pix"
         assert tx["categoria"] == "Alimentação"  # do palpite da IA, nao da regra
         assert tx["subcategoria"] == "Padaria"
 
@@ -1565,7 +1630,7 @@ class TestValidateAiResultComRegras:
         tx = validate_ai_result(self.RESULTADO, set(), regras)["transacoes"][0]
         assert tx["categoria"] == "Transporte"
         assert tx["subcategoria"] == "Pedágio"
-        assert tx["metodo_pagamento"] == "Dinheiro"
+        assert tx["metodo_pagamento"] == "Cartão de Crédito"  # fatura manda
         assert tx["origem_sugestao"] == "aprendido"
 
     def test_descricao_original_preserva_o_texto_do_documento(self):

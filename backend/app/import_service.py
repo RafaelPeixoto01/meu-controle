@@ -70,6 +70,20 @@ ACQUIRER_PREFIX_RE = re.compile(
 # da IA (comportamento anterior); "aprendido" = regra do proprio usuario.
 ORIGEM_APRENDIDO = "aprendido"
 
+# CR-054: descritores genericos que NAO identificam estabelecimento — o que os
+# distingue entre si e justamente a parte numerica que `normalize_pattern`
+# remove ("PIX ENVIADO 12/07" e "PIX ENVIADO 19/07" colapsam em "pix enviado").
+# Sem esta lista, confirmar um unico Pix criaria uma regra coringa que no mes
+# seguinte renomearia e recategorizaria TODOS os Pix — o mesmo falso positivo
+# silencioso que o D1 evitou ao recusar match por prefixo.
+PADROES_GENERICOS = frozenset({
+    "pix", "pix enviado", "pix recebido", "pix transferencia", "transferencia",
+    "transferencia enviada", "transferencia recebida", "ted", "doc", "saque",
+    "deposito", "compra", "compra cartao", "compra no debito", "compra credito",
+    "pagamento", "pagamento de fatura", "pagamento recebido", "debito automatico",
+    "tarifa", "tarifa bancaria", "juros", "iof", "estorno", "anuidade",
+})
+
 
 def is_import_enabled() -> bool:
     return os.getenv("IMPORT_ENABLED", "true").lower() == "true"
@@ -118,7 +132,11 @@ def normalize_pattern(descricao: str) -> str:
 
     # Descritor sem nenhuma parte alfabetica (so numeros) perderia tudo aqui;
     # nesse caso o texto original ja e a chave mais estavel disponivel
-    return padrao or normalize_description(descricao)[:255]
+    padrao = padrao or normalize_description(descricao)[:255]
+
+    # Descritor generico nao vira chave: ele nao identifica estabelecimento
+    # nenhum, e a regra pegaria transacoes sem relacao entre si
+    return "" if padrao in PADROES_GENERICOS else padrao
 
 
 def compute_fingerprint(
@@ -318,33 +336,13 @@ def _parse_parcelas(tx: dict) -> tuple[int | None, int | None]:
     return atual, total
 
 
-def load_rules(db: Session, user_id: str) -> dict[str, dict]:
-    """
-    CR-054: memoria do usuario como dados puros, indexada pelo padrao.
-
-    Devolve dicts e nao objetos ORM de proposito: `process_import_batch` fecha
-    a sessao antes de chamar a IA, e instancias desanexadas dependeriam de os
-    atributos continuarem carregados para nao estourar na leitura minutos
-    depois. Como efeito colateral, `validate_ai_result` segue pura e testavel
-    sem banco.
-    """
-    return {
-        padrao: {
-            "descricao_sugerida": regra.descricao_sugerida,
-            "categoria": regra.categoria,
-            "subcategoria": regra.subcategoria,
-            "metodo_pagamento": regra.metodo_pagamento,
-        }
-        for padrao, regra in crud.get_import_rules_map(db, user_id).items()
-    }
-
-
 def _apply_rule(
     regra: dict,
     descricao: str,
     categoria: str | None,
     subcategoria: str | None,
     metodo: str | None,
+    tipo_documento: str | None = None,
 ) -> tuple[str, str | None, str | None, str | None, bool]:
     """
     CR-054: sobrepoe o palpite da IA com a decisao que o usuario ja tomou para
@@ -372,10 +370,16 @@ def _apply_rule(
         subcategoria = r_subcategoria
         aplicou = True
 
-    r_metodo = regra.get("metodo_pagamento")
-    if r_metodo and is_valid_payment_method(r_metodo):
-        metodo = r_metodo
-        aplicou = True
+    # Numa fatura o meio de pagamento e propriedade do DOCUMENTO, nao do
+    # historico: a compra esta ali porque foi no cartao. Uma regra aprendida
+    # num extrato (ex.: "Pix" na padaria) sobrescreveria o "Cartão de Crédito"
+    # que a validacao acabou de derivar do tipo do documento, e o usuario
+    # teria que recorrigir todo mes — o oposto do objetivo da memoria.
+    if tipo_documento != "fatura":
+        r_metodo = regra.get("metodo_pagamento")
+        if r_metodo and is_valid_payment_method(r_metodo):
+            metodo = r_metodo
+            aplicou = True
 
     return descricao, categoria, subcategoria, metodo, aplicou
 
@@ -465,10 +469,11 @@ def validate_ai_result(
         descricao_original = descricao
         origem_sugestao = None
         if rules and classificacao == "gasto_diario":
-            regra = rules.get(normalize_pattern(descricao))
+            padrao = normalize_pattern(descricao)
+            regra = rules.get(padrao) if padrao else None
             if regra is not None:
                 descricao, categoria, subcategoria, metodo, aplicou = _apply_rule(
-                    regra, descricao, categoria, subcategoria, metodo
+                    regra, descricao, categoria, subcategoria, metodo, tipo_documento
                 )
                 if aplicou:
                     origem_sugestao = ORIGEM_APRENDIDO
@@ -605,7 +610,7 @@ def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes
         open_expenses = collect_open_expenses(db, user_id)
         valid_ids = {e.id for e in open_expenses}
         system_prompt, user_prompt = build_import_prompts(open_expenses)
-        rules = load_rules(db, user_id)  # CR-054
+        rules = crud.get_import_rules_data(db, user_id)  # CR-054
     except Exception:
         logger.error(f"Falha ao montar o contexto do lote {batch_id}", exc_info=True)
         db.rollback()

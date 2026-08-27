@@ -711,8 +711,35 @@ def get_import_rules_map(db: Session, user_id: str) -> dict[str, ImportCategoryR
     return {regra.padrao: regra for regra in db.scalars(stmt).all()}
 
 
+def get_import_rules_data(db: Session, user_id: str) -> dict[str, dict]:
+    """
+    Mesmas regras, como dados puros (RN-049).
+
+    Projecao em vez de entidades: quem le as regras e a task de background, que
+    fecha a sessao antes de chamar a IA — objetos ORM desanexados dependeriam
+    de os atributos continuarem carregados minutos depois.
+    """
+    stmt = select(
+        ImportCategoryRule.padrao,
+        ImportCategoryRule.descricao_sugerida,
+        ImportCategoryRule.categoria,
+        ImportCategoryRule.subcategoria,
+        ImportCategoryRule.metodo_pagamento,
+    ).where(ImportCategoryRule.user_id == user_id)
+    return {
+        row.padrao: {
+            "descricao_sugerida": row.descricao_sugerida,
+            "categoria": row.categoria,
+            "subcategoria": row.subcategoria,
+            "metodo_pagamento": row.metodo_pagamento,
+        }
+        for row in db.execute(stmt)
+    }
+
+
 def upsert_import_rule(
     db: Session,
+    cache: dict[str, ImportCategoryRule],
     user_id: str,
     padrao: str,
     descricao_sugerida: str | None,
@@ -724,20 +751,23 @@ def upsert_import_rule(
     Grava/atualiza a regra de um padrao (RN-049). Nao commita — o confirm da
     importacao e atomico e fecha a transacao inteira de uma vez.
 
+    `cache` e o mapa das regras existentes, carregado UMA vez antes do laco do
+    confirm. Ele resolve tres coisas de uma so vez: evita um SELECT por linha
+    numa fatura de 80 transacoes; e, como a sessao roda com `autoflush=False`,
+    evita que duas linhas do mesmo estabelecimento no mesmo lote nao se
+    enxerguem e emitam dois INSERTs para a mesma (user_id, padrao) — o que
+    estouraria a unique constraint no commit e abortaria o confirm inteiro.
+
     A ultima decisao do usuario vence: reconfirmar o mesmo padrao com valores
     diferentes sobrescreve a regra, que e como uma regra errada se corrige sem
     tela de gestao.
     """
-    regra = db.scalars(
-        select(ImportCategoryRule).where(
-            ImportCategoryRule.user_id == user_id,
-            ImportCategoryRule.padrao == padrao,
-        )
-    ).first()
+    regra = cache.get(padrao)
 
     if regra is None:
         regra = ImportCategoryRule(user_id=user_id, padrao=padrao, hits=1)
         db.add(regra)
+        cache[padrao] = regra
     else:
         regra.hits += 1
 

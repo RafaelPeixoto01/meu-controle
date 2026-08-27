@@ -174,6 +174,11 @@ def confirm_import(
     descartadas = 0
     expenses_ja_atualizados: set[str] = set()
     series_ja_criadas: set[tuple] = set()  # CR-049
+    # CR-054: regras carregadas UMA vez — o laco abaixo pode ter 80 linhas, e a
+    # sessao roda com autoflush=False (duas linhas do mesmo estabelecimento nao
+    # se enxergariam num SELECT por linha e colidiriam na unique constraint)
+    regras_do_usuario = crud.get_import_rules_map(db, current_user.id)
+    padroes_aprendidos: set[str] = set()
 
     for tx in batch.transacoes:
         decision = decisions.get(tx.id)
@@ -230,22 +235,33 @@ def confirm_import(
             criados += 1
 
             # CR-054 (RN-049): aprende a decisao do usuario para este padrao.
-            # A chave sai do texto BRUTO do documento, nunca da descricao
-            # editada: o extrato do mes seguinte trara o descritor cru de novo,
-            # e uma regra indexada por "Padaria Stella" jamais casaria com
+            # A chave sai do texto que veio do DOCUMENTO, nunca da descricao
+            # editada: o extrato do mes seguinte trara o descritor de novo, e
+            # uma regra indexada por "Padaria Stella" jamais casaria com
             # "PG *PADARIA STELLA*SP 15/08".
             #
             # `descricao_original` e obrigatorio aqui e nao um detalhe: se a
             # linha ja chegou renomeada por uma regra, `tx.descricao` E o nome
             # aprendido, e aprender dele criaria uma regra paralela — a original
             # nunca mais receberia correcao. Fallback para o historico anterior.
-            padrao = import_service.normalize_pattern(tx.descricao_original or tx.descricao)
-            if padrao:
+            texto_documento = tx.descricao_original or tx.descricao
+            padrao = import_service.normalize_pattern(texto_documento)
+            # Uma linha ja aprendida neste mesmo confirm nao reprocessa: `hits`
+            # deve contar confirmacoes do padrao, nao linhas da fatura — senao
+            # 6 corridas de Uber num mes superariam um padrao recorrente de 5
+            # meses na ordenacao que o few-shot vai usar
+            if padrao and padrao not in padroes_aprendidos:
+                padroes_aprendidos.add(padrao)
                 crud.upsert_import_rule(
                     db,
+                    regras_do_usuario,
                     current_user.id,
                     padrao,
-                    descricao_sugerida=descricao,
+                    # So aprende o nome se o usuario REALMENTE reescreveu. Sem
+                    # esta guarda, aceitar o descritor como veio gravaria a data
+                    # do mes corrente ("...12/07") como nome sugerido, e o mes
+                    # seguinte chegaria renomeado com a data velha.
+                    descricao_sugerida=descricao if descricao != texto_documento else None,
                     categoria=categoria,
                     subcategoria=subcategoria,
                     metodo_pagamento=metodo,

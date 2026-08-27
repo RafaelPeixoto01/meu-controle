@@ -295,7 +295,13 @@ export function matchesFilter(
 ): boolean {
   const alvo = normalizeForSearch(query);
   if (!alvo) return true;
-  const texto = normalizeForSearch(`${tx.descricao} ${decision?.descricao ?? ""}`);
+  // CR-054: `descricao_original` entra na busca porque uma regra aprendida pode
+  // ter renomeado a linha — sem ela, quem procura pelo texto que esta vendo no
+  // PDF nao acha a transacao, e como o filtro E a selecao (CR-053) a linha
+  // tambem ficaria fora da edicao em massa.
+  const texto = normalizeForSearch(
+    `${tx.descricao} ${tx.descricao_original ?? ""} ${decision?.descricao ?? ""}`
+  );
   return texto.includes(alvo);
 }
 

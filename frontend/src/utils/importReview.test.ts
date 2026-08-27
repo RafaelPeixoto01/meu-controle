@@ -718,7 +718,10 @@ describe("isLearnedSuggestion", () => {
   });
 
   it("valor desconhecido nao vira badge", () => {
-    expect(isLearnedSuggestion(makeTx({ origem_sugestao: "ia" }))).toBe(false);
+    // O tipo literal impede isso em compilacao, mas o JSON vem da rede: se o
+    // backend renomear o sentinela, o badge tem que sumir e nao virar `true`
+    const inesperado = { origem_sugestao: "ia" } as unknown as ImportTransaction;
+    expect(isLearnedSuggestion(inesperado)).toBe(false);
   });
 });
 
@@ -739,5 +742,29 @@ describe("learnedTitle", () => {
 
   it("omite a linha extra no historico sem descricao_original", () => {
     expect(learnedTitle(makeTx({ descricao_original: null }))).not.toContain("No documento");
+  });
+});
+
+describe("matchesFilter com descricao renomeada (CR-054)", () => {
+  it("acha a linha pelo texto do documento apos a regra renomea-la", () => {
+    const tx = makeTx({
+      descricao: "Padaria Stella",
+      descricao_original: "PG *PADARIA STELLA*SP 15/08",
+    });
+    // o usuario esta lendo o PDF e busca pelo que ve la
+    expect(matchesFilter(tx, undefined, "PADARIA STELLA*SP")).toBe(true);
+  });
+
+  it("continua achando pelo nome exibido", () => {
+    const tx = makeTx({
+      descricao: "Padaria Stella",
+      descricao_original: "PG *PADARIA STELLA*SP 15/08",
+    });
+    expect(matchesFilter(tx, undefined, "stella")).toBe(true);
+  });
+
+  it("nao casa texto que nao esta em nenhum dos campos", () => {
+    const tx = makeTx({ descricao: "Padaria Stella", descricao_original: "PG *PADARIA*SP" });
+    expect(matchesFilter(tx, undefined, "posto")).toBe(false);
   });
 });
