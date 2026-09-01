@@ -28,6 +28,7 @@ export interface ReviewGroups {
   novos: ImportTransaction[];
   matches: ImportTransaction[];
   parcelamentos: ImportTransaction[]; // CR-049
+  jaLancados: ImportTransaction[]; // CR-055
   ignoradas: ImportTransaction[];
   duplicadas: ImportTransaction[];
 }
@@ -37,6 +38,7 @@ export function groupTransactions(batch: ImportBatch): ReviewGroups {
     novos: [],
     matches: [],
     parcelamentos: [],
+    jaLancados: [],
     ignoradas: [],
     duplicadas: [],
   };
@@ -47,6 +49,8 @@ export function groupTransactions(batch: ImportBatch): ReviewGroups {
       groups.matches.push(tx);
     } else if (tx.classificacao === "parcelamento") {
       groups.parcelamentos.push(tx);
+    } else if (tx.classificacao === "ja_lancado") {
+      groups.jaLancados.push(tx);
     } else if (tx.classificacao === "ignorar") {
       groups.ignoradas.push(tx);
     } else {
@@ -89,8 +93,12 @@ export function buildInitialDecisions(batch: ImportBatch): Record<string, Review
     else if (isParcelamento) acao = "criar_planejado_parcelado";
 
     decisions[tx.id] = {
-      // Ignoradas e duplicadas nascem desmarcadas (resgataveis na revisao)
-      incluida: tx.status === "pendente" && tx.classificacao !== "ignorar",
+      // Ignoradas, duplicadas e ja lancadas (CR-055) nascem desmarcadas —
+      // resgataveis na revisao, mas nunca importadas por descuido
+      incluida:
+        tx.status === "pendente" &&
+        tx.classificacao !== "ignorar" &&
+        tx.classificacao !== "ja_lancado",
       acao,
       descricao: tx.descricao,
       valor: String(tx.valor),
@@ -98,7 +106,12 @@ export function buildInitialDecisions(batch: ImportBatch): Record<string, Review
       categoria: tx.categoria ?? "",
       subcategoria: tx.subcategoria ?? "",
       metodoPagamento: tx.metodo_pagamento ?? "",
-      expenseId: tx.expense_id_sugerido ?? "",
+      // CR-055: so a conciliacao pre-seleciona alvo. Em `ja_lancado`,
+      // `expense_id_sugerido` aponta para um planejado JA PAGO — pre-preencher
+      // aqui o faria escapar do filtro do dropdown (que so mantem Pago quando
+      // ja selecionado), o usuario poderia escolhe-lo e o confirm devolveria
+      // 422, derrubando o lote inteiro.
+      expenseId: isMatch ? tx.expense_id_sugerido ?? "" : "",
       parcelaAtual: tx.parcela_atual ? String(tx.parcela_atual) : "",
       parcelaTotal: tx.parcela_total ? String(tx.parcela_total) : "",
     };
@@ -214,9 +227,19 @@ export function monthsToFetchForMatches(
   const keys = new Set<string>();
   const add = (year: number, month: number) => keys.add(`${year}-${month}`);
 
-  add(today.getFullYear(), today.getMonth() + 1);
-  const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  add(prev.getFullYear(), prev.getMonth() + 1);
+  // CR-055: espelha a janela do backend (PENDING_EXPENSES_MONTHS_BACK = 3
+  // meses atras ate o mes seguinte). Sem isso, o planejado ja pago apontado
+  // pela deteccao costuma ficar fora de `matchTargets` e a linha degrada para
+  // a dica generica, perdendo justamente o nome/valor/vencimento que o usuario
+  // precisa para decidir se resgata.
+  // Nao inclui o mes SEGUINTE de proposito: `fetchMonthlySummary` dispara a
+  // transicao de mes (RF-06), e abrir a revisao passaria a materializar os
+  // recorrentes do mes que ainda nao chegou. Planejado ja pago vive no passado
+  // recente, entao a perda de cobertura e desprezivel.
+  for (let offset = -3; offset <= 0; offset++) {
+    const m = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    add(m.getFullYear(), m.getMonth() + 1);
+  }
 
   for (const tx of batch.transacoes) {
     const [year, month] = tx.data.split("-").map(Number);
@@ -258,6 +281,7 @@ export const REVIEW_GROUP_KEYS: ReviewGroupKey[] = [
   "novos",
   "matches",
   "parcelamentos",
+  "jaLancados",
   "ignoradas",
   "duplicadas",
 ];
@@ -317,6 +341,7 @@ export function filterGroups(
     novos: [],
     matches: [],
     parcelamentos: [],
+    jaLancados: [],
     ignoradas: [],
     duplicadas: [],
   };
@@ -368,13 +393,14 @@ export function bulkTargetIds(
     .map((tx) => tx.id);
 }
 
-// Alvo do "marcar em lote": as visiveis, MENOS as duplicadas. Duplicada costuma
-// vir com categoria/metodo completos da importacao anterior, entao passaria na
-// validacao e seria regravada — dobrando o lancamento. Resgate de duplicada
-// continua sendo linha a linha, que e onde o usuario ve o aviso "ja importada".
+// Alvo do "marcar em lote": as visiveis, MENOS as duplicadas e as ja lancadas
+// (CR-055). Ambas vem completas o bastante para passar na validacao e seriam
+// regravadas — dobrando exatamente o lancamento que elas existem para evitar.
+// Resgate das duas continua sendo linha a linha, que e onde o usuario ve o
+// aviso e o planejado alvo.
 export function bulkIncludeTargetIds(visibleGroups: ReviewGroups): string[] {
   return flattenGroups(visibleGroups)
-    .filter((tx) => tx.status !== "duplicada")
+    .filter((tx) => tx.status !== "duplicada" && tx.classificacao !== "ja_lancado")
     .map((tx) => tx.id);
 }
 

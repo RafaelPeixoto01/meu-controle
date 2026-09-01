@@ -1,7 +1,7 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.5
-**Data:** 2026-08-27
+**Versão:** 1.6
+**Data:** 2026-09-01
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
 **Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa) / CR-054 (memória de categorização)
@@ -244,9 +244,11 @@ Dividir uma compra em duas ou mais categorias (mercado + farmácia na mesma nota
 
 Fatiar faturas muito grandes em várias chamadas para não estourar `max_tokens`. Hoje `max_tokens=16000` com effort low cobre os casos observados, e a reconciliação de total da **E-D é o detector** do caso em que não cobrir — implementar o chunking antes de ter esse detector seria otimização sem evidência.
 
-### B-6 — Match de planejados mais rico
+### B-6 — Match de planejados mais rico 🟡 Parcial (CR-055)
 
-Hoje a IA sugere no máximo um `expense_id`, restrito a Pendente/Atrasado dos últimos 3 meses + o mês seguinte ([`import_service.py:57`](../backend/app/import_service.py#L57)), e o valor do planejado é sobrescrito sem alarde. Evolução: múltiplos candidatos com score exibidos na revisão, e destaque quando o valor real diverge do planejado (pagamento parcial, juros, correção monetária) em vez de sobrescrever silenciosamente.
+Hoje a IA sugere no máximo um `expense_id`, restrito a Pendente/Atrasado dos últimos 3 meses + o mês seguinte, e o valor do planejado é sobrescrito sem alarde. Evolução: múltiplos candidatos com score exibidos na revisão, e destaque quando o valor real diverge do planejado (pagamento parcial, juros, correção monetária) em vez de sobrescrever silenciosamente.
+
+> **Recorte entregue no [CR-055](changes/CR-055-detectar-planejado-ja-pago.md):** o planejado **já Pago** ficava invisível para a importação (fora da lista de candidatos e escondido do dropdown), então a transação correspondente virava um gasto diário novo — contagem dupla silenciosa, que a dedup da RN-042 não pega por comparar só com transações importadas. A detecção é determinística (valor ±R$ 1,00, ±7 dias do vencimento), não toca no prompt, e a linha chega desmarcada num grupo próprio. RN-050. O resto do B-6 (múltiplos candidatos com score, divergência de valor) segue aberto.
 
 ### B-7 — Custo e tokens visíveis
 
@@ -277,7 +279,7 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | B-3 | Confiança por transação | Baixa | — | Sim |
 | B-4 | Split de transação | Baixa | — | Talvez |
 | B-5 | Chunking de PDF | Baixa | E-D | Não |
-| B-6 | Match de planejados mais rico | Baixa | — | Talvez |
+| B-6 | Match de planejados mais rico 🟡 parcial (CR-055: planejado já pago) | Baixa | — | Não |
 | B-7 | Custo e tokens visíveis | Baixa | — | Não |
 | B-8 | Limite de páginas do PDF | Baixa | — | Não |
 

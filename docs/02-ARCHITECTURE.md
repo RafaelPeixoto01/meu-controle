@@ -3,7 +3,7 @@
 **Versao:** 3.3
 **Data:** 2026-08-22
 **PRD Ref:** 01-PRD v3.3
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao)
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao), CR-055 (Deteccao de Planejado Ja Pago)
 
 ---
 
@@ -524,7 +524,7 @@ erDiagram
 
 > **Index:** `ix_import_batches_user_status (user_id, status)`
 
-#### ImportTransaction (`import_transactions`) — CR-046 / CR-049 / CR-054
+#### ImportTransaction (`import_transactions`) — CR-046 / CR-049 / CR-054 / CR-055
 
 | Campo                    | Tipo         | Restricoes                              | Descricao                                        |
 |--------------------------|--------------|------------------------------------------|---------------------------------------------------|
@@ -535,9 +535,9 @@ erDiagram
 | descricao                | String(255)  | NOT NULL                                 | Descricao exibida (pode ter sido reescrita por regra aprendida) |
 | descricao_original       | String(255)  | Nullable                                 | CR-054: texto como veio do documento — base do fingerprint e da memoria |
 | valor                    | Numeric(10,2)| NOT NULL                                 | Valor da transacao                                |
-| classificacao            | String(20)   | NOT NULL                                 | gasto_diario, match_planejado, parcelamento, ignorar |
+| classificacao            | String(20)   | NOT NULL                                 | gasto_diario, match_planejado, parcelamento, ja_lancado (CR-055), ignorar |
 | motivo_ignorar           | String(255)  | Nullable                                 | Justificativa quando classificacao=ignorar        |
-| expense_id_sugerido      | String(36)   | Nullable                                 | Gasto planejado sugerido pela IA para conciliacao |
+| expense_id_sugerido      | String(36)   | Nullable                                 | Planejado sugerido pela IA para conciliacao; em `ja_lancado`, o planejado ja PAGO detectado (CR-055) |
 | categoria/subcategoria   | String(50)   | Nullable                                 | Sugestao da IA (par validado no backend)          |
 | metodo_pagamento         | String(30)   | Nullable                                 | Sugestao da IA                                    |
 | parcela_atual/total      | Integer      | Nullable                                 | CR-049: numeracao lida da fatura (so parcelamento) |

@@ -347,6 +347,20 @@ def confirm_import(
                     detail=f"Transação {tx.id}: gasto planejado {expense.id} já foi "
                            "atualizado por outra transação deste lote",
                 )
+            # CR-055 (D3): conciliar algo ja pago remarcaria Pago e sobrescreveria
+            # o valor real ja registrado, sem deixar rastro. A UI ja esconde os
+            # pagos do dropdown; isto alinha o contrato da API ao que ela permite.
+            #
+            # DEPOIS da guarda de lote acima, e nao antes: a primeira conciliacao
+            # ja deixou o Expense em Pago na sessao, entao checar aqui primeiro
+            # faria duas linhas apontando para o mesmo planejado ABERTO
+            # reportarem "ja esta pago" — mensagem errada, e a guarda especifica
+            # viraria codigo morto.
+            if expense.status == ExpenseStatus.PAGO.value:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transação {tx.id}: o gasto planejado já está pago",
+                )
             expenses_ja_atualizados.add(expense.id)
 
             expense.status = ExpenseStatus.PAGO.value  # RN-040

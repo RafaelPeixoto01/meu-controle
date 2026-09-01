@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 3.4
-**Data:** 2026-08-27
+**Versao:** 3.5
+**Data:** 2026-09-01
 **Status:** Aprovado
 **Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052, CR-053, CR-054
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052, CR-053, CR-054, CR-055
 
 ---
 
@@ -262,6 +262,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - O PDF e processado em memoria e **nunca persistido**; apenas as transacoes extraidas sao armazenadas.
 - Feature flag `IMPORT_ENABLED` + `ANTHROPIC_API_KEY`; indisponibilidade retorna resposta explicativa sem quebrar o app (padrao RF-19).
 - UI (CR-047): pagina propria "Importar" no ViewSelector com fluxo upload → processamento → revisao → confirmacao. A revisao agrupa por destino, incluindo "Compras parceladas" com edicao da numeracao e previa da serie antes de gravar (CR-049).
+- Deteccao de planejado ja pago (CR-055): transacao que corresponde a um gasto planejado JA marcado como Pago e sinalizada e chega desmarcada na revisao, num grupo proprio, exibindo o planejado alvo. Confirmar sem tocar nela nao cria nada — antes, ela virava um gasto diario novo em cima do planejado ja pago, duplicando o valor. Conciliar um planejado ja pago passa a ser recusado.
 - Memoria de categorizacao (CR-054): confirmar um gasto diario ensina ao sistema como aquele descritor deve ser tratado (nome, categoria, subcategoria, metodo). Na importacao seguinte, transacoes de estabelecimentos ja vistos chegam preenchidas e marcadas como "aprendido" na revisao — o usuario para de recorrigir as mesmas linhas todo mes. A regra e aprendida do texto do DOCUMENTO (nao da descricao editada), porque e o descritor cru que voltara no proximo extrato. A revisao continua obrigatoria e cada campo continua editavel.
 
 ### Modulo: Autenticacao e Usuarios (CR-002)
@@ -510,6 +511,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-046 | Parcela ja existente no mes-alvo (mesmo nome + numeracao) nao e recriada: e conciliada (status/valor atualizados), evitando duplicacao ao importar faturas de meses consecutivos | Importacao (RF-21, CR-049) |
 | RN-047 | A extracao do PDF roda fora do request: o upload responde 202 com o lote em `processando` e a IA e chamada em background. O lote so e escrito pela task se ainda estiver `processando` — descartar durante a extracao e decisao final | Importacao (RF-21, CR-052) |
 | RN-048 | Lote parado em `processando` ha mais de 30 minutos perdeu o processamento (ex.: restart do servidor) e e resolvido como `erro` na primeira leitura, sem rotina de limpeza dedicada | Importacao (RF-21, CR-052) |
+| RN-050 | Transacao importada cuja data e valor correspondem a um gasto planejado ja PAGO (tolerancia de R$ 1,00 e 7 dias em torno do vencimento) e classificada como `ja_lancado` e chega desmarcada na revisao, evitando lancar o mesmo valor duas vezes. Cada planejado e apontado por no maximo uma transacao do lote. Conciliar um planejado ja pago e recusado | Importacao (RF-21, CR-055) |
 | RN-049 | Confirmar um gasto diario grava/atualiza uma regra de categorizacao do usuario, indexada pelo padrao do descritor do DOCUMENTO (nunca da descricao editada). Na importacao seguinte a regra sobrescreve a sugestao da IA e a transacao e marcada como "aprendido". Descritores genericos (ex.: "PIX ENVIADO") nao viram regra, e em fatura o metodo de pagamento do documento prevalece sobre o aprendido | Importacao (RF-21, CR-054) |
 
 ---
@@ -575,6 +577,7 @@ Os itens abaixo **nao** estao no escopo atual:
 | ViewSelector | Componente de navegacao que permite alternar entre as abas do app: Planejados, Diarios, Dashboard, Parcelas, Score (CR-005, expandido em CRs subsequentes) |
 | Dashboard | Tela com KPI cards e graficos agregados do mes: distribuicao por categoria, evolucao 6 meses, breakdown por status (CR-019) |
 | Score de Saude Financeira | Nota de 0-100 calculada deterministicamente a partir de 4 dimensoes: comprometimento fixo, pressao de parcelas, capacidade de poupanca, comportamento/disciplina (CR-026) |
+| Ja lancado | Transacao importada que corresponde a um gasto planejado ja pago — sinalizada e mantida fora da importacao para evitar contagem dupla (CR-055) |
 | Memoria de categorizacao | Conjunto de regras por usuario que associa o padrao do descritor de uma transacao importada a decisao ja tomada na revisao (nome, categoria, subcategoria, metodo), reaplicada nas importacoes seguintes (CR-054) |
 | Padrao (de descritor) | Forma normalizada e estavel entre meses do texto de uma transacao, sem acentos, pontuacao, prefixo de adquirente e numeros — e a chave da memoria de categorizacao (CR-054) |
 | Projecao de Parcelas | Visao consolidada de todos os parcelamentos ativos com projecao de comprometimento futuro em 12 meses (CR-021) |
@@ -638,6 +641,8 @@ Os itens abaixo **nao** estao no escopo atual:
 *Atualizado para v3.2 em 2026-08-16. CR-049: importacao de compras parceladas (F07, item E-A do roadmap v2) — RF-21 estendido com a classificacao `parcelamento` e a acao `criar_planejado_parcelado`; RN-044 a RN-046 novas; RN-042 passa a considerar a numeracao da parcela. Receitas seguem em `ignorar` (RN-041 inalterada).*
 
 *Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7. UI entregue no CR-047 (mesma data) — conteudo do RF-21 ja cobria a feature completa.*
+*Atualizado para v3.5 em 2026-09-01. CR-055: deteccao de planejado ja pago na importacao (F07, recorte do B-6 do roadmap v2) — RF-21 detalhado com a sinalizacao; RN-050 nova. Sem migration e sem endpoint novo; a deteccao e deterministica e roda depois da IA, e a revisao segue obrigatoria.*
+
 *Atualizado para v3.4 em 2026-08-27. CR-054: memoria de categorizacao da importacao (F07, item E-C do roadmap v2, frente backend) — RF-21 detalhado com o aprendizado por padrao de descritor; RN-049 nova. Nenhum endpoint novo e nenhuma regra de confirmacao alterada: a memoria atua antes da revisao, que segue obrigatoria.*
 
 *Atualizado para v3.3 em 2026-08-22. CR-052: upload assincrono da importacao (F07, item E-B do roadmap v2) — `POST /api/imports` responde 202 e a extracao roda em `BackgroundTasks`; RN-047 e RN-048 novas; status de lote `processando` e `erro` com `erro_mensagem`. Nenhuma regra de classificacao ou confirmacao alterada.*

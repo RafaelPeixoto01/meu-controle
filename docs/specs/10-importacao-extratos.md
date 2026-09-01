@@ -1,6 +1,6 @@
-# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa / CR-054 memória de categorização)
+# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa / CR-054 memória de categorização / CR-055 planejado já pago)
 
-**PRD Ref:** RF-21, US-29, RN-038..RN-049
+**PRD Ref:** RF-21, US-29, RN-038..RN-050
 
 ## Visão Geral
 
@@ -123,6 +123,25 @@ Compra parcelada identificada pela numeração explícita na descrição (`3/10`
 
 A criação upfront das parcelas é feita por `services.create_expense_with_installments()`, **compartilhada com o cadastro manual** ([`routers/expenses.py`](../../backend/app/routers/expenses.py)) — o import apenas passa `status_primeira=Pago` e `skip_existing=True`.
 
+## Planejado já pago (CR-055 — recorte do B-6 do roadmap v2)
+
+Fecha um furo de **contagem dupla**. Como `collect_open_expenses` só oferece candidatos **Pendente/Atrasado**, um planejado quitado à mão nunca aparecia para a IA nem no dropdown da revisão: a transação correspondente chegava como `gasto_diario` **marcada**, e confirmar lançava o mesmo valor duas vezes. A dedup por fingerprint (RN-042) não cobre o caso — ela compara com transações **importadas**, nunca com lançamentos manuais.
+
+O caminho de **parcelas** já era protegido: `crud.get_expense_installment` não filtra por status, então a RN-046 concilia parcela paga em vez de duplicar. Era o planejado comum que estava descoberto.
+
+**Detecção determinística, depois da IA** (`detect_already_paid`). Não toca no prompt: sem custo de token e sem variabilidade do modelo.
+
+- **Escopo:** só `classificacao == "gasto_diario"`.
+- **Candidatos:** planejados **Pago** da mesma janela da conciliação (`collect_match_context` lê a janela **uma vez** e particiona — duas varreduras dobrariam as queries dentro do trecho curto de sessão do CR-052).
+- **Casa quando ambos:** diferença de valor `<= PAID_MATCH_VALUE_TOLERANCE` (**R$ 1,00, absoluta**) e `abs(data − vencimento) <= PAID_MATCH_WINDOW_DAYS` (**7 dias**). A tolerância é absoluta de propósito: relativa a 2% abriria uma janela de R$ 60 num aluguel de R$ 3.000 e engoliria compras sem relação.
+- **Atribuição global.** Todos os pares viáveis do lote são ordenados por (distância de data, diferença de valor, índice, id) e o melhor par do lote inteiro casa primeiro; cada planejado é reivindicado por no máximo uma transação. Percorrer as transações em ordem **inverteria o CR**: com "Energia R$ 187,32" paga, um lote com "SUPERMERCADO R$ 186,60" (2 dias antes) e "CEMIG R$ 187,32" (no vencimento) faria o supermercado reivindicar o alvo e ser silenciado, enquanto a CEMIG chegaria marcada e seria importada.
+- **Resultado:** `classificacao = "ja_lancado"` e `expense_id_sugerido` apontando para o planejado pago. `ja_lancado` fica **fora** de `CLASSIFICACOES_VALIDAS` — é produzida só pelo backend, e assim a IA não consegue emiti-la.
+- Roda **depois** da memória (CR-054): a linha reclassificada preserva categoria/método, então o resgate manual sai válido.
+
+**No confirm:** `atualizar_planejado` apontando para um Expense já **Pago** retorna **422**. A verificação vem **depois** da guarda de "já atualizado neste lote" — antes dela, duas linhas no mesmo planejado *aberto* reportariam "já está pago" (a primeira já o deixou Pago na sessão) e a guarda específica viraria código morto.
+
+**Limitação conhecida:** valor real que diverge muito do planejado estimado (conta variável) não é detectado. É o comportamento anterior, sem regressão — a tolerância estreita prioriza precisão, porque sinalizar demais treina o usuário a ignorar o grupo.
+
 ## Memória de categorização (CR-054 — item E-C do roadmap v2, frente backend)
 
 A IA erra as mesmas descrições todo mês. A memória grava a decisão do usuário por **padrão de descritor** e a reaplica na importação seguinte, antes da revisão.
@@ -159,6 +178,8 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 
 - `import_service.py`:
   - `normalize_description(texto)` — lowercase, espaços colapsados, trim. **Contrato congelado** (CR-054): alimenta fingerprints já persistidos
+  - `collect_match_context(db, user_id)` (CR-055) — (planejados em aberto, candidatos já pagos) numa varredura só da janela
+  - `detect_already_paid(transacoes, paid_expenses)` (CR-055) — reclassifica como `ja_lancado`; atribuição global, pura e testável sem banco
   - `normalize_pattern(texto)` (CR-054) — chave de match da memória; devolve `""` para descritor genérico (`PADROES_GENERICOS`)
   - `_apply_rule(regra, ..., tipo_documento)` (CR-054) — sobrepõe o palpite da IA, revalidando cada campo
   - `compute_fingerprint(user_id, data, valor, descricao, parcela_atual=None, parcela_total=None)` — sha256 de `user_id|YYYY-MM-DD|valor 2 casas|descricao normalizada`, mais `|atual/total` quando houver parcela. Sem a numeração, parcelas da mesma compra colidiriam (mesma data de compra, mesmo valor, mesma descrição limpa) e a parcela do mês seguinte nasceria `duplicada`
@@ -184,6 +205,7 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 | PDF nunca persistido | RN-043 |
 | Extração assíncrona: upload responde 202 e o lote nasce `processando` | RN-047 (CR-052) |
 | Lote `processando` há mais de 30 min é resolvido como `erro` na leitura | RN-048 (CR-052) |
+| Transação que corresponde a um planejado já **Pago** é marcada `ja_lancado` e chega desmarcada na revisão; conciliar um planejado já pago é recusado (422) | RN-050 (CR-055) |
 | Confirmar um gasto diário grava/atualiza uma regra de categorização do usuário, indexada pelo padrão do descritor do documento; a regra é reaplicada na importação seguinte e sobrescreve a sugestão da IA | RN-049 (CR-054) |
 
 ## Persistência (migration 009)
@@ -197,6 +219,8 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 Migration **010** (CR-049) adiciona `parcela_atual`, `parcela_total` e `expense_id_criado` via `batch_alter_table`.
 Migration **011** (CR-052) adiciona `erro_mensagem` em `import_batches`. Os valores novos de `status` não exigem DDL — a coluna é `String(20)` sem constraint.
 Migration **012** (CR-054) cria `import_category_rules` e adiciona em `import_transactions`: `origem_sugestao` (`aprendido` | nulo) e `descricao_original` (texto do documento — `descricao` pode ter sido reescrita por uma regra, e tanto o fingerprint quanto a realimentação da memória dependem do original). Ambas nullable; nulo equivale ao comportamento anterior, sem backfill.
+
+**CR-055 não altera schema:** reusa `expense_id_sugerido` para apontar o planejado já pago, e `classificacao` é `String(20)` sem constraint de enum.
 
 Sem alteração nas tabelas existentes.
 
@@ -233,6 +257,7 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - Confirm inválido: categoria/subcategoria incompatíveis → 422; lote já confirmado → 409; expense de outro usuário → 404
 - Ownership: get/confirm/delete de lote de outro usuário → 404
 - PDF não persistido (nenhum arquivo escrito)
+- Planejado já pago (CR-055): casa por valor+data e reclassifica com `expense_id_sugerido`; não casa fora da janela de dias nem fora da tolerância; tolerância é absoluta (aluguel de R$ 3.000 não engole compra de R$ 2.980); só atua em `gasto_diario`; a melhor correspondência do **lote** vence a ordem das linhas; um planejado não é reivindicado por duas transações; planejado Pendente segue no caminho de conciliação; planejado pago de outro usuário nunca é alcançado; `atualizar_planejado` sobre Pago → 422, e duas linhas no mesmo planejado aberto reportam a causa certa; linha reclassificada preserva o que a memória preencheu
 - Memória de categorização (CR-054): `normalize_pattern` converge descritores do mesmo estabelecimento entre meses e mantém `UBER *TRIP`/`UBER *EATS` distintos; descritor genérico não produz padrão; confirm grava a regra a partir do texto do documento; reconfirmar sobrescreve e incrementa `hits` (uma vez por confirmação); linha já renomeada realimenta a regra **original**; regra vence palpite válido da IA; par inválido é ignorado na aplicação; método aprendido vale em extrato mas não em fatura; nome só é aprendido se editado; parcelamento/conciliação/ignorada não geram nem recebem regra; regra de outro usuário nunca alcança o lote; reimportar o mesmo documento depois da regra continua marcando `duplicada`
 
 ## Frontend (CR-047)
@@ -242,6 +267,7 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - `components/imports/ImportUpload.tsx` — seleção de PDF com validação client-side (extensão + 10MB), estado "enviando o arquivo" (só a transferência), banner de lotes em aberto que distingue `processando` (spinner + "Acompanhar") de `pendente_revisao` ("Retomar revisão"), exibição de `indisponivel`/`erro` sem quebrar
 - `components/imports/ImportProcessing.tsx` (CR-052) — tela do estágio assíncrono: "você pode fechar esta página", cancelamento do lote, e título neutro enquanto o status ainda não chegou
 - `components/imports/ImportReview.tsx` — estado (decisões, erros, filtro) e layout. Grupos (novos gastos / conciliações / **compras parceladas** / ignoradas / duplicadas), checkbox por transação (ignoradas e duplicadas nascem desmarcadas), validação por linha antes do confirm (inclui guarda contra pagar o mesmo planejado 2x — espelho da regra do backend). CR-053: quando o confirm falha e alguma linha com erro está oculta pelo filtro, o filtro é **limpo automaticamente** — senão o usuário leria "corrija os campos destacados" sem nenhum campo destacado na tela
+- **CR-055 na revisão:** grupo próprio "Já lançados" (`jaLancados`), com a linha nascendo **desmarcada** e **fora** do "marcar em lote" — pelo mesmo motivo das duplicadas, resgate em massa regravaria o que o CR veio evitar. O planejado alvo (nome, valor, vencimento) é renderizado no **cabeçalho** da linha, e não no bloco de edição: como a linha nasce desmarcada, aquele bloco não renderiza e o usuário nunca veria o motivo. `buildInitialDecisions` **não** pré-preenche `expenseId` aqui — o alvo é um planejado Pago, e pré-preencher o faria escapar do filtro do dropdown, permitindo selecioná-lo e levar o confirm a um 422 que derruba o lote inteiro. `monthsToFetchForMatches` cobre 3 meses atrás até o mês **atual** (o mês seguinte fica de fora: buscar o summary dele dispararia a transição de mês, RF-06)
 - **CR-054 na revisão:** badge "aprendido" na linha cuja sugestão veio de uma regra (`isLearnedSuggestion`), com tooltip que mostra o descritor do documento quando a regra renomeou a linha (`learnedTitle`) — sem ele o usuário vê "Padaria Stella" e não sabe a que linha da fatura aquilo corresponde. `matchesFilter` passa a buscar também em `descricao_original`: como **o filtro é a seleção** (CR-053), uma linha renomeada e não encontrável também ficaria fora da edição em massa
 - `components/imports/ImportReviewRow.tsx` (CR-053) — a linha e seus editores inline (destino, valor, data, descrição, categoria+subcategoria em cascata, método); conciliação mostra o planejado alvo (nome, parcela, valor, status, vencimento). Em `React.memo`: antes era um `renderRow` de 255 linhas recriado a cada tecla, e numa fatura de 80 linhas digitar um caractere re-renderizava as 80
 - `components/imports/ImportReviewGroup.tsx` (CR-053) — cabeçalho do grupo com contagem ("X de N" sob filtro), subtotal das linhas incluídas, e mensagem própria quando o filtro não casou nada no grupo
@@ -254,5 +280,5 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 
 ## Referências
 
-- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), CR-054 (memória de categorização — item E-C, frente backend), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
+- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), CR-054 (memória de categorização — item E-C, frente backend), CR-055 (planejado já pago — recorte do B-6), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
 - Padrões reutilizados de F06: `docs/specs/09-analise-ia.md`, `backend/app/ai_analysis.py`

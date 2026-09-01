@@ -41,6 +41,13 @@ function ImportReviewRowBase({
   const candidates = Object.values(matchTargets).filter(
     (e) => e.status !== "Pago" || e.id === decision.expenseId
   );
+  // CR-055: o planejado ja pago que a deteccao apontou. Precisa sair no
+  // cabecalho, e nao no bloco de edicao: a linha nasce desmarcada e aquele
+  // bloco so renderiza quando marcada — o usuario nunca veria o motivo.
+  const jaPago =
+    tx.classificacao === "ja_lancado" && tx.expense_id_sugerido
+      ? matchTargets[tx.expense_id_sugerido]
+      : undefined;
 
   return (
     <div
@@ -82,6 +89,13 @@ function ImportReviewRowBase({
             {tx.motivo_ignorar ? ` · ignorada: ${tx.motivo_ignorar}` : ""}
             {tx.status === "duplicada" ? " · já importada anteriormente" : ""}
           </p>
+          {tx.classificacao === "ja_lancado" && (
+            <p className="text-xs font-semibold text-warning mt-0.5">
+              {jaPago
+                ? `já pago: ${jaPago.nome} · ${formatBRL(jaPago.valor)} · vence ${formatDateBR(jaPago.vencimento)}`
+                : "corresponde a um gasto planejado já pago"}
+            </p>
+          )}
         </div>
       </div>
 

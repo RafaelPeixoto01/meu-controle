@@ -602,7 +602,8 @@ class ImportTransactionResponse(BaseModel):
     data: date
     descricao: str
     valor: float
-    classificacao: str  # gasto_diario | match_planejado | parcelamento | ignorar
+    # ja_lancado (CR-055) e produzida so pela deteccao do backend, nunca pela IA
+    classificacao: str  # gasto_diario | match_planejado | parcelamento | ja_lancado | ignorar
     motivo_ignorar: str | None = None
     expense_id_sugerido: str | None = None
     categoria: str | None = None

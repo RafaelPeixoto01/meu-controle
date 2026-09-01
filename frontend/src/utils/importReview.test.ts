@@ -17,6 +17,7 @@ import {
   bulkTargetIds,
   decisionValor,
   filterGroups,
+  flattenGroups,
   isFilterActive,
   matchesFilter,
   normalizeForSearch,
@@ -214,11 +215,15 @@ describe("monthsToFetchForMatches", () => {
       makeTx({ id: "c", classificacao: "gasto_diario", data: "2025-01-01" }),
     ]);
     const months = monthsToFetchForMatches(batch, new Date(2026, 7, 12)); // ago/2026
-    expect(months).toContainEqual({ year: 2026, month: 8 });
-    expect(months).toContainEqual({ year: 2026, month: 7 });
+    // CR-055: 3 meses atras ate o mes ATUAL. O mes seguinte fica de fora de
+    // proposito — busca-lo dispararia a transicao de mes (RF-06).
+    expect(months).toContainEqual({ year: 2026, month: 5 });
     expect(months).toContainEqual({ year: 2026, month: 6 }); // jun nao duplica
-    expect(months).toContainEqual({ year: 2025, month: 1 });
-    expect(months).toHaveLength(4);
+    expect(months).toContainEqual({ year: 2026, month: 7 });
+    expect(months).toContainEqual({ year: 2026, month: 8 });
+    expect(months).not.toContainEqual({ year: 2026, month: 9 });
+    expect(months).toContainEqual({ year: 2025, month: 1 }); // mes de uma transacao
+    expect(months).toHaveLength(5);
   });
 });
 
@@ -766,5 +771,84 @@ describe("matchesFilter com descricao renomeada (CR-054)", () => {
   it("nao casa texto que nao esta em nenhum dos campos", () => {
     const tx = makeTx({ descricao: "Padaria Stella", descricao_original: "PG *PADARIA*SP" });
     expect(matchesFilter(tx, undefined, "posto")).toBe(false);
+  });
+});
+
+// ========== CR-055: planejado ja pago ==========
+
+describe("grupo jaLancados (CR-055)", () => {
+  it("separa a transacao ja lancada em grupo proprio", () => {
+    const batch = makeBatch([
+      makeTx({ id: "a" }),
+      makeTx({ id: "j", classificacao: "ja_lancado", expense_id_sugerido: "exp-pago" }),
+    ]);
+    const groups = groupTransactions(batch);
+    expect(groups.jaLancados.map((t) => t.id)).toEqual(["j"]);
+    expect(groups.novos.map((t) => t.id)).toEqual(["a"]);
+  });
+
+  it("duplicada tem precedencia sobre ja_lancado no agrupamento", () => {
+    const batch = makeBatch([
+      makeTx({ id: "d", classificacao: "ja_lancado", status: "duplicada" }),
+    ]);
+    const groups = groupTransactions(batch);
+    expect(groups.duplicadas.map((t) => t.id)).toEqual(["d"]);
+    expect(groups.jaLancados).toHaveLength(0);
+  });
+
+  it("nasce desmarcada — confirmar sem tocar nela nao lanca nada", () => {
+    const batch = makeBatch([
+      makeTx({ id: "j", classificacao: "ja_lancado", expense_id_sugerido: "exp-pago" }),
+    ]);
+    const decisions = buildInitialDecisions(batch);
+    expect(decisions["j"].incluida).toBe(false);
+    expect(buildConfirmPayload(batch, decisions).transacoes).toHaveLength(0);
+  });
+
+  it("resgatada individualmente entra no payload como gasto diario", () => {
+    const batch = makeBatch([
+      makeTx({ id: "j", classificacao: "ja_lancado", expense_id_sugerido: "exp-pago" }),
+    ]);
+    const decisions = buildInitialDecisions(batch);
+    decisions["j"].incluida = true;
+    const payload = buildConfirmPayload(batch, decisions);
+    expect(payload.transacoes).toHaveLength(1);
+    expect(payload.transacoes[0].acao).toBe("criar_gasto_diario");
+  });
+
+  it("nao pre-preenche expenseId com o planejado pago", () => {
+    // Regressao: pre-preencher fazia o alvo PAGO escapar do filtro do dropdown
+    // (que so mantem Pago quando ja selecionado). O usuario podia escolhe-lo e
+    // o confirm devolvia 422, derrubando o lote inteiro.
+    const batch = makeBatch([
+      makeTx({ id: "j", classificacao: "ja_lancado", expense_id_sugerido: "exp-pago" }),
+    ]);
+    expect(buildInitialDecisions(batch)["j"].expenseId).toBe("");
+  });
+
+  it("conciliacao continua pre-preenchendo o alvo sugerido", () => {
+    const batch = makeBatch([
+      makeTx({ id: "m", classificacao: "match_planejado", expense_id_sugerido: "e1" }),
+    ]);
+    expect(buildInitialDecisions(batch)["m"].expenseId).toBe("e1");
+  });
+
+  it("fica de fora do marcar em lote, como as duplicadas", () => {
+    const groups = groupTransactions(
+      makeBatch([
+        makeTx({ id: "a" }),
+        makeTx({ id: "j", classificacao: "ja_lancado" }),
+        makeTx({ id: "d", status: "duplicada" }),
+      ])
+    );
+    expect(bulkIncludeTargetIds(groups)).toEqual(["a"]);
+  });
+
+  it("o chip do grupo filtra so as ja lancadas", () => {
+    const groups = groupTransactions(
+      makeBatch([makeTx({ id: "a" }), makeTx({ id: "j", classificacao: "ja_lancado" })])
+    );
+    const visiveis = filterGroups(groups, {}, { query: "", grupos: ["jaLancados"] });
+    expect(flattenGroups(visiveis).map((t) => t.id)).toEqual(["j"]);
   });
 });

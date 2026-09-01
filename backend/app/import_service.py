@@ -70,6 +70,21 @@ ACQUIRER_PREFIX_RE = re.compile(
 # da IA (comportamento anterior); "aprendido" = regra do proprio usuario.
 ORIGEM_APRENDIDO = "aprendido"
 
+# CR-055 (RN-050): classificacao produzida SO pela deteccao deterministica do
+# backend — de proposito fora de CLASSIFICACOES_VALIDAS, para que a IA nunca
+# consiga emiti-la. O prompt nao conhece esse valor.
+CLASSIFICACAO_JA_LANCADO = "ja_lancado"
+
+# Um planejado ja pago so e apontado quando o valor bate dentro desta tolerancia
+# E a data cai dentro desta janela em torno do vencimento. Ambos deliberadamente
+# estreitos: a linha e sinalizada em silencio, e sinalizar demais treina o
+# usuario a ignorar o grupo — o mesmo raciocinio do D1 do CR-054.
+# Tolerancia ABSOLUTA, em reais. Era relativa (2%) e isso a tornava muito mais
+# larga do que "centavos de arredondamento" nos valores altos: num aluguel de
+# R$ 3.000 a janela virava R$ 60, engolindo compras sem relacao nenhuma.
+PAID_MATCH_VALUE_TOLERANCE = 1.00
+PAID_MATCH_WINDOW_DAYS = 7
+
 # CR-054: descritores genericos que NAO identificam estabelecimento — o que os
 # distingue entre si e justamente a parte numerica que `normalize_pattern`
 # remove ("PIX ENVIADO 12/07" e "PIX ENVIADO 19/07" colapsam em "pix enviado").
@@ -163,12 +178,15 @@ def compute_fingerprint(
 
 # ========== Contexto do prompt ==========
 
-def collect_open_expenses(db: Session, user_id: str, hoje: date | None = None) -> list:
+def _expenses_in_window(db: Session, user_id: str, hoje: date, statuses: tuple[str, ...]) -> list:
     """
-    Gastos planejados Pendente/Atrasado dos ultimos meses (candidatos a match).
+    Gastos planejados do usuario na janela da importacao, filtrados por status.
     Janela: PENDING_EXPENSES_MONTHS_BACK meses para tras ate o mes seguinte.
+
+    CR-055: extraido de `collect_open_expenses` para que a coleta dos ja pagos
+    use exatamente a mesma janela — duas copias divergiriam na primeira vez que
+    alguem mexesse no numero de meses.
     """
-    hoje = hoje or date.today()
     mes = date(hoje.year, hoje.month, 1)
     meses = []
     # mes seguinte
@@ -179,12 +197,84 @@ def collect_open_expenses(db: Session, user_id: str, hoje: date | None = None) -
         meses.append(check)
         check = (check - timedelta(days=1)).replace(day=1)
 
-    abertos = []
+    encontrados = []
     for m in meses:
         for e in crud.get_expenses_by_month(db, m, user_id):
-            if e.status in (ExpenseStatus.PENDENTE.value, ExpenseStatus.ATRASADO.value):
-                abertos.append(e)
-    return abertos
+            if e.status in statuses:
+                encontrados.append(e)
+    return encontrados
+
+
+def collect_open_expenses(db: Session, user_id: str, hoje: date | None = None) -> list:
+    """Gastos planejados Pendente/Atrasado da janela (candidatos a conciliacao)."""
+    hoje = hoje or date.today()
+    return _expenses_in_window(
+        db, user_id, hoje, (ExpenseStatus.PENDENTE.value, ExpenseStatus.ATRASADO.value)
+    )
+
+
+def _to_paid_candidates(expenses: list) -> list[dict]:
+    """
+    CR-055: candidatos ja pagos como dados puros, e nao entidades.
+
+    Mesmo motivo do CR-054: `process_import_batch` fecha a sessao antes de
+    chamar a IA, e objetos ORM desanexados dependeriam de os atributos
+    continuarem carregados minutos depois. Mantem `detect_already_paid` pura e
+    testavel sem banco.
+    """
+    return [
+        {
+            "id": e.id,
+            "nome": e.nome,
+            "valor": float(e.valor),
+            "vencimento": e.vencimento,
+        }
+        for e in expenses
+    ]
+
+
+def collect_paid_expenses(db: Session, user_id: str, hoje: date | None = None) -> list[dict]:
+    """
+    CR-055: gastos planejados ja PAGOS da mesma janela — candidatos da RN-050.
+
+    Eles nunca entram no prompt nem sao conciliaveis; servem so para a deteccao
+    deterministica sinalizar uma transacao que ja foi lancada.
+    """
+    hoje = hoje or date.today()
+    return _to_paid_candidates(
+        _expenses_in_window(db, user_id, hoje, (ExpenseStatus.PAGO.value,))
+    )
+
+
+def collect_match_context(
+    db: Session, user_id: str, hoje: date | None = None
+) -> tuple[list, list[dict]]:
+    """
+    CR-055: (planejados em aberto, candidatos ja pagos) numa varredura so.
+
+    `collect_open_expenses` e `collect_paid_expenses` percorrem a MESMA janela
+    de 5 meses, cada uma com uma query por mes. Chamar as duas dobraria os
+    round-trips dentro do trecho de sessao que o CR-052 mantem curto de
+    proposito. Aqui a janela e lida uma vez e particionada em memoria.
+    """
+    hoje = hoje or date.today()
+    todos = _expenses_in_window(
+        db,
+        user_id,
+        hoje,
+        (
+            ExpenseStatus.PENDENTE.value,
+            ExpenseStatus.ATRASADO.value,
+            ExpenseStatus.PAGO.value,
+        ),
+    )
+    abertos = [
+        e
+        for e in todos
+        if e.status in (ExpenseStatus.PENDENTE.value, ExpenseStatus.ATRASADO.value)
+    ]
+    pagos = [e for e in todos if e.status == ExpenseStatus.PAGO.value]
+    return abertos, _to_paid_candidates(pagos)
 
 
 def _format_categories() -> str:
@@ -336,6 +426,67 @@ def _parse_parcelas(tx: dict) -> tuple[int | None, int | None]:
     return atual, total
 
 
+def detect_already_paid(transacoes: list[dict], paid_expenses: list[dict]) -> list[dict]:
+    """
+    CR-055 (RN-050): sinaliza transacoes que correspondem a um gasto planejado
+    JA PAGO, para que confirmar a importacao nao lance o mesmo valor duas vezes.
+
+    O furo que isso fecha: `collect_open_expenses` so oferece candidatos
+    Pendente/Atrasado, entao um planejado ja quitado a mao chega a revisao como
+    gasto diario novo, marcado, indistinguivel de uma compra de verdade. A dedup
+    por fingerprint (RN-042) nao ajuda — ela compara com transacoes IMPORTADAS,
+    nunca com lancamentos criados manualmente.
+
+    Escopo (D7): so `gasto_diario`. `match_planejado` ja achou alvo em aberto,
+    `parcelamento` e coberto pela RN-046 (que concilia parcela paga em vez de
+    duplicar) e `ignorar` esta fora por definicao.
+
+    Um planejado so pode ser reivindicado por UMA transacao do lote, e a
+    atribuicao e resolvida **globalmente**: todos os pares viaveis do lote sao
+    ordenados por proximidade (data, depois diferenca de valor) e o melhor par
+    do lote inteiro e casado primeiro.
+
+    Isso nao e detalhe de estilo. Percorrer as transacoes em ordem e casar a
+    primeira que couber inverte o CR: com um planejado "Energia R$ 187,32" e um
+    lote contendo "SUPERMERCADO R$ 186,60" (2 dias antes) e "CEMIG R$ 187,32"
+    (no vencimento), o supermercado reivindicaria o alvo e seria silenciado,
+    enquanto a CEMIG — a duplicata de verdade — chegaria marcada e seria
+    importada. Perde-se um gasto legitimo E cria-se a contagem dupla.
+
+    A ordenacao final inclui indice e id justamente para ser estavel: testes e
+    revisoes precisam de resultado reproduzivel.
+    """
+    if not paid_expenses:
+        return transacoes
+
+    pares: list[tuple[int, float, int, str]] = []
+    for idx, tx in enumerate(transacoes):
+        if tx["classificacao"] != "gasto_diario":
+            continue
+        for candidato in paid_expenses:
+            dist = abs((tx["data"] - candidato["vencimento"]).days)
+            if dist > PAID_MATCH_WINDOW_DAYS:
+                continue
+            delta = abs(tx["valor"] - candidato["valor"])
+            if delta > PAID_MATCH_VALUE_TOLERANCE:
+                continue
+            pares.append((dist, delta, idx, candidato["id"]))
+
+    pares.sort()
+
+    transacoes_usadas: set[int] = set()
+    candidatos_usados: set[str] = set()
+    for _dist, _delta, idx, candidato_id in pares:
+        if idx in transacoes_usadas or candidato_id in candidatos_usados:
+            continue
+        transacoes_usadas.add(idx)
+        candidatos_usados.add(candidato_id)
+        transacoes[idx]["classificacao"] = CLASSIFICACAO_JA_LANCADO
+        transacoes[idx]["expense_id_sugerido"] = candidato_id
+
+    return transacoes
+
+
 def _apply_rule(
     regra: dict,
     descricao: str,
@@ -388,6 +539,7 @@ def validate_ai_result(
     resultado: dict,
     valid_expense_ids: set[str],
     rules: dict[str, dict] | None = None,
+    paid_expenses: list[dict] | None = None,
 ) -> dict:
     """
     Sanitiza o JSON da IA: descarta transacoes malformadas e normaliza campos.
@@ -400,6 +552,8 @@ def validate_ai_result(
     - metodo_pagamento invalido → None; fatura sem metodo → "Cartão de Crédito"
     - CR-054: `rules` (memoria do usuario) sobrepoe a sugestao da IA em
       gasto_diario e marca a transacao como 'aprendido'
+    - CR-055: `paid_expenses` reclassifica como 'ja_lancado' o gasto diario que
+      corresponde a um planejado ja pago (RN-050)
     """
     banco = str(resultado.get("banco") or "")[:50] or None
     tipo_documento = resultado.get("tipo_documento")
@@ -495,6 +649,11 @@ def validate_ai_result(
             "parcela_atual": parcela_atual,
             "parcela_total": parcela_total,
         })
+
+    # CR-055 depois do CR-054 (D6): a memoria ja preencheu categoria/metodo, e
+    # a reclassificacao preserva esses campos — assim, se o usuario resgatar a
+    # linha, ela sai valida sem retrabalho.
+    transacoes_limpas = detect_already_paid(transacoes_limpas, paid_expenses or [])
 
     return {
         "banco": banco,
@@ -607,7 +766,8 @@ def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes
     try:
         if _claim_batch(db, batch_id, user_id) is None:
             return
-        open_expenses = collect_open_expenses(db, user_id)
+        # CR-055: abertos e ja pagos saem da mesma varredura da janela
+        open_expenses, paid_expenses = collect_match_context(db, user_id)
         valid_ids = {e.id for e in open_expenses}
         system_prompt, user_prompt = build_import_prompts(open_expenses)
         rules = crud.get_import_rules_data(db, user_id)  # CR-054
@@ -625,7 +785,7 @@ def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes
     # 2. Chamada a IA — sem conexao de banco presa
     try:
         api_result = call_import_api(pdf_bytes, system_prompt, user_prompt)
-        parsed = validate_ai_result(api_result["resultado"], valid_ids, rules)
+        parsed = validate_ai_result(api_result["resultado"], valid_ids, rules, paid_expenses)
     except Exception as e:
         logger.error(f"Erro ao interpretar importação {batch_id}: {e}", exc_info=True)
         _finish_with_error(
