@@ -1,8 +1,8 @@
 # Change Request — CR-055: Detecção de Planejado Já Pago na Importação
 
-**Versão:** 1.1
+**Versão:** 1.2
 **Data:** 2026-09-01
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -185,7 +185,7 @@ Roda em `validate_ai_result`, **depois** da sanitização e **depois** da memór
 - [x] Revisão de código pré-merge executada — complexidade Média (CR-040) — ver §8.2
 - [x] Revisão de segurança (checklist OWASP) executada — ver §8.3
 - [x] Documentos afetados foram atualizados — os 6 documentos marcados "Sim" na §5
-- [ ] CI verde após o push — fecha no follow-up
+- [x] CI verde após o push — run 33522662449 (backend e frontend verdes)
 
 ### 8.1 Validação runtime (CR-037)
 
@@ -290,3 +290,4 @@ Aplicável: altera o comportamento de um endpoint existente e lê dados de plane
 | 2026-09-01 | Claude | Implementação concluída: `detect_already_paid`, `collect_paid_expenses`, guarda 422 e grupo "Já lançados" |
 | 2026-09-01 | Claude | Revisão de código (11 findings): 8 corrigidos, 1 documentado, 2 aceitos. A atribuição global e a tolerância absoluta nasceram daqui. Revalidado em runtime |
 | 2026-09-01 | Claude | Documentação sincronizada: PRD v3.5 (RN-050, glossário), Architecture, spec F07, plano, roadmap (recorte do B-6) e CLAUDE.md |
+| 2026-09-01 | Claude | Validação realizada — status: ✅ CI verde (run 33522662449), CR concluído |
