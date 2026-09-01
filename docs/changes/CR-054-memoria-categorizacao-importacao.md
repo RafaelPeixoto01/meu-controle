@@ -67,10 +67,6 @@ O sistema aprende com o confirm. Na importação seguinte, transações de descr
 - Nenhum endpoint novo, alterado ou removido. Nenhuma tela nova.
 - `parcelamento`, `match_planejado` e `ignorar` **não** recebem regra aplicada (ver §4.3).
 
-### 4.4 Limitação conhecida
-
-`descricao_original` guarda o texto que **a IA extraiu** do documento, não o byte cru do PDF — que nunca é persistido (RN-043). Como o prompt pede a descrição "limpa de códigos irrelevantes", a transcrição pode variar entre importações do mesmo estabelecimento. Quando varia, o match falha e a linha volta ao comportamento anterior ao CR-054 (palpite da IA), podendo gerar uma segunda regra para a variante. Não há perda de correção — apenas cobertura menor. O **B-9** (few-shot das regras no prompt) é o caminho registrado para cobrir essa faixa.
-
 ### 4.3 Decisões de escopo
 
 | # | Decisão | Justificativa |
@@ -86,6 +82,10 @@ O sistema aprende com o confirm. Na importação seguinte, transações de descr
 | D9 | Em documento do tipo **fatura**, a regra não sobrescreve `metodo_pagamento` | *(veio da revisão de código)* Ali o meio de pagamento é propriedade do documento. Uma regra aprendida num extrato ("Pix" na padaria) forçaria o usuário a recorrigir todo mês — o inverso do objetivo |
 | D10 | Descritores genéricos (`PADROES_GENERICOS`) nunca viram regra | *(veio da revisão de código)* Sem os dígitos, "PIX ENVIADO 12/07" e "PIX ENVIADO 19/07" colapsam no mesmo padrão; uma regra ali recategorizaria todos os Pix do mês seguinte. É o falso positivo do D1 por outra porta |
 | D11 | `hits` conta **confirmações** do padrão, não linhas da fatura | *(veio da revisão de código)* Seis corridas de Uber num mês superariam um padrão recorrente de cinco meses na ordenação que o few-shot (D5) vai usar |
+
+### 4.4 Limitação conhecida
+
+`descricao_original` guarda o texto que **a IA extraiu** do documento, não o byte cru do PDF — que nunca é persistido (RN-043). Como o prompt pede a descrição "limpa de códigos irrelevantes", a transcrição pode variar entre importações do mesmo estabelecimento. Quando varia, o match falha e a linha volta ao comportamento anterior ao CR-054 (palpite da IA), podendo gerar uma segunda regra para a variante. Não há perda de correção — apenas cobertura menor. O **B-9** (few-shot das regras no prompt) é o caminho registrado para cobrir essa faixa.
 
 ---
 
