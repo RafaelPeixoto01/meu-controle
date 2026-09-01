@@ -474,6 +474,9 @@ export type ImportClassificacao =
   | "gasto_diario"
   | "match_planejado"
   | "parcelamento" // CR-049
+  // CR-055: produzida so pela deteccao deterministica do backend (RN-050), nunca
+  // pela IA. `expense_id_sugerido` aponta para o planejado ja pago.
+  | "ja_lancado"
   | "ignorar";
 export type ImportTransactionStatus = "pendente" | "confirmada" | "descartada" | "duplicada";
 export type ImportBatchStatus =

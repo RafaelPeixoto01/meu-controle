@@ -28,6 +28,7 @@ export interface ReviewGroups {
   novos: ImportTransaction[];
   matches: ImportTransaction[];
   parcelamentos: ImportTransaction[]; // CR-049
+  jaLancados: ImportTransaction[]; // CR-055
   ignoradas: ImportTransaction[];
   duplicadas: ImportTransaction[];
 }
@@ -37,6 +38,7 @@ export function groupTransactions(batch: ImportBatch): ReviewGroups {
     novos: [],
     matches: [],
     parcelamentos: [],
+    jaLancados: [],
     ignoradas: [],
     duplicadas: [],
   };
@@ -47,6 +49,8 @@ export function groupTransactions(batch: ImportBatch): ReviewGroups {
       groups.matches.push(tx);
     } else if (tx.classificacao === "parcelamento") {
       groups.parcelamentos.push(tx);
+    } else if (tx.classificacao === "ja_lancado") {
+      groups.jaLancados.push(tx);
     } else if (tx.classificacao === "ignorar") {
       groups.ignoradas.push(tx);
     } else {
@@ -89,8 +93,12 @@ export function buildInitialDecisions(batch: ImportBatch): Record<string, Review
     else if (isParcelamento) acao = "criar_planejado_parcelado";
 
     decisions[tx.id] = {
-      // Ignoradas e duplicadas nascem desmarcadas (resgataveis na revisao)
-      incluida: tx.status === "pendente" && tx.classificacao !== "ignorar",
+      // Ignoradas, duplicadas e ja lancadas (CR-055) nascem desmarcadas —
+      // resgataveis na revisao, mas nunca importadas por descuido
+      incluida:
+        tx.status === "pendente" &&
+        tx.classificacao !== "ignorar" &&
+        tx.classificacao !== "ja_lancado",
       acao,
       descricao: tx.descricao,
       valor: String(tx.valor),
@@ -258,6 +266,7 @@ export const REVIEW_GROUP_KEYS: ReviewGroupKey[] = [
   "novos",
   "matches",
   "parcelamentos",
+  "jaLancados",
   "ignoradas",
   "duplicadas",
 ];
@@ -317,6 +326,7 @@ export function filterGroups(
     novos: [],
     matches: [],
     parcelamentos: [],
+    jaLancados: [],
     ignoradas: [],
     duplicadas: [],
   };
@@ -368,13 +378,14 @@ export function bulkTargetIds(
     .map((tx) => tx.id);
 }
 
-// Alvo do "marcar em lote": as visiveis, MENOS as duplicadas. Duplicada costuma
-// vir com categoria/metodo completos da importacao anterior, entao passaria na
-// validacao e seria regravada — dobrando o lancamento. Resgate de duplicada
-// continua sendo linha a linha, que e onde o usuario ve o aviso "ja importada".
+// Alvo do "marcar em lote": as visiveis, MENOS as duplicadas e as ja lancadas
+// (CR-055). Ambas vem completas o bastante para passar na validacao e seriam
+// regravadas — dobrando exatamente o lancamento que elas existem para evitar.
+// Resgate das duas continua sendo linha a linha, que e onde o usuario ve o
+// aviso e o planejado alvo.
 export function bulkIncludeTargetIds(visibleGroups: ReviewGroups): string[] {
   return flattenGroups(visibleGroups)
-    .filter((tx) => tx.status !== "duplicada")
+    .filter((tx) => tx.status !== "duplicada" && tx.classificacao !== "ja_lancado")
     .map((tx) => tx.id);
 }
 

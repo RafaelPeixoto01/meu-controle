@@ -30,6 +30,7 @@ from app.import_service import (
     STALE_PROCESSING_MINUTES,
     call_import_api,
     compute_fingerprint,
+    detect_already_paid,  # CR-055
     mark_duplicates,  # CR-054
     normalize_description,
     normalize_pattern,  # CR-054
@@ -1654,3 +1655,293 @@ class TestValidateAiResultComRegras:
         assert marcadas[0]["fingerprint"] == compute_fingerprint(
             "user-a", date(2026, 7, 28), 23.50, "PG *PADARIA STELLA*SP 12/07"
         )
+
+
+# ========== CR-055: deteccao de planejado ja pago (RN-050) ==========
+
+def make_paid(nome="Energia elétrica", valor=187.32, vencimento="2026-07-10", id_="exp-pago"):
+    """Candidato ja pago, no formato puro que collect_paid_expenses devolve."""
+    return {
+        "id": id_,
+        "nome": nome,
+        "valor": valor,
+        "vencimento": date.fromisoformat(vencimento),
+    }
+
+
+def tx_limpa(valor=187.32, data="2026-07-10", classificacao="gasto_diario", descricao="CEMIG ENERGIA"):
+    """Transacao ja sanitizada, no formato que detect_already_paid recebe."""
+    return {
+        "data": date.fromisoformat(data),
+        "descricao": descricao,
+        "valor": valor,
+        "classificacao": classificacao,
+        "expense_id_sugerido": None,
+    }
+
+
+@pytest.fixture
+def paid_expense(db, user_a):
+    """Gasto planejado do mes corrente ja marcado como Pago."""
+    hoje = date.today()
+    expense = Expense(
+        id="expense-pago",
+        user_id=user_a.id,
+        mes_referencia=date(hoje.year, hoje.month, 1),
+        nome="Energia elétrica",
+        valor=187.32,
+        vencimento=date(hoje.year, hoje.month, 15),
+        recorrente=True,
+        status=ExpenseStatus.PAGO.value,
+    )
+    db.add(expense)
+    db.commit()
+    return expense
+
+
+class TestDetectAlreadyPaid:
+    """CR-T-02: a regra pura de deteccao."""
+
+    def test_casa_por_valor_e_data_e_reclassifica(self):
+        txs = detect_already_paid([tx_limpa()], [make_paid()])
+        assert txs[0]["classificacao"] == "ja_lancado"
+        assert txs[0]["expense_id_sugerido"] == "exp-pago"
+
+    def test_diferenca_de_centavos_dentro_da_tolerancia_ainda_casa(self):
+        txs = detect_already_paid([tx_limpa(valor=187.30)], [make_paid(valor=187.32)])
+        assert txs[0]["classificacao"] == "ja_lancado"
+
+    def test_valor_fora_da_tolerancia_nao_casa(self):
+        # 10% de diferenca: acima dos 2% de PAID_MATCH_VALUE_TOLERANCE
+        txs = detect_already_paid([tx_limpa(valor=206.0)], [make_paid(valor=187.32)])
+        assert txs[0]["classificacao"] == "gasto_diario"
+        assert txs[0]["expense_id_sugerido"] is None
+
+    def test_dentro_da_janela_de_dias_casa(self):
+        txs = detect_already_paid([tx_limpa(data="2026-07-17")], [make_paid(vencimento="2026-07-10")])
+        assert txs[0]["classificacao"] == "ja_lancado"
+
+    def test_fora_da_janela_de_dias_nao_casa(self):
+        # 8 dias: acima de PAID_MATCH_WINDOW_DAYS
+        txs = detect_already_paid([tx_limpa(data="2026-07-18")], [make_paid(vencimento="2026-07-10")])
+        assert txs[0]["classificacao"] == "gasto_diario"
+
+    @pytest.mark.parametrize("classificacao", ["match_planejado", "parcelamento", "ignorar"])
+    def test_so_atua_em_gasto_diario(self, classificacao):
+        # D7: conciliacao ja achou alvo em aberto, parcelamento e coberto pela
+        # RN-046 e ignorar esta fora por definicao
+        txs = detect_already_paid([tx_limpa(classificacao=classificacao)], [make_paid()])
+        assert txs[0]["classificacao"] == classificacao
+        assert txs[0]["expense_id_sugerido"] is None
+
+    def test_um_planejado_nao_e_reivindicado_por_duas_transacoes(self):
+        # sem a guarda, duas compras iguais no mesmo dia seriam ambas silenciadas
+        txs = detect_already_paid([tx_limpa(), tx_limpa()], [make_paid()])
+        assert txs[0]["classificacao"] == "ja_lancado"
+        assert txs[1]["classificacao"] == "gasto_diario"
+
+    def test_escolhe_o_planejado_de_data_mais_proxima(self):
+        candidatos = [
+            make_paid(id_="exp-longe", vencimento="2026-07-14"),
+            make_paid(id_="exp-perto", vencimento="2026-07-10"),
+        ]
+        txs = detect_already_paid([tx_limpa(data="2026-07-10")], candidatos)
+        assert txs[0]["expense_id_sugerido"] == "exp-perto"
+
+    def test_sem_candidatos_nada_muda(self):
+        txs = detect_already_paid([tx_limpa()], [])
+        assert txs[0]["classificacao"] == "gasto_diario"
+
+
+class TestJaLancadoNaImportacao:
+    """CR-T-03: a deteccao chegando ao staging pelo fluxo real."""
+
+    def test_planejado_pago_reclassifica_a_transacao(self, client, db, paid_expense):
+        hoje = date.today()
+        batch = upload_batch(
+            client,
+            [
+                {
+                    "data": date(hoje.year, hoje.month, 15).isoformat(),
+                    "descricao": "CEMIG ENERGIA",
+                    "valor": 187.32,
+                    "classificacao": "gasto_diario",
+                    "categoria": "Moradia",
+                    "subcategoria": "Energia elétrica",
+                    "metodo_pagamento": "Pix",
+                    "expense_id": None,
+                    "motivo_ignorar": None,
+                }
+            ],
+        )
+        tx = batch["transacoes"][0]
+        assert tx["classificacao"] == "ja_lancado"
+        assert tx["expense_id_sugerido"] == paid_expense.id
+
+    def test_confirmar_sem_tocar_na_linha_nao_cria_lancamento(self, client, db, paid_expense):
+        hoje = date.today()
+        batch = upload_batch(
+            client,
+            [
+                {
+                    "data": date(hoje.year, hoje.month, 15).isoformat(),
+                    "descricao": "CEMIG ENERGIA",
+                    "valor": 187.32,
+                    "classificacao": "gasto_diario",
+                    "categoria": "Moradia",
+                    "subcategoria": "Energia elétrica",
+                    "metodo_pagamento": "Pix",
+                    "expense_id": None,
+                    "motivo_ignorar": None,
+                }
+            ],
+        )
+        # o frontend nasce com a linha desmarcada, entao ela nao entra no payload
+        r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": []})
+        assert r.status_code == 200, r.text
+        assert r.json()["gastos_diarios_criados"] == 0
+        assert db.query(DailyExpense).count() == 0
+        # e o planejado continua intacto
+        db.refresh(paid_expense)
+        assert paid_expense.status == ExpenseStatus.PAGO.value
+        assert float(paid_expense.valor) == 187.32
+
+    def test_planejado_pendente_segue_no_caminho_de_conciliacao(self, client, open_expense):
+        # a regra so olha os PAGOS (D7): o fluxo existente nao muda
+        hoje = date.today()
+        batch = upload_batch(
+            client,
+            [
+                {
+                    "data": date(hoje.year, hoje.month, 15).isoformat(),
+                    "descricao": "CEMIG ENERGIA",
+                    "valor": 200.00,
+                    "classificacao": "gasto_diario",
+                    "categoria": "Moradia",
+                    "subcategoria": "Energia elétrica",
+                    "metodo_pagamento": "Pix",
+                    "expense_id": None,
+                    "motivo_ignorar": None,
+                }
+            ],
+        )
+        assert batch["transacoes"][0]["classificacao"] == "gasto_diario"
+
+    def test_planejado_pago_de_outro_usuario_nunca_e_alcancado(self, client, db, user_b):
+        hoje = date.today()
+        db.add(
+            Expense(
+                id="expense-pago-b",
+                user_id=user_b.id,
+                mes_referencia=date(hoje.year, hoje.month, 1),
+                nome="Energia elétrica",
+                valor=187.32,
+                vencimento=date(hoje.year, hoje.month, 15),
+                recorrente=True,
+                status=ExpenseStatus.PAGO.value,
+            )
+        )
+        db.commit()
+
+        batch = upload_batch(
+            client,
+            [
+                {
+                    "data": date(hoje.year, hoje.month, 15).isoformat(),
+                    "descricao": "CEMIG ENERGIA",
+                    "valor": 187.32,
+                    "classificacao": "gasto_diario",
+                    "categoria": "Moradia",
+                    "subcategoria": "Energia elétrica",
+                    "metodo_pagamento": "Pix",
+                    "expense_id": None,
+                    "motivo_ignorar": None,
+                }
+            ],
+        )
+        assert batch["transacoes"][0]["classificacao"] == "gasto_diario"
+
+    def test_linha_reclassificada_preserva_o_que_a_memoria_preencheu(
+        self, client, db, user_a, paid_expense
+    ):
+        # D6: a deteccao roda depois do CR-054, entao o resgate manual sai valido
+        db.add(
+            ImportCategoryRule(
+                user_id=user_a.id,
+                padrao="cemig energia",
+                descricao_sugerida="Conta de luz",
+                categoria="Moradia",
+                subcategoria="Energia elétrica",
+                metodo_pagamento="Pix",
+            )
+        )
+        db.commit()
+
+        hoje = date.today()
+        batch = upload_batch(
+            client,
+            [
+                {
+                    "data": date(hoje.year, hoje.month, 15).isoformat(),
+                    "descricao": "CEMIG ENERGIA 15/08",
+                    "valor": 187.32,
+                    "classificacao": "gasto_diario",
+                    "categoria": "Transporte",
+                    "subcategoria": "Pedágio",
+                    "metodo_pagamento": "Cartão de Crédito",
+                    "expense_id": None,
+                    "motivo_ignorar": None,
+                }
+            ],
+        )
+        tx = batch["transacoes"][0]
+        assert tx["classificacao"] == "ja_lancado"
+        assert tx["descricao"] == "Conta de luz"
+        assert tx["categoria"] == "Moradia"
+        assert tx["origem_sugestao"] == "aprendido"
+
+
+class TestConciliarPlanejadoPago:
+    """CR-T-04 (D3): o confirm recusa conciliar algo que ja esta Pago."""
+
+    def test_atualizar_planejado_pago_retorna_422(self, client, db, paid_expense):
+        batch = upload_batch(client, [TX_PADARIA])
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={
+                "transacoes": [
+                    {
+                        "id": batch["transacoes"][0]["id"],
+                        "acao": "atualizar_planejado",
+                        "expense_id": paid_expense.id,
+                        "valor": 999.00,
+                    }
+                ]
+            },
+        )
+        assert r.status_code == 422
+        assert "já está pago" in r.json()["detail"]
+
+        # nada foi sobrescrito
+        db.refresh(paid_expense)
+        assert float(paid_expense.valor) == 187.32
+
+    def test_atualizar_planejado_pendente_continua_funcionando(self, client, db, open_expense):
+        batch = upload_batch(client, [TX_PADARIA])
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={
+                "transacoes": [
+                    {
+                        "id": batch["transacoes"][0]["id"],
+                        "acao": "atualizar_planejado",
+                        "expense_id": open_expense.id,
+                        "valor": 210.00,
+                    }
+                ]
+            },
+        )
+        assert r.status_code == 200, r.text
+        db.refresh(open_expense)
+        assert open_expense.status == ExpenseStatus.PAGO.value
+        assert float(open_expense.valor) == 210.00

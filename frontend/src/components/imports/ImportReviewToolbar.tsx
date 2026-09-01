@@ -13,6 +13,7 @@ const GROUP_LABELS: Record<ReviewGroupKey, string> = {
   novos: "Novos",
   matches: "Conciliações",
   parcelamentos: "Parceladas",
+  jaLancados: "Já lançados",
   ignoradas: "Ignoradas",
   duplicadas: "Duplicadas",
 };

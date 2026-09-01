@@ -341,6 +341,14 @@ def confirm_import(
             expense = crud.get_expense_by_id(db, expense_id, current_user.id)
             if not expense:
                 raise HTTPException(status_code=404, detail="Despesa planejada não encontrada")
+            # CR-055 (D3): conciliar algo ja pago remarcaria Pago e sobrescreveria
+            # o valor real ja registrado, sem deixar rastro. A UI ja esconde os
+            # pagos do dropdown; isto alinha o contrato da API ao que ela permite.
+            if expense.status == ExpenseStatus.PAGO.value:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Transação {tx.id}: o gasto planejado já está pago",
+                )
             if expense.id in expenses_ja_atualizados:
                 raise HTTPException(
                     status_code=422,

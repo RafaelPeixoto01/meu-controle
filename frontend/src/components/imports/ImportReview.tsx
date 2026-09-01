@@ -218,6 +218,13 @@ export default function ImportReview({
         {...groupProps}
       />
       <ImportReviewGroup
+        titulo="Já lançados"
+        hint="Correspondem a um gasto planejado que já está Pago. Ficam de fora para não lançar o mesmo valor duas vezes — marque se for uma compra diferente."
+        itens={visibleGroups.jaLancados}
+        totalItens={groups.jaLancados.length}
+        {...groupProps}
+      />
+      <ImportReviewGroup
         titulo="Ignoradas pela IA"
         hint="Receitas, transferências e pagamento de fatura. Marque para resgatar alguma."
         itens={visibleGroups.ignoradas}

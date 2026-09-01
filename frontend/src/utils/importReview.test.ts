@@ -17,6 +17,7 @@ import {
   bulkTargetIds,
   decisionValor,
   filterGroups,
+  flattenGroups,
   isFilterActive,
   matchesFilter,
   normalizeForSearch,
@@ -766,5 +767,67 @@ describe("matchesFilter com descricao renomeada (CR-054)", () => {
   it("nao casa texto que nao esta em nenhum dos campos", () => {
     const tx = makeTx({ descricao: "Padaria Stella", descricao_original: "PG *PADARIA*SP" });
     expect(matchesFilter(tx, undefined, "posto")).toBe(false);
+  });
+});
+
+// ========== CR-055: planejado ja pago ==========
+
+describe("grupo jaLancados (CR-055)", () => {
+  it("separa a transacao ja lancada em grupo proprio", () => {
+    const batch = makeBatch([
+      makeTx({ id: "a" }),
+      makeTx({ id: "j", classificacao: "ja_lancado", expense_id_sugerido: "exp-pago" }),
+    ]);
+    const groups = groupTransactions(batch);
+    expect(groups.jaLancados.map((t) => t.id)).toEqual(["j"]);
+    expect(groups.novos.map((t) => t.id)).toEqual(["a"]);
+  });
+
+  it("duplicada tem precedencia sobre ja_lancado no agrupamento", () => {
+    const batch = makeBatch([
+      makeTx({ id: "d", classificacao: "ja_lancado", status: "duplicada" }),
+    ]);
+    const groups = groupTransactions(batch);
+    expect(groups.duplicadas.map((t) => t.id)).toEqual(["d"]);
+    expect(groups.jaLancados).toHaveLength(0);
+  });
+
+  it("nasce desmarcada — confirmar sem tocar nela nao lanca nada", () => {
+    const batch = makeBatch([
+      makeTx({ id: "j", classificacao: "ja_lancado", expense_id_sugerido: "exp-pago" }),
+    ]);
+    const decisions = buildInitialDecisions(batch);
+    expect(decisions["j"].incluida).toBe(false);
+    expect(buildConfirmPayload(batch, decisions).transacoes).toHaveLength(0);
+  });
+
+  it("resgatada individualmente entra no payload como gasto diario", () => {
+    const batch = makeBatch([
+      makeTx({ id: "j", classificacao: "ja_lancado", expense_id_sugerido: "exp-pago" }),
+    ]);
+    const decisions = buildInitialDecisions(batch);
+    decisions["j"].incluida = true;
+    const payload = buildConfirmPayload(batch, decisions);
+    expect(payload.transacoes).toHaveLength(1);
+    expect(payload.transacoes[0].acao).toBe("criar_gasto_diario");
+  });
+
+  it("fica de fora do marcar em lote, como as duplicadas", () => {
+    const groups = groupTransactions(
+      makeBatch([
+        makeTx({ id: "a" }),
+        makeTx({ id: "j", classificacao: "ja_lancado" }),
+        makeTx({ id: "d", status: "duplicada" }),
+      ])
+    );
+    expect(bulkIncludeTargetIds(groups)).toEqual(["a"]);
+  });
+
+  it("o chip do grupo filtra so as ja lancadas", () => {
+    const groups = groupTransactions(
+      makeBatch([makeTx({ id: "a" }), makeTx({ id: "j", classificacao: "ja_lancado" })])
+    );
+    const visiveis = filterGroups(groups, {}, { query: "", grupos: ["jaLancados"] });
+    expect(flattenGroups(visiveis).map((t) => t.id)).toEqual(["j"]);
   });
 });
