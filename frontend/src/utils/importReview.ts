@@ -106,7 +106,12 @@ export function buildInitialDecisions(batch: ImportBatch): Record<string, Review
       categoria: tx.categoria ?? "",
       subcategoria: tx.subcategoria ?? "",
       metodoPagamento: tx.metodo_pagamento ?? "",
-      expenseId: tx.expense_id_sugerido ?? "",
+      // CR-055: so a conciliacao pre-seleciona alvo. Em `ja_lancado`,
+      // `expense_id_sugerido` aponta para um planejado JA PAGO — pre-preencher
+      // aqui o faria escapar do filtro do dropdown (que so mantem Pago quando
+      // ja selecionado), o usuario poderia escolhe-lo e o confirm devolveria
+      // 422, derrubando o lote inteiro.
+      expenseId: isMatch ? tx.expense_id_sugerido ?? "" : "",
       parcelaAtual: tx.parcela_atual ? String(tx.parcela_atual) : "",
       parcelaTotal: tx.parcela_total ? String(tx.parcela_total) : "",
     };
@@ -222,9 +227,19 @@ export function monthsToFetchForMatches(
   const keys = new Set<string>();
   const add = (year: number, month: number) => keys.add(`${year}-${month}`);
 
-  add(today.getFullYear(), today.getMonth() + 1);
-  const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  add(prev.getFullYear(), prev.getMonth() + 1);
+  // CR-055: espelha a janela do backend (PENDING_EXPENSES_MONTHS_BACK = 3
+  // meses atras ate o mes seguinte). Sem isso, o planejado ja pago apontado
+  // pela deteccao costuma ficar fora de `matchTargets` e a linha degrada para
+  // a dica generica, perdendo justamente o nome/valor/vencimento que o usuario
+  // precisa para decidir se resgata.
+  // Nao inclui o mes SEGUINTE de proposito: `fetchMonthlySummary` dispara a
+  // transicao de mes (RF-06), e abrir a revisao passaria a materializar os
+  // recorrentes do mes que ainda nao chegou. Planejado ja pago vive no passado
+  // recente, entao a perda de cobertura e desprezivel.
+  for (let offset = -3; offset <= 0; offset++) {
+    const m = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    add(m.getFullYear(), m.getMonth() + 1);
+  }
 
   for (const tx of batch.transacoes) {
     const [year, month] = tx.data.split("-").map(Number);

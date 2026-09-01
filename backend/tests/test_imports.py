@@ -1712,7 +1712,7 @@ class TestDetectAlreadyPaid:
         assert txs[0]["classificacao"] == "ja_lancado"
 
     def test_valor_fora_da_tolerancia_nao_casa(self):
-        # 10% de diferenca: acima dos 2% de PAID_MATCH_VALUE_TOLERANCE
+        # R$ 18,68 de diferenca: acima de PAID_MATCH_VALUE_TOLERANCE (R$ 1,00)
         txs = detect_already_paid([tx_limpa(valor=206.0)], [make_paid(valor=187.32)])
         assert txs[0]["classificacao"] == "gasto_diario"
         assert txs[0]["expense_id_sugerido"] is None
@@ -1739,6 +1739,33 @@ class TestDetectAlreadyPaid:
         txs = detect_already_paid([tx_limpa(), tx_limpa()], [make_paid()])
         assert txs[0]["classificacao"] == "ja_lancado"
         assert txs[1]["classificacao"] == "gasto_diario"
+
+    def test_a_melhor_correspondencia_do_LOTE_vence_a_ordem_das_linhas(self):
+        """
+        Regressao: com atribuicao gulosa em ordem de transacao, o supermercado
+        (2 dias antes, R$ 0,72 de diferenca) reivindicava o planejado e era
+        silenciado, enquanto a CEMIG — a duplicata de verdade — chegava marcada
+        e era importada. Perdia-se um gasto legitimo E criava-se a contagem
+        dupla que este CR existe para evitar.
+        """
+        txs = detect_already_paid(
+            [
+                tx_limpa(valor=186.60, data="2026-07-08", descricao="SUPERMERCADO"),
+                tx_limpa(valor=187.32, data="2026-07-10", descricao="CEMIG ENERGIA"),
+            ],
+            [make_paid(valor=187.32, vencimento="2026-07-10")],
+        )
+        assert txs[0]["classificacao"] == "gasto_diario"  # supermercado preservado
+        assert txs[1]["classificacao"] == "ja_lancado"  # a duplicata real
+
+    def test_tolerancia_e_absoluta_e_nao_proporcional_ao_valor(self):
+        # Com tolerancia relativa de 2%, um aluguel de R$ 3.000 abria uma janela
+        # de R$ 60 e engolia compras sem relacao nenhuma
+        txs = detect_already_paid(
+            [tx_limpa(valor=2980.00, descricao="MOVEIS PLANEJADOS")],
+            [make_paid(valor=3000.00, nome="Aluguel")],
+        )
+        assert txs[0]["classificacao"] == "gasto_diario"
 
     def test_escolhe_o_planejado_de_data_mais_proxima(self):
         candidatos = [
@@ -1925,6 +1952,39 @@ class TestConciliarPlanejadoPago:
         # nada foi sobrescrito
         db.refresh(paid_expense)
         assert float(paid_expense.valor) == 187.32
+
+    def test_duas_linhas_no_mesmo_planejado_aberto_reportam_a_causa_certa(
+        self, client, open_expense
+    ):
+        """
+        Regressao: a guarda de "ja pago" rodava ANTES da guarda de lote. Como a
+        primeira conciliacao ja deixa o Expense em Pago na sessao, a segunda
+        linha caia na mensagem errada ("ja esta pago") e a guarda especifica
+        virava codigo morto.
+        """
+        batch = upload_batch(client, [TX_PADARIA, TX_MATCH_LUZ], banco="Nubank")
+        ids = [t["id"] for t in batch["transacoes"]]
+        r = client.post(
+            f"/api/imports/{batch['id']}/confirm",
+            json={
+                "transacoes": [
+                    {
+                        "id": ids[0],
+                        "acao": "atualizar_planejado",
+                        "expense_id": open_expense.id,
+                        "valor": 100.00,
+                    },
+                    {
+                        "id": ids[1],
+                        "acao": "atualizar_planejado",
+                        "expense_id": open_expense.id,
+                        "valor": 200.00,
+                    },
+                ]
+            },
+        )
+        assert r.status_code == 422
+        assert "já foi atualizado por outra transação deste lote" in r.json()["detail"]
 
     def test_atualizar_planejado_pendente_continua_funcionando(self, client, db, open_expense):
         batch = upload_batch(client, [TX_PADARIA])

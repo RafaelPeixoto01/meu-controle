@@ -277,7 +277,7 @@ class ImportTransaction(Base):
     valor: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     classificacao: Mapped[str] = mapped_column(
         String(20), nullable=False
-    )  # gasto_diario | match_planejado | parcelamento (CR-049) | ignorar
+    )  # gasto_diario | match_planejado | parcelamento (CR-049) | ja_lancado (CR-055) | ignorar
     motivo_ignorar: Mapped[str | None] = mapped_column(String(255), nullable=True)
     expense_id_sugerido: Mapped[str | None] = mapped_column(String(36), nullable=True)
     categoria: Mapped[str | None] = mapped_column(String(50), nullable=True)

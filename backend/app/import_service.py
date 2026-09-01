@@ -79,7 +79,10 @@ CLASSIFICACAO_JA_LANCADO = "ja_lancado"
 # E a data cai dentro desta janela em torno do vencimento. Ambos deliberadamente
 # estreitos: a linha e sinalizada em silencio, e sinalizar demais treina o
 # usuario a ignorar o grupo — o mesmo raciocinio do D1 do CR-054.
-PAID_MATCH_VALUE_TOLERANCE = 0.02  # 2% — absorve centavos de arredondamento
+# Tolerancia ABSOLUTA, em reais. Era relativa (2%) e isso a tornava muito mais
+# larga do que "centavos de arredondamento" nos valores altos: num aluguel de
+# R$ 3.000 a janela virava R$ 60, engolindo compras sem relacao nenhuma.
+PAID_MATCH_VALUE_TOLERANCE = 1.00
 PAID_MATCH_WINDOW_DAYS = 7
 
 # CR-054: descritores genericos que NAO identificam estabelecimento — o que os
@@ -210,19 +213,15 @@ def collect_open_expenses(db: Session, user_id: str, hoje: date | None = None) -
     )
 
 
-def collect_paid_expenses(db: Session, user_id: str, hoje: date | None = None) -> list[dict]:
+def _to_paid_candidates(expenses: list) -> list[dict]:
     """
-    CR-055: gastos planejados ja PAGOS da mesma janela — candidatos da RN-050.
+    CR-055: candidatos ja pagos como dados puros, e nao entidades.
 
-    Eles nunca entram no prompt nem sao conciliaveis; servem so para a deteccao
-    deterministica sinalizar uma transacao que ja foi lancada.
-
-    Devolve dados puros, e nao entidades, pelo mesmo motivo do CR-054:
-    `process_import_batch` fecha a sessao antes de chamar a IA, e objetos ORM
-    desanexados dependeriam de os atributos continuarem carregados minutos
-    depois. Mantem `detect_already_paid` pura e testavel sem banco.
+    Mesmo motivo do CR-054: `process_import_batch` fecha a sessao antes de
+    chamar a IA, e objetos ORM desanexados dependeriam de os atributos
+    continuarem carregados minutos depois. Mantem `detect_already_paid` pura e
+    testavel sem banco.
     """
-    hoje = hoje or date.today()
     return [
         {
             "id": e.id,
@@ -230,8 +229,52 @@ def collect_paid_expenses(db: Session, user_id: str, hoje: date | None = None) -
             "valor": float(e.valor),
             "vencimento": e.vencimento,
         }
-        for e in _expenses_in_window(db, user_id, hoje, (ExpenseStatus.PAGO.value,))
+        for e in expenses
     ]
+
+
+def collect_paid_expenses(db: Session, user_id: str, hoje: date | None = None) -> list[dict]:
+    """
+    CR-055: gastos planejados ja PAGOS da mesma janela — candidatos da RN-050.
+
+    Eles nunca entram no prompt nem sao conciliaveis; servem so para a deteccao
+    deterministica sinalizar uma transacao que ja foi lancada.
+    """
+    hoje = hoje or date.today()
+    return _to_paid_candidates(
+        _expenses_in_window(db, user_id, hoje, (ExpenseStatus.PAGO.value,))
+    )
+
+
+def collect_match_context(
+    db: Session, user_id: str, hoje: date | None = None
+) -> tuple[list, list[dict]]:
+    """
+    CR-055: (planejados em aberto, candidatos ja pagos) numa varredura so.
+
+    `collect_open_expenses` e `collect_paid_expenses` percorrem a MESMA janela
+    de 5 meses, cada uma com uma query por mes. Chamar as duas dobraria os
+    round-trips dentro do trecho de sessao que o CR-052 mantem curto de
+    proposito. Aqui a janela e lida uma vez e particionada em memoria.
+    """
+    hoje = hoje or date.today()
+    todos = _expenses_in_window(
+        db,
+        user_id,
+        hoje,
+        (
+            ExpenseStatus.PENDENTE.value,
+            ExpenseStatus.ATRASADO.value,
+            ExpenseStatus.PAGO.value,
+        ),
+    )
+    abertos = [
+        e
+        for e in todos
+        if e.status in (ExpenseStatus.PENDENTE.value, ExpenseStatus.ATRASADO.value)
+    ]
+    pagos = [e for e in todos if e.status == ExpenseStatus.PAGO.value]
+    return abertos, _to_paid_candidates(pagos)
 
 
 def _format_categories() -> str:
@@ -383,11 +426,6 @@ def _parse_parcelas(tx: dict) -> tuple[int | None, int | None]:
     return atual, total
 
 
-def _valores_compativeis(valor_tx: float, valor_planejado: float) -> bool:
-    """Diferenca dentro de PAID_MATCH_VALUE_TOLERANCE do valor planejado."""
-    return abs(valor_tx - valor_planejado) <= abs(valor_planejado) * PAID_MATCH_VALUE_TOLERANCE
-
-
 def detect_already_paid(transacoes: list[dict], paid_expenses: list[dict]) -> list[dict]:
     """
     CR-055 (RN-050): sinaliza transacoes que correspondem a um gasto planejado
@@ -403,40 +441,48 @@ def detect_already_paid(transacoes: list[dict], paid_expenses: list[dict]) -> li
     `parcelamento` e coberto pela RN-046 (que concilia parcela paga em vez de
     duplicar) e `ignorar` esta fora por definicao.
 
-    A atribuicao e gulosa e um planejado so pode ser reivindicado por UMA
-    transacao do lote: sem isso, duas linhas parecidas se ancorariam no mesmo
-    alvo e as duas seriam silenciadas. Desempate deterministico pela menor
-    diferenca de data e, em empate, pelo id — testes precisam de ordem estavel.
+    Um planejado so pode ser reivindicado por UMA transacao do lote, e a
+    atribuicao e resolvida **globalmente**: todos os pares viaveis do lote sao
+    ordenados por proximidade (data, depois diferenca de valor) e o melhor par
+    do lote inteiro e casado primeiro.
+
+    Isso nao e detalhe de estilo. Percorrer as transacoes em ordem e casar a
+    primeira que couber inverte o CR: com um planejado "Energia R$ 187,32" e um
+    lote contendo "SUPERMERCADO R$ 186,60" (2 dias antes) e "CEMIG R$ 187,32"
+    (no vencimento), o supermercado reivindicaria o alvo e seria silenciado,
+    enquanto a CEMIG — a duplicata de verdade — chegaria marcada e seria
+    importada. Perde-se um gasto legitimo E cria-se a contagem dupla.
+
+    A ordenacao final inclui indice e id justamente para ser estavel: testes e
+    revisoes precisam de resultado reproduzivel.
     """
     if not paid_expenses:
         return transacoes
 
-    usados: set[str] = set()
-    for tx in transacoes:
+    pares: list[tuple[int, float, int, str]] = []
+    for idx, tx in enumerate(transacoes):
         if tx["classificacao"] != "gasto_diario":
             continue
-
-        melhor = None
-        melhor_dist = None
         for candidato in paid_expenses:
-            if candidato["id"] in usados:
-                continue
             dist = abs((tx["data"] - candidato["vencimento"]).days)
             if dist > PAID_MATCH_WINDOW_DAYS:
                 continue
-            if not _valores_compativeis(tx["valor"], candidato["valor"]):
+            delta = abs(tx["valor"] - candidato["valor"])
+            if delta > PAID_MATCH_VALUE_TOLERANCE:
                 continue
-            if (
-                melhor is None
-                or dist < melhor_dist
-                or (dist == melhor_dist and candidato["id"] < melhor["id"])
-            ):
-                melhor, melhor_dist = candidato, dist
+            pares.append((dist, delta, idx, candidato["id"]))
 
-        if melhor is not None:
-            usados.add(melhor["id"])
-            tx["classificacao"] = CLASSIFICACAO_JA_LANCADO
-            tx["expense_id_sugerido"] = melhor["id"]
+    pares.sort()
+
+    transacoes_usadas: set[int] = set()
+    candidatos_usados: set[str] = set()
+    for _dist, _delta, idx, candidato_id in pares:
+        if idx in transacoes_usadas or candidato_id in candidatos_usados:
+            continue
+        transacoes_usadas.add(idx)
+        candidatos_usados.add(candidato_id)
+        transacoes[idx]["classificacao"] = CLASSIFICACAO_JA_LANCADO
+        transacoes[idx]["expense_id_sugerido"] = candidato_id
 
     return transacoes
 
@@ -607,8 +653,7 @@ def validate_ai_result(
     # CR-055 depois do CR-054 (D6): a memoria ja preencheu categoria/metodo, e
     # a reclassificacao preserva esses campos — assim, se o usuario resgatar a
     # linha, ela sai valida sem retrabalho.
-    if paid_expenses:
-        detect_already_paid(transacoes_limpas, paid_expenses)
+    transacoes_limpas = detect_already_paid(transacoes_limpas, paid_expenses or [])
 
     return {
         "banco": banco,
@@ -721,11 +766,11 @@ def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes
     try:
         if _claim_batch(db, batch_id, user_id) is None:
             return
-        open_expenses = collect_open_expenses(db, user_id)
+        # CR-055: abertos e ja pagos saem da mesma varredura da janela
+        open_expenses, paid_expenses = collect_match_context(db, user_id)
         valid_ids = {e.id for e in open_expenses}
         system_prompt, user_prompt = build_import_prompts(open_expenses)
         rules = crud.get_import_rules_data(db, user_id)  # CR-054
-        paid_expenses = collect_paid_expenses(db, user_id)  # CR-055
     except Exception:
         logger.error(f"Falha ao montar o contexto do lote {batch_id}", exc_info=True)
         db.rollback()
