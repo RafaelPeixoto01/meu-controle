@@ -1,9 +1,9 @@
 # Especificacao Tecnica — Meu Controle (Índice)
 
-**Versao:** 3.3
+**Versao:** 3.4
 **Data:** 2026-09-25
-**PRD Ref:** 01-PRD v3.6
-**Arquitetura Ref:** 02-ARCHITECTURE v3.4
+**PRD Ref:** 01-PRD v3.7
+**Arquitetura Ref:** 02-ARCHITECTURE v3.5
 **CR Ref:** CR-002, CR-003, CR-005, CR-007, CR-010, CR-011, CR-012, CR-016, CR-019, CR-021, CR-026, CR-033, CR-038, CR-046
 
 > **CR-038:** este documento virou um **índice**. O conteúdo técnico completo vive em `docs/specs/`, dividido por feature — extração mecânica do monólito original (4.449 linhas, v2.9), sem alteração de conteúdo.
@@ -25,7 +25,7 @@
 | [specs/07-score-saude.md](specs/07-score-saude.md) | Endpoints de score, cálculo determinístico (D1–D4), cenário conservador, ações, persistência | F04 (CR-026) |
 | [specs/08-alertas.md](specs/08-alertas.md) | Motor de alertas on-demand, 8 tipos (A1–A8), ciclo de vida, endpoints, configurações | F05 (CR-033) |
 | [specs/09-analise-ia.md](specs/09-analise-ia.md) | Endpoint /api/analysis, arquitetura real (ai_analysis.py), regras (mês fechado, cache mensal, mesclagem F04, graceful degradation), env vars | F06 (CR-032; criada no CR-041) |
-| [specs/10-importacao-extratos.md](specs/10-importacao-extratos.md) | Upload de extrato/fatura PDF, interpretação por IA, staging/revisão, dedup por fingerprint, confirmação (gastos diários + conciliação de planejados + séries de parcelas), UI /import | F07 / RF-21 (CR-046 backend, CR-047 frontend, CR-049 compras parceladas, CR-052..CR-055, CR-056 histórico e desfazer — entregues) |
+| [specs/10-importacao-extratos.md](specs/10-importacao-extratos.md) | Upload de extrato/fatura PDF, interpretação por IA, staging/revisão, dedup por fingerprint, confirmação (gastos diários + conciliação de planejados + séries de parcelas), UI /import | F07 / RF-21 (CR-046 backend, CR-047 frontend, CR-049 compras parceladas, CR-052..CR-055, CR-056 histórico e desfazer, CR-057 reconciliação de total — entregues) |
 
 ---
 
@@ -45,3 +45,4 @@
 | 2026-07-15 | Claude | v3.1 — CR-041: criada specs/09-analise-ia.md (F06); lacuna eliminada |
 | 2026-08-12 | Claude | v3.2 — CR-046: criada specs/10-importacao-extratos.md (F07, RF-21) |
 | 2026-09-25 | Claude | v3.3 — CR-056: specs/10 ganha a seção "Histórico e desfazer"; índice da F07 atualizado (CR-052..CR-056) |
+| 2026-09-25 | Claude | v3.4 — CR-057: specs/10 ganha a seção "Reconciliação de total do documento" |

@@ -28,12 +28,14 @@ from app.models import (
 from app.ai_analysis import DEFAULT_MODEL, AiRefusalError
 from app.import_service import (
     STALE_PROCESSING_MINUTES,
+    build_import_prompts,  # CR-057
     call_import_api,
     compute_fingerprint,
     detect_already_paid,  # CR-055
     mark_duplicates,  # CR-054
     normalize_description,
     normalize_pattern,  # CR-054
+    sum_debitos,  # CR-057
     validate_ai_result,
 )
 
@@ -2005,3 +2007,162 @@ class TestConciliarPlanejadoPago:
         db.refresh(open_expense)
         assert open_expense.status == ExpenseStatus.PAGO.value
         assert float(open_expense.valor) == 210.00
+
+
+# ========== CR-057: reconciliacao de total do documento (RN-053) ==========
+
+
+def _debito(tx, natureza="debito"):
+    return {**tx, "natureza": natureza}
+
+
+def upload_com_total(client, transacoes, total):
+    """Upload com `total_debitos_documento` no topo do resultado da IA."""
+    result = ai_result(transacoes)
+    result["resultado"]["total_debitos_documento"] = total
+    with patch("app.import_service.call_import_api", return_value=result):
+        r = client.post(
+            "/api/imports",
+            files={"file": ("fatura.pdf", PDF_BYTES, "application/pdf")},
+        )
+    assert r.status_code == 202, r.text
+    r = client.get(f"/api/imports/{r.json()['batch']['id']}")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+class TestPromptDaConferencia:
+    def test_prompt_pede_natureza_e_total_copiado_do_documento(self):
+        system_prompt, _ = build_import_prompts([])
+        assert '"natureza"' in system_prompt
+        assert '"total_debitos_documento"' in system_prompt
+        # o ponto central: copiar, nunca somar o que foi extraido
+        assert "NÃO some as transações" in system_prompt
+        assert "total a pagar" in system_prompt  # nomeado como o que NAO usar
+
+
+class TestValidateAiResultConferencia:
+    def _validar(self, transacoes, total=None, **extra):
+        resultado = {"banco": "Nubank", "tipo_documento": "fatura", "transacoes": transacoes, **extra}
+        if total is not None:
+            resultado["total_debitos_documento"] = total
+        return validate_ai_result(resultado, set())
+
+    def test_soma_so_os_debitos_de_todas_as_classificacoes(self):
+        r = self._validar([
+            _debito(TX_PADARIA),                                   # 23,50 gasto
+            _debito({**TX_IGNORAR, "valor": 300.00,
+                     "motivo_ignorar": "transferência própria"}),  # 300,00 ignorada, debito
+            _debito(TX_IGNORAR, "credito"),                        # 2.500 credito: fora
+        ], total=323.50)
+        assert r["total_debitos_extraido"] == 323.50
+        assert r["total_debitos_documento"] == 323.50
+        assert [t["natureza"] for t in r["transacoes"]] == ["debito", "debito", "credito"]
+
+    def test_linha_descartada_na_sanitizacao_aparece_como_divergencia(self):
+        """E o furo que a conferencia existe para pegar."""
+        r = self._validar([
+            _debito(TX_PADARIA),
+            _debito({**TX_PADARIA, "data": "data-invalida", "valor": 50.00}),
+        ], total=73.50)
+        assert r["total_debitos_extraido"] == 23.50
+        assert r["total_debitos_documento"] == 73.50
+
+    def test_natureza_ausente_em_qualquer_linha_torna_a_conferencia_indisponivel(self):
+        r = self._validar([_debito(TX_PADARIA), TX_IGNORAR], total=23.50)
+        assert r["total_debitos_extraido"] is None
+        assert r["transacoes"][1]["natureza"] is None
+
+    def test_natureza_invalida_vira_none(self):
+        r = self._validar([_debito(TX_PADARIA, "saida")])
+        assert r["transacoes"][0]["natureza"] is None
+        assert r["total_debitos_extraido"] is None
+
+    def test_total_do_documento_invalido_vira_none(self):
+        for total in ("mil reais", -10, 0, True, 1e13, float("nan"), float("inf")):
+            r = self._validar([_debito(TX_PADARIA)], total=total)
+            assert r["total_debitos_documento"] is None, total
+
+    def test_total_em_string_e_recusado(self):
+        """
+        Code review #4: "3.412" e tres mil em pt-BR, mas 3.412 num float() —
+        aceitar string geraria alarme falso de milhares de reais.
+        """
+        for total in ("3.412", "3.412,90", "R$ 23,50", "23.50"):
+            r = self._validar([_debito(TX_PADARIA)], total=total)
+            assert r["total_debitos_documento"] is None, total
+
+    def test_total_numerico_e_arredondado(self):
+        r = self._validar([_debito(TX_PADARIA)], total=23.504)
+        assert r["total_debitos_documento"] == 23.50
+
+    def test_soma_extraida_acima_do_teto_vira_none(self):
+        """Code review #6: nao pode estourar Numeric(12,2) e derrubar o lote."""
+        linhas = [_debito({**TX_PADARIA, "valor": 99_999_999.99}) for _ in range(101)]
+        assert self._validar(linhas)["total_debitos_extraido"] is None
+
+    def test_sem_total_no_resultado(self):
+        r = self._validar([_debito(TX_PADARIA)])
+        assert r["total_debitos_documento"] is None
+        assert r["total_debitos_extraido"] == 23.50
+
+    def test_sum_debitos_de_lote_vazio_e_none(self):
+        assert sum_debitos([]) is None
+
+    def test_soma_sem_ruido_de_ponto_flutuante(self):
+        r = self._validar([_debito({**TX_PADARIA, "valor": 0.1}), _debito({**TX_PADARIA, "valor": 0.2})])
+        assert r["total_debitos_extraido"] == 0.3
+
+
+class TestConferenciaNoLote:
+    def test_lote_expoe_os_totais_e_a_natureza(self, client):
+        batch = upload_com_total(
+            client,
+            [_debito(TX_PADARIA), _debito(TX_IGNORAR, "credito")],
+            total=23.50,
+        )
+        assert batch["total_debitos_documento"] == 23.50
+        assert batch["total_debitos_extraido"] == 23.50
+        assert {t["descricao"]: t["natureza"] for t in batch["transacoes"]} == {
+            "PADARIA STELLA": "debito",
+            "PAGAMENTO RECEBIDO": "credito",
+        }
+
+    def test_divergencia_nao_bloqueia_o_confirm(self, client):
+        batch = upload_com_total(client, [_debito(TX_PADARIA)], total=500.00)
+        r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [{
+            "id": batch["transacoes"][0]["id"], "acao": "criar_gasto_diario",
+            "descricao": "Padaria", "valor": 23.50, "data": "2026-07-28",
+            "categoria": "Alimentação", "subcategoria": "Padaria",
+            "metodo_pagamento": "Cartão de Crédito",
+        }]})
+        assert r.status_code == 200, r.text
+
+    def test_duplicadas_tambem_entram_na_soma(self, client):
+        """Compara-se o documento, nao o que sera gravado."""
+        primeiro = upload_com_total(client, [_debito(TX_PADARIA)], total=23.50)
+        client.post(f"/api/imports/{primeiro['id']}/confirm", json={"transacoes": [{
+            "id": primeiro["transacoes"][0]["id"], "acao": "criar_gasto_diario",
+            "descricao": "Padaria", "valor": 23.50, "data": "2026-07-28",
+            "categoria": "Alimentação", "subcategoria": "Padaria",
+            "metodo_pagamento": "Cartão de Crédito",
+        }]}).raise_for_status()
+
+        segundo = upload_com_total(client, [_debito(TX_PADARIA)], total=23.50)
+        assert segundo["transacoes"][0]["status"] == "duplicada"
+        assert segundo["total_debitos_extraido"] == 23.50
+
+    def test_lote_anterior_ao_cr_volta_com_os_campos_nulos(self, client, db, user_a):
+        lote = ImportBatch(user_id=user_a.id, filename="antigo.pdf", status="pendente_revisao", modelo="x")
+        db.add(lote)
+        db.commit()
+
+        corpo = client.get(f"/api/imports/{lote.id}").json()
+        assert corpo["total_debitos_documento"] is None
+        assert corpo["total_debitos_extraido"] is None
+
+    def test_historico_tambem_expoe_os_totais(self, client):
+        upload_com_total(client, [_debito(TX_PADARIA)], total=30.00)
+        item = client.get("/api/imports").json()["items"][0]
+        assert item["total_debitos_documento"] == 30.00
+        assert item["total_debitos_extraido"] == 23.50

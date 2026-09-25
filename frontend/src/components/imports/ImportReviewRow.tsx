@@ -78,6 +78,13 @@ function ImportReviewRowBase({
                   aprendido
                 </span>
               )}
+              {/* CR-057: sem a direcao visivel, o aviso de "credito lido como
+                  debito" da conferencia nao teria como ser localizado */}
+              {tx.natureza === "credito" && (
+                <span className="shrink-0 rounded-full bg-pago-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-pago">
+                  entrada
+                </span>
+              )}
             </span>
             <span className="text-sm font-bold text-text tabular-nums">
               {/* CR-053: valor efetivo, para a linha bater com o subtotal do grupo */}

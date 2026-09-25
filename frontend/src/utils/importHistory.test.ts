@@ -24,6 +24,8 @@ function makeItem(overrides: Partial<ImportHistoryItem> = {}): ImportHistoryItem
     created_at: "2026-09-01T10:00:00",
     confirmado_em: "2026-09-01T10:05:00",
     revertido_em: null,
+    total_debitos_documento: null,
+    total_debitos_extraido: null,
     total_transacoes: 0,
     confirmadas: 0,
     descartadas: 0,
