@@ -1,5 +1,6 @@
 import calendar
 import logging
+from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy.orm import Session
@@ -11,6 +12,23 @@ from app.models import Expense, ExpenseStatus, Income
 from app.utils import add_months
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SeriesEffects:
+    """
+    CR-056: o que `create_expense_with_installments` fez com a serie, para quem
+    precisa desfazer depois (o diario da importacao).
+
+    `criadas` sao as despesas que a funcao inseriu. `conciliada` e a parcela
+    informada quando ela JA existia (RN-046) — foi sobrescrita, nao criada, e
+    `status_anterior`/`valor_anterior` guardam o que havia antes. A distincao e
+    o ponto: um undo que tratasse a conciliada como criada a apagaria.
+    """
+    criadas: list[Expense] = field(default_factory=list)
+    conciliada: Expense | None = None
+    status_anterior: str | None = None
+    valor_anterior: float | None = None
 
 
 def create_expense_with_installments(
@@ -27,6 +45,7 @@ def create_expense_with_installments(
     recorrente: bool = True,
     status_primeira: str = ExpenseStatus.PENDENTE.value,
     skip_existing: bool = False,
+    efeitos: SeriesEffects | None = None,
 ) -> tuple[Expense, int]:
     """
     CR-049: Cria uma despesa e, se for parcelada (parcela_total > 1), TODAS as
@@ -46,6 +65,8 @@ def create_expense_with_installments(
       evitando duplicacao quando a fatura do mes seguinte e importada. Se a
       propria parcela informada ja existir, ela e conciliada (status e valor
       atualizados) em vez de duplicada, e nao entra na contagem de criadas.
+    - `efeitos` (CR-056), se informado, recebe o detalhe do que foi criado e do
+      que foi conciliado — o cadastro manual nao precisa e nao passa.
 
     Retorna (despesa da parcela informada, total de despesas criadas).
     NAO faz commit — quem chama controla a transacao.
@@ -61,6 +82,10 @@ def create_expense_with_installments(
         )
 
     if existente is not None:
+        if efeitos is not None:
+            efeitos.conciliada = existente
+            efeitos.status_anterior = existente.status
+            efeitos.valor_anterior = float(existente.valor)
         existente.status = status_primeira
         existente.valor = valor
         expense_atual = existente
@@ -80,6 +105,8 @@ def create_expense_with_installments(
         )
         db.add(expense_atual)
         criadas += 1
+        if efeitos is not None:
+            efeitos.criadas.append(expense_atual)
 
     if parcela_total and parcela_total > 1:
         base = parcela_atual or 1
@@ -92,23 +119,24 @@ def create_expense_with_installments(
             ):
                 continue
 
-            db.add(
-                Expense(
-                    user_id=user_id,
-                    mes_referencia=next_mes,
-                    nome=nome,
-                    categoria=categoria,
-                    subcategoria=subcategoria,
-                    valor=valor,
-                    vencimento=add_months(vencimento, offset_months),
-                    parcela_atual=i,
-                    parcela_total=parcela_total,
-                    # Parcelas futuras nao sao "recorrentes" no sentido da flag
-                    recorrente=False,
-                    status=ExpenseStatus.PENDENTE.value,
-                )
+            futura = Expense(
+                user_id=user_id,
+                mes_referencia=next_mes,
+                nome=nome,
+                categoria=categoria,
+                subcategoria=subcategoria,
+                valor=valor,
+                vencimento=add_months(vencimento, offset_months),
+                parcela_atual=i,
+                parcela_total=parcela_total,
+                # Parcelas futuras nao sao "recorrentes" no sentido da flag
+                recorrente=False,
+                status=ExpenseStatus.PENDENTE.value,
             )
+            db.add(futura)
             criadas += 1
+            if efeitos is not None:
+                efeitos.criadas.append(futura)
 
     return expense_atual, criadas
 

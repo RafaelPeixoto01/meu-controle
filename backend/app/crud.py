@@ -698,6 +698,76 @@ def get_confirmed_fingerprints(db: Session, user_id: str, fingerprints: list[str
     return set(db.scalars(stmt).all())
 
 
+# ========== Historico e desfazer (CR-056, F07) ==========
+
+def get_import_history(
+    db: Session, user_id: str, page: int, page_size: int
+) -> tuple[list[ImportBatch], int]:
+    """Pagina do historico de lotes do usuario (todos os status), mais recentes primeiro."""
+    total = db.scalar(
+        select(func.count()).select_from(ImportBatch).where(ImportBatch.user_id == user_id)
+    )
+    stmt = (
+        select(ImportBatch)
+        .where(ImportBatch.user_id == user_id)
+        # id desempata lotes criados no mesmo instante: sem ele a paginacao
+        # poderia repetir ou pular um lote entre duas paginas
+        .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(db.scalars(stmt).all()), total or 0
+
+
+def count_import_transactions_by_status(
+    db: Session, user_id: str, batch_ids: list[str]
+) -> dict[str, dict[str, int]]:
+    """
+    {batch_id: {status: quantidade}} numa query agregada so para a pagina do
+    historico — sem ela, cada lote carregaria suas transacoes (N+1).
+    """
+    if not batch_ids:
+        return {}
+    stmt = (
+        select(ImportTransaction.batch_id, ImportTransaction.status, func.count())
+        .where(
+            ImportTransaction.user_id == user_id,
+            ImportTransaction.batch_id.in_(batch_ids),
+        )
+        .group_by(ImportTransaction.batch_id, ImportTransaction.status)
+    )
+    contagens: dict[str, dict[str, int]] = {}
+    for batch_id, status, quantidade in db.execute(stmt).all():
+        contagens.setdefault(batch_id, {})[status] = quantidade
+    return contagens
+
+
+# Abaixo do limite de parametros do SQLite antigo (999). Um lote de 80 linhas
+# com series de parcelas pode passar de mil ids.
+_IDS_POR_CONSULTA = 500
+
+
+def _by_ids(db: Session, model, ids: list[str], user_id: str) -> dict:
+    encontrados = {}
+    unicos = list(dict.fromkeys(ids))
+    for i in range(0, len(unicos), _IDS_POR_CONSULTA):
+        fatia = unicos[i:i + _IDS_POR_CONSULTA]
+        stmt = select(model).where(model.id.in_(fatia), model.user_id == user_id)
+        for entidade in db.scalars(stmt).all():
+            encontrados[entidade.id] = entidade
+    return encontrados
+
+
+def get_daily_expenses_by_ids(db: Session, ids: list[str], user_id: str) -> dict[str, DailyExpense]:
+    """Gastos diarios do usuario pelos ids (ownership check). Ausentes ficam fora do mapa."""
+    return _by_ids(db, DailyExpense, ids, user_id)
+
+
+def get_expenses_by_ids(db: Session, ids: list[str], user_id: str) -> dict[str, Expense]:
+    """Gastos planejados do usuario pelos ids (ownership check). Ausentes ficam fora do mapa."""
+    return _by_ids(db, Expense, ids, user_id)
+
+
 # ========== Memoria de categorizacao (CR-054, F07) ==========
 
 def get_import_rules_map(db: Session, user_id: str) -> dict[str, ImportCategoryRule]:
