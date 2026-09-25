@@ -478,13 +478,20 @@ export type ImportClassificacao =
   // pela IA. `expense_id_sugerido` aponta para o planejado ja pago.
   | "ja_lancado"
   | "ignorar";
-export type ImportTransactionStatus = "pendente" | "confirmada" | "descartada" | "duplicada";
+export type ImportTransactionStatus =
+  | "pendente"
+  | "confirmada"
+  | "descartada"
+  | "duplicada"
+  // CR-056: lote desfeito — deixa de contar para a dedup (RN-052)
+  | "revertida";
 export type ImportBatchStatus =
   | "processando" // CR-052
   | "pendente_revisao"
   | "confirmado"
   | "descartado"
-  | "erro"; // CR-052
+  | "erro" // CR-052
+  | "revertido"; // CR-056
 export type ImportAcao =
   | "criar_gasto_diario"
   | "atualizar_planejado"
@@ -523,6 +530,8 @@ export interface ImportBatchSummary {
   status: ImportBatchStatus;
   erro_mensagem: string | null; // CR-052: preenchido quando status === "erro"
   created_at: string;
+  confirmado_em: string | null; // CR-056
+  revertido_em: string | null; // CR-056
 }
 
 export interface ImportBatch extends ImportBatchSummary {
@@ -558,6 +567,53 @@ export interface ImportConfirmResponse {
   planejados_criados: number; // CR-049
   planejados_atualizados: number;
   descartadas: number;
+}
+
+// ========== Historico e desfazer (CR-056) ==========
+
+export interface ImportHistoryItem extends ImportBatchSummary {
+  total_transacoes: number;
+  confirmadas: number;
+  descartadas: number;
+  duplicadas: number;
+  revertidas: number;
+  // Falso para lote nao confirmado e para lote confirmado antes do diario de
+  // efeitos existir (RN-051)
+  pode_desfazer: boolean;
+}
+
+export interface ImportHistoryPage {
+  items: ImportHistoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export type ImportUndoAcao = "remover" | "restaurar" | "preservar" | "ja_removido";
+
+export interface ImportUndoItem {
+  entidade: "gasto_diario" | "planejado";
+  efeito: "criado" | "conciliado";
+  acao: ImportUndoAcao;
+  descricao: string;
+  valor: number;
+  data: string | null; // data do gasto ou vencimento do planejado
+  parcela_atual: number | null;
+  parcela_total: number | null;
+  status_anterior: string | null; // so em conciliado
+  valor_anterior: number | null; // so em conciliado
+}
+
+export interface ImportUndoResponse {
+  gastos_diarios_removidos: number;
+  planejados_removidos: number;
+  planejados_restaurados: number;
+  preservados: number; // alterados depois da importacao — mantidos
+  ja_removidos: number; // apagados pelo usuario antes do undo
+}
+
+export interface ImportUndoPreview extends ImportUndoResponse {
+  itens: ImportUndoItem[];
 }
 
 // ========== Auth Types (CR-002) ==========

@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 3.5
-**Data:** 2026-09-01
+**Versao:** 3.6
+**Data:** 2026-09-25
 **Status:** Aprovado
 **Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052, CR-053, CR-054, CR-055
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052, CR-053, CR-054, CR-055, CR-056
 
 ---
 
@@ -264,6 +264,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - UI (CR-047): pagina propria "Importar" no ViewSelector com fluxo upload → processamento → revisao → confirmacao. A revisao agrupa por destino, incluindo "Compras parceladas" com edicao da numeracao e previa da serie antes de gravar (CR-049).
 - Deteccao de planejado ja pago (CR-055): transacao que corresponde a um gasto planejado JA marcado como Pago e sinalizada e chega desmarcada na revisao, num grupo proprio, exibindo o planejado alvo. Confirmar sem tocar nela nao cria nada — antes, ela virava um gasto diario novo em cima do planejado ja pago, duplicando o valor. Conciliar um planejado ja pago passa a ser recusado.
 - Memoria de categorizacao (CR-054): confirmar um gasto diario ensina ao sistema como aquele descritor deve ser tratado (nome, categoria, subcategoria, metodo). Na importacao seguinte, transacoes de estabelecimentos ja vistos chegam preenchidas e marcadas como "aprendido" na revisao — o usuario para de recorrigir as mesmas linhas todo mes. A regra e aprendida do texto do DOCUMENTO (nao da descricao editada), porque e o descritor cru que voltara no proximo extrato. A revisao continua obrigatoria e cada campo continua editavel.
+- Historico e desfazer (CR-056): a tela de importacao lista as **importacoes anteriores** (todos os lotes, paginados, com status e contadores). Um lote confirmado pode ser **desfeito**: uma previa mostra o que sera removido (gastos diarios e parcelas criados pelo lote), o que sera restaurado (planejados que o lote marcou como pagos voltam ao status e valor de antes) e o que sera mantido — lancamentos alterados depois da importacao nao sao tocados, e os ja apagados so sao reportados. Depois do undo o mesmo documento pode ser importado de novo. Lotes confirmados antes do CR-056 aparecem no historico mas nao podem ser desfeitos (nao ha registro do que gravaram); regras aprendidas (CR-054) nao sao revertidas.
 
 ### Modulo: Autenticacao e Usuarios (CR-002)
 
@@ -457,6 +458,14 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
     - [ ] Dado um re-upload com transacoes ja importadas, entao elas aparecem marcadas como duplicadas e nao sao gravadas de novo por padrao.
     - [ ] Nada e gravado nas tabelas finais sem confirmacao explicita do usuario.
 
+- **US-30:** Como usuario, quero ver minhas importacoes anteriores e desfazer uma que confirmei por engano, para corrigir o erro sem apagar lancamento por lancamento. (CR-056)
+  - Criterios de aceite:
+    - [x] A tela de importacao lista todos os lotes que enviei, com status, data e contadores, paginados.
+    - [x] Dado um lote confirmado, quando peco para desfazer, entao vejo antes o que sera removido, restaurado e mantido.
+    - [x] Dado que confirmo o desfazer, entao os gastos e parcelas criados pelo lote somem e os planejados que ele marcou como pagos voltam ao status e valor anteriores.
+    - [x] Lancamentos que alterei depois da importacao nao sao removidos nem restaurados.
+    - [x] Depois de desfeito, posso importar o mesmo documento de novo sem que ele seja marcado como duplicado.
+
 ---
 
 ## 7. Regras de Negocio
@@ -513,6 +522,8 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-048 | Lote parado em `processando` ha mais de 30 minutos perdeu o processamento (ex.: restart do servidor) e e resolvido como `erro` na primeira leitura, sem rotina de limpeza dedicada | Importacao (RF-21, CR-052) |
 | RN-050 | Transacao importada cuja data e valor correspondem a um gasto planejado ja PAGO (tolerancia de R$ 1,00 e 7 dias em torno do vencimento) e classificada como `ja_lancado` e chega desmarcada na revisao, evitando lancar o mesmo valor duas vezes. Cada planejado e apontado por no maximo uma transacao do lote. Conciliar um planejado ja pago e recusado | Importacao (RF-21, CR-055) |
 | RN-049 | Confirmar um gasto diario grava/atualiza uma regra de categorizacao do usuario, indexada pelo padrao do descritor do DOCUMENTO (nunca da descricao editada). Na importacao seguinte a regra sobrescreve a sugestao da IA e a transacao e marcada como "aprendido". Descritores genericos (ex.: "PIX ENVIADO") nao viram regra, e em fatura o metodo de pagamento do documento prevalece sobre o aprendido | Importacao (RF-21, CR-054) |
+| RN-051 | Desfazer um lote confirmado remove os lancamentos que ele criou e restaura status e valor dos planejados que ele conciliou. Lancamento alterado depois da importacao e mantido; lancamento ja apagado e apenas reportado. Regras de categorizacao aprendidas nao sao revertidas. So lotes confirmados a partir do CR-056 (com registro do que gravaram) podem ser desfeitos, e entre lotes dependentes (o mais recente alterou lancamentos do mais antigo) o mais recente deve ser desfeito primeiro | Importacao (RF-21, CR-056) |
+| RN-052 | Transacao de lote desfeito passa a `revertida` e deixa de contar para a deduplicacao (RN-042), permitindo reimportar o documento — exceto quando algum lancamento dela foi mantido pelo undo, caso em que continua confirmada e segue protegida contra reimportacao | Importacao (RF-21, CR-056) |
 
 ---
 
@@ -586,6 +597,8 @@ Os itens abaixo **nao** estao no escopo atual:
 | AlertEngine | Motor on-demand que executa 7 checkers para detectar 8 tipos de alerta a cada requisicao (CR-033) |
 | Categoria (Despesa Planejada) | Classificacao de uma despesa planejada derivada automaticamente da subcategoria selecionada, compartilhando o mesmo sistema de categorias dos gastos diarios (CR-016) |
 | Lote de Importacao | Resultado do upload de um extrato/fatura: conjunto de transacoes interpretadas pela IA aguardando revisao e confirmacao do usuario (CR-046) |
+| Desfazer importacao | Reverter um lote confirmado: remover o que ele criou e restaurar o que ele conciliou, preservando o que foi alterado depois (CR-056) |
+| Diario de efeitos | Registro, gravado no confirm, de cada lancamento que o lote criou ou conciliou, com o estado anterior — base do desfazer (CR-056) |
 | Fingerprint | Impressao digital de uma transacao importada (hash de usuario + data + valor + descricao normalizada) usada para detectar duplicatas entre uploads (CR-046) |
 | Conciliacao | Vinculo entre uma transacao do extrato/fatura e um gasto planejado existente, confirmando o pagamento e o valor real (CR-046) |
 
@@ -641,6 +654,7 @@ Os itens abaixo **nao** estao no escopo atual:
 *Atualizado para v3.2 em 2026-08-16. CR-049: importacao de compras parceladas (F07, item E-A do roadmap v2) — RF-21 estendido com a classificacao `parcelamento` e a acao `criar_planejado_parcelado`; RN-044 a RN-046 novas; RN-042 passa a considerar a numeracao da parcela. Receitas seguem em `ignorar` (RN-041 inalterada).*
 
 *Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7. UI entregue no CR-047 (mesma data) — conteudo do RF-21 ja cobria a feature completa.*
+*Atualizado para v3.6 em 2026-09-25. CR-056: historico e desfazer da importacao (F07, primeira metade do item E-D do roadmap v2) — RF-21 detalhado com o historico de lotes e o desfazer; US-30; RN-051 e RN-052 novas; glossario com "Desfazer importacao" e "Diario de efeitos". Migration 013 (`import_effects`). A reconciliacao de total do documento, segunda metade do E-D, fica para o CR-057.*
 *Atualizado para v3.5 em 2026-09-01. CR-055: deteccao de planejado ja pago na importacao (F07, recorte do B-6 do roadmap v2) — RF-21 detalhado com a sinalizacao; RN-050 nova. Sem migration e sem endpoint novo; a deteccao e deterministica e roda depois da IA, e a revisao segue obrigatoria.*
 
 *Atualizado para v3.4 em 2026-08-27. CR-054: memoria de categorizacao da importacao (F07, item E-C do roadmap v2, frente backend) — RF-21 detalhado com o aprendizado por padrao de descritor; RN-049 nova. Nenhum endpoint novo e nenhuma regra de confirmacao alterada: a memoria atua antes da revisao, que segue obrigatoria.*

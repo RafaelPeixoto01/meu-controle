@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from datetime import date
 
-from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas, ImportBatch, ImportTransaction, ImportCategoryRule  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira; CR-033: AlertaEstado, ConfiguracaoAlertas; CR-046: ImportBatch, ImportTransaction; CR-054: ImportCategoryRule
+from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas, ImportBatch, ImportTransaction, ImportCategoryRule, ImportEffect  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira; CR-033: AlertaEstado, ConfiguracaoAlertas; CR-046: ImportBatch, ImportTransaction; CR-054: ImportCategoryRule; CR-056: ImportEffect
 
 
 # ========== Expenses ==========
@@ -657,6 +657,22 @@ def get_import_batch_by_id(db: Session, batch_id: str, user_id: str) -> ImportBa
     return db.scalars(stmt).first()
 
 
+def get_import_batch_for_update(db: Session, batch_id: str, user_id: str) -> ImportBatch | None:
+    """
+    CR-056: mesmo lookup com SELECT ... FOR UPDATE. O undo trava o lote ate o
+    commit: dois POST simultaneos (clique duplo, retry de rede) no PostgreSQL
+    passariam os dois pela checagem de status e executariam o mesmo plano. O
+    segundo agora espera, relê 'revertido' e recebe 409. (SQLite ignora a
+    clausula — e serializa escritas de qualquer forma.)
+    """
+    stmt = (
+        select(ImportBatch)
+        .where(ImportBatch.id == batch_id, ImportBatch.user_id == user_id)
+        .with_for_update()
+    )
+    return db.scalars(stmt).first()
+
+
 def get_pending_import_batches(db: Session, user_id: str) -> list[ImportBatch]:
     """
     Lotes do usuario aguardando acao, mais recentes primeiro.
@@ -696,6 +712,104 @@ def get_confirmed_fingerprints(db: Session, user_id: str, fingerprints: list[str
         )
     )
     return set(db.scalars(stmt).all())
+
+
+# ========== Historico e desfazer (CR-056, F07) ==========
+
+def get_import_history(
+    db: Session, user_id: str, page: int, page_size: int
+) -> tuple[list[ImportBatch], int]:
+    """Pagina do historico de lotes do usuario (todos os status), mais recentes primeiro."""
+    total = db.scalar(
+        select(func.count()).select_from(ImportBatch).where(ImportBatch.user_id == user_id)
+    )
+    stmt = (
+        select(ImportBatch)
+        .where(ImportBatch.user_id == user_id)
+        # id desempata lotes criados no mesmo instante: sem ele a paginacao
+        # poderia repetir ou pular um lote entre duas paginas
+        .order_by(ImportBatch.created_at.desc(), ImportBatch.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    return list(db.scalars(stmt).all()), total or 0
+
+
+def count_import_transactions_by_status(
+    db: Session, user_id: str, batch_ids: list[str]
+) -> dict[str, dict[str, int]]:
+    """
+    {batch_id: {status: quantidade}} numa query agregada so para a pagina do
+    historico — sem ela, cada lote carregaria suas transacoes (N+1).
+    """
+    if not batch_ids:
+        return {}
+    stmt = (
+        select(ImportTransaction.batch_id, ImportTransaction.status, func.count())
+        .where(
+            ImportTransaction.user_id == user_id,
+            ImportTransaction.batch_id.in_(batch_ids),
+        )
+        .group_by(ImportTransaction.batch_id, ImportTransaction.status)
+    )
+    contagens: dict[str, dict[str, int]] = {}
+    for batch_id, status, quantidade in db.execute(stmt).all():
+        contagens.setdefault(batch_id, {})[status] = quantidade
+    return contagens
+
+
+# Abaixo do limite de parametros do SQLite antigo (999). Um lote de 80 linhas
+# com series de parcelas pode passar de mil ids.
+_IDS_POR_CONSULTA = 500
+
+
+def get_later_batch_touching(db: Session, batch: ImportBatch) -> ImportBatch | None:
+    """
+    CR-056: lote confirmado DEPOIS de `batch` que ainda tem efeito num
+    lancamento que `batch` criou ou conciliou (ex.: a fatura seguinte
+    conciliou uma parcela que esta criou). Desfazer `batch` antes dele deixaria
+    um orfao — ver `import_undo.undo_blocker_dependencies`.
+    """
+    ids = list(dict.fromkeys(e.entidade_id for e in batch.efeitos))
+    for i in range(0, len(ids), _IDS_POR_CONSULTA):
+        stmt = (
+            select(ImportBatch)
+            .join(ImportEffect, ImportEffect.batch_id == ImportBatch.id)
+            .where(
+                ImportEffect.user_id == batch.user_id,
+                ImportEffect.entidade_id.in_(ids[i:i + _IDS_POR_CONSULTA]),
+                ImportBatch.id != batch.id,
+                ImportBatch.status == "confirmado",
+                ImportBatch.confirmado_em > batch.confirmado_em,
+            )
+            .order_by(ImportBatch.confirmado_em.desc())
+            .limit(1)
+        )
+        posterior = db.scalars(stmt).first()
+        if posterior is not None:
+            return posterior
+    return None
+
+
+def _by_ids(db: Session, model, ids: list[str], user_id: str) -> dict:
+    encontrados = {}
+    unicos = list(dict.fromkeys(ids))
+    for i in range(0, len(unicos), _IDS_POR_CONSULTA):
+        fatia = unicos[i:i + _IDS_POR_CONSULTA]
+        stmt = select(model).where(model.id.in_(fatia), model.user_id == user_id)
+        for entidade in db.scalars(stmt).all():
+            encontrados[entidade.id] = entidade
+    return encontrados
+
+
+def get_daily_expenses_by_ids(db: Session, ids: list[str], user_id: str) -> dict[str, DailyExpense]:
+    """Gastos diarios do usuario pelos ids (ownership check). Ausentes ficam fora do mapa."""
+    return _by_ids(db, DailyExpense, ids, user_id)
+
+
+def get_expenses_by_ids(db: Session, ids: list[str], user_id: str) -> dict[str, Expense]:
+    """Gastos planejados do usuario pelos ids (ownership check). Ausentes ficam fora do mapa."""
+    return _by_ids(db, Expense, ids, user_id)
 
 
 # ========== Memoria de categorizacao (CR-054, F07) ==========

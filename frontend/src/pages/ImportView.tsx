@@ -7,6 +7,7 @@ import ImportUpload from "../components/imports/ImportUpload";
 import ImportProcessing from "../components/imports/ImportProcessing";
 import ImportReview from "../components/imports/ImportReview";
 import ImportResult from "../components/imports/ImportResult";
+import ImportHistory from "../components/imports/ImportHistory";
 import {
   useConfirmImport,
   useDiscardImport,
@@ -141,6 +142,11 @@ export default function ImportView() {
           onResume={handleResume}
           onDiscard={handleDiscard}
         />
+      )}
+
+      {/* CR-056: historico e desfazer, abaixo do upload */}
+      {stage === "upload" && !uploadMutation.isPending && (
+        <ImportHistory onResume={handleResume} />
       )}
 
       {stage === "processing" && (

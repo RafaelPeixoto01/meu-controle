@@ -57,6 +57,8 @@ function makeBatch(transacoes: ImportTransaction[]): ImportBatch {
     status: "pendente_revisao",
     erro_mensagem: null,
     created_at: "2026-08-12T10:00:00",
+    confirmado_em: null, // CR-056
+    revertido_em: null, // CR-056
     transacoes,
   };
 }
@@ -377,6 +379,8 @@ describe("nextStageForBatch (CR-052)", () => {
       status,
       erro_mensagem: null,
       created_at: "2026-08-22T10:00:00",
+      confirmado_em: null, // CR-056
+      revertido_em: null, // CR-056
     };
   }
 
@@ -388,7 +392,7 @@ describe("nextStageForBatch (CR-052)", () => {
     expect(nextStageForBatch(summary("pendente_revisao"))).toBe("review");
   });
 
-  it.each(["erro", "confirmado", "descartado"] as const)(
+  it.each(["erro", "confirmado", "descartado", "revertido"] as const)(
     "volta ao upload em estado terminal (%s)",
     (status) => {
       expect(nextStageForBatch(summary(status))).toBe("upload");

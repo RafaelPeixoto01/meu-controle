@@ -227,7 +227,7 @@ class ImportBatch(Base):
     tipo_documento: Mapped[str | None] = mapped_column(String(20), nullable=True)  # extrato | fatura
     status: Mapped[str] = mapped_column(
         String(20), default="pendente_revisao", nullable=False
-    )  # processando (CR-052) | pendente_revisao | confirmado | descartado | erro (CR-052)
+    )  # processando (CR-052) | pendente_revisao | confirmado | descartado | erro (CR-052) | revertido (CR-056)
     # CR-052: motivo da falha quando status == 'erro'. Guarda so o tipo da
     # excecao / mensagem generica — nunca conteudo do documento (RN-043).
     erro_mensagem: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -235,6 +235,10 @@ class ImportBatch(Base):
     tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
     modelo: Mapped[str] = mapped_column(String(50), nullable=False)
     tempo_processamento_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # CR-056: nulo num lote confirmado = confirmado antes do diario de efeitos
+    # existir, e por isso nao pode ser desfeito (RN-051)
+    confirmado_em: Mapped[datetime | None] = mapped_column(nullable=True)
+    revertido_em: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.now, onupdate=datetime.now
@@ -246,6 +250,12 @@ class ImportBatch(Base):
         back_populates="batch",
         cascade="all, delete-orphan",
         order_by="ImportTransaction.data",
+    )
+    efeitos = relationship(  # CR-056
+        "ImportEffect",
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        order_by="ImportEffect.created_at",
     )
 
 
@@ -289,7 +299,7 @@ class ImportTransaction(Base):
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)  # sha256 hex (RN-042)
     status: Mapped[str] = mapped_column(
         String(20), default="pendente", nullable=False
-    )  # pendente | confirmada | descartada | duplicada
+    )  # pendente | confirmada | descartada | duplicada | revertida (CR-056)
     daily_expense_id_criado: Mapped[str | None] = mapped_column(String(36), nullable=True)
     expense_id_atualizado: Mapped[str | None] = mapped_column(String(36), nullable=True)
     # CR-049: id da parcela criada (a 'atual' da serie) — auditoria do parcelamento
@@ -344,6 +354,53 @@ class ImportCategoryRule(Base):
     )
 
     user = relationship("User", back_populates="import_category_rules")
+
+
+class ImportEffect(Base):
+    """
+    CR-056 (F07): diario do que um confirm gravou — a fonte da verdade do undo
+    (RN-051, ADR-022).
+
+    Uma linha por efeito: gasto diario criado, CADA parcela criada de uma serie,
+    e cada planejado conciliado (com status e valor de antes). Os campos de
+    auditoria de `ImportTransaction` nao bastam: registram so a parcela ancora,
+    e na RN-046 `expense_id_criado` aponta para uma parcela que ja existia —
+    um undo guiado por ele apagaria um lancamento do usuario.
+
+    `assinatura` e o hash do estado gravado pelo confirm (ver
+    `import_undo.entity_signature`): se o lancamento hoje difere dela, alguem
+    mexeu depois da importacao e o undo o preserva.
+    """
+    __tablename__ = "import_effects"
+    __table_args__ = (
+        Index("ix_import_effects_batch", "batch_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    batch_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("import_batches.id", ondelete="CASCADE"), nullable=False
+    )
+    transaction_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("import_transactions.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    tipo: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # gasto_diario_criado | planejado_criado | planejado_conciliado
+    # Sem FK: aponta para daily_expenses ou expenses conforme o tipo, e precisa
+    # sobreviver ao usuario apagar o lancamento (o undo reporta 'ja_removido')
+    entidade_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    assinatura: Mapped[str] = mapped_column(String(64), nullable=False)
+    # So em planejado_conciliado: o estado que o undo restaura
+    status_anterior: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    valor_anterior: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+
+    batch = relationship("ImportBatch", back_populates="efeitos")
 
 
 class AlertaEstado(Base):

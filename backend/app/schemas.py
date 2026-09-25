@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import date, datetime
 from typing import Optional
 
@@ -628,10 +628,55 @@ class ImportBatchSummary(BaseModel):
     status: str
     erro_mensagem: str | None = None  # CR-052: preenchido quando status == 'erro'
     created_at: datetime
+    confirmado_em: datetime | None = None  # CR-056
+    revertido_em: datetime | None = None  # CR-056
 
 
 class ImportBatchResponse(ImportBatchSummary):
     transacoes: list[ImportTransactionResponse] = []
+
+
+class ImportHistoryItem(ImportBatchSummary):
+    """CR-056: lote no historico, com a contagem de transacoes por status."""
+    total_transacoes: int = 0
+    confirmadas: int = 0
+    descartadas: int = 0
+    duplicadas: int = 0
+    revertidas: int = 0
+    pode_desfazer: bool = False
+
+
+class ImportHistoryPage(BaseModel):
+    items: list[ImportHistoryItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class ImportUndoItem(BaseModel):
+    """CR-056: um efeito do lote e o que o undo fara com ele (RN-051)."""
+    entidade: str  # gasto_diario | planejado
+    efeito: str  # criado | conciliado
+    acao: str  # remover | restaurar | preservar | ja_removido
+    descricao: str
+    valor: float
+    data: date | None = None  # data do gasto ou vencimento do planejado
+    parcela_atual: int | None = None
+    parcela_total: int | None = None
+    status_anterior: str | None = None  # so em conciliado
+    valor_anterior: float | None = None  # so em conciliado
+
+
+class ImportUndoResponse(BaseModel):
+    gastos_diarios_removidos: int
+    planejados_removidos: int
+    planejados_restaurados: int
+    preservados: int  # alterados depois da importacao — mantidos
+    ja_removidos: int  # apagados pelo usuario antes do undo
+
+
+class ImportUndoPreview(ImportUndoResponse):
+    itens: list[ImportUndoItem]
 
 
 class ImportUploadResponse(BaseModel):
@@ -655,6 +700,23 @@ class ImportConfirmDecision(BaseModel):
     # CR-049: serie exige 2+ parcelas; o teto evita que um numero absurdo vindo
     # da IA gere milhares de despesas numa unica requisicao
     parcela_total: int | None = Field(None, ge=2, le=MAX_PARCELAS)
+
+    @field_validator("valor")
+    @classmethod
+    def round_valor(cls, valor: float | None) -> float | None:
+        """
+        CR-056: arredonda para as 2 casas da coluna ANTES de gravar. Sem isso o
+        banco arredonda por conta propria (o PostgreSQL grava 10.005 como 10.01,
+        enquanto o float em memoria formata como 10.00), e a assinatura do
+        diario — calculada sobre o valor em memoria — nunca bateria com o valor
+        relido no undo: o lancamento intocado pareceria editado.
+        """
+        if valor is None:
+            return None
+        arredondado = round(valor, 2)
+        if arredondado <= 0:
+            raise ValueError("valor deve ser maior que zero")
+        return arredondado
 
     @model_validator(mode="after")
     def validate_acao(self):

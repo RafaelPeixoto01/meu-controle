@@ -1,6 +1,6 @@
-# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa / CR-054 memória de categorização / CR-055 planejado já pago)
+# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa / CR-054 memória de categorização / CR-055 planejado já pago / CR-056 histórico e desfazer)
 
-**PRD Ref:** RF-21, US-29, RN-038..RN-050
+**PRD Ref:** RF-21, US-29, US-30, RN-038..RN-052
 
 ## Visão Geral
 
@@ -17,8 +17,11 @@ Todos exigem autenticação (Bearer) e verificam ownership (404 para recurso de 
 | `/api/imports` | POST (multipart `file`) | **202** | Valida o PDF, grava lote `processando` e agenda a extração. Responde só metadados (sem transações). Rate limit **5/min** (slowapi). |
 | `/api/imports/pending` | GET | 200 | Lista lotes `pendente_revisao` **e `processando`** do usuário (retomada / acompanhamento). |
 | `/api/imports/{batch_id}` | GET | 200 | Lote + transações. **Canal de polling** do processamento (CR-052); resolve lote órfão (RN-048). |
-| `/api/imports/{batch_id}/confirm` | POST | 200 | Aplica as decisões revisadas; retorna contadores do resultado. |
-| `/api/imports/{batch_id}` | DELETE | 204 | Descarta lote (status → `descartado`). |
+| `/api/imports/{batch_id}/confirm` | POST | 200 | Aplica as decisões revisadas; retorna contadores do resultado. **CR-056:** grava também o diário de efeitos e `confirmado_em`. |
+| `/api/imports/{batch_id}` | DELETE | 204 | Descarta lote (status → `descartado`). 409 se `confirmado` ou `revertido`. |
+| `/api/imports?page=&page_size=` | GET | 200 | **CR-056:** histórico paginado de todos os lotes do usuário, com contadores por status de transação e `pode_desfazer`. |
+| `/api/imports/{batch_id}/undo-preview` | GET | 200 | **CR-056:** o que o desfazer faria agora, item a item. 409 se o lote não pode ser desfeito. |
+| `/api/imports/{batch_id}/undo` | POST | 200 | **CR-056:** desfaz o lote confirmado (RN-051/052). 409 se não pode ser desfeito. |
 
 ### POST /api/imports — validações de upload
 
@@ -31,8 +34,8 @@ Todos exigem autenticação (Bearer) e verificam ownership (404 para recurso de 
 ### Ciclo de vida do lote (CR-052)
 
 ```
-POST /api/imports ──> processando ──┬──> pendente_revisao ──> confirmado
-     (202)                          │                   └──> descartado
+POST /api/imports ──> processando ──┬──> pendente_revisao ──> confirmado ──> revertido
+     (202)                          │                   └──> descartado    (CR-056, undo)
                                     └──> erro   (falha da IA, nenhuma transação
                                                  identificada, ou RN-048)
 ```
@@ -142,6 +145,63 @@ O caminho de **parcelas** já era protegido: `crud.get_expense_installment` não
 
 **Limitação conhecida:** valor real que diverge muito do planejado estimado (conta variável) não é detectado. É o comportamento anterior, sem regressão — a tolerância estreita prioriza precisão, porque sinalizar demais treina o usuário a ignorar o grupo.
 
+## Histórico e desfazer (CR-056 — item E-D do roadmap v2, primeira metade)
+
+Antes do CR-056 um lote confirmado saía do `/pending` e sumia da interface, e um confirm errado só se resolvia apagando à mão. Agora o histórico lista todos os lotes e um lote confirmado pode ser **desfeito**.
+
+### Diário de efeitos (ADR-022)
+
+O confirm registra em `import_effects` **cada coisa que gravou**, via `import_undo.EffectJournal`:
+
+| `tipo` | Quando | Guarda |
+|--------|--------|--------|
+| `gasto_diario_criado` | `criar_gasto_diario` | id + assinatura |
+| `planejado_criado` | cada parcela que `create_expense_with_installments` inseriu (âncora **e** futuras) | id + assinatura |
+| `planejado_conciliado` | `atualizar_planejado` e a conciliação da RN-046 | id + assinatura + `status_anterior` + `valor_anterior` |
+
+Os campos de auditoria da transação **não servem** para o undo: registram só a âncora da série, e na RN-046 `expense_id_criado` aponta para uma parcela que **já existia** — um undo guiado por eles apagaria um lançamento do usuário. `services.SeriesEffects` (parâmetro opcional `efeitos` de `create_expense_with_installments`) devolve o que a série criou e o que ela conciliou, separadamente.
+
+- **Gravação no fim do confirm** (`gravar`, depois do laço): a assinatura precisa ser a do estado **final**, e o id das parcelas só existe depois do flush.
+- **Um efeito por lançamento.** Se o mesmo planejado é tocado duas vezes no confirm (uma linha concilia a parcela 3 e outra a reconcilia pela RN-046), vale o **primeiro** registro — é o que guarda o estado de antes do lote.
+- **`confirmado_em`** marca o lote como desfazível. Lote confirmado antes do CR-056 fica com ele nulo e **não pode ser desfeito**: não tem diário, e o fallback pelos campos de auditoria cairia exatamente no furo acima.
+
+### Assinatura — `import_undo.entity_signature(entidade)`
+
+sha256 dos campos que o usuário (ou outro lote) pode alterar:
+
+- `DailyExpense`: mês, descrição, valor, data, categoria, subcategoria, método
+- `Expense`: mês, nome, valor, vencimento, categoria, subcategoria, parcela atual/total, recorrente e **status normalizado** — `Pendente` e `Atrasado` contam como o mesmo estado, porque a RF-05 alterna entre eles sozinha a cada leitura do mês. Sem isso toda parcela futura vencida pareceria editada e o undo nunca a removeria. `Pago` é distinto: parcela futura paga à mão é preservada.
+
+Valores monetários entram como `f"{float(v):.2f}"`, igualando o `Decimal` lido do banco ao `float` atribuído no confirm.
+
+### Desfazer (RN-051)
+
+`import_undo.plan_undo(db, batch)` lê o diário e decide, efeito a efeito, a partir do estado **atual** — sem alterar nada. A prévia e a execução usam o mesmo plano; o POST o recalcula na hora (a prévia é informativa).
+
+| Lançamento hoje | Efeito criado | Efeito conciliado | Contador |
+|-----------------|---------------|-------------------|----------|
+| Assinatura igual | remove | restaura status e valor anteriores | `*_removidos` / `planejados_restaurados` |
+| Assinatura diferente | mantém | mantém | `preservados` |
+| Não existe mais | — | — | `ja_removidos` |
+
+- Os lançamentos são buscados **sempre filtrados pelo dono do lote** (`crud.get_*_by_ids(..., user_id)`, em fatias de 500 ids): um efeito que apontasse para dado alheio seria tratado como ausente.
+- **Ordem inversa entre lotes dependentes** (`undo_blocker_dependencies`, via `crud.get_later_batch_touching`). Se um lote B, confirmado **depois** e ainda `confirmado`, tem efeito num lançamento que A criou ou conciliou (ex.: a fatura seguinte conciliou pela RN-046 uma parcela da série de A), desfazer A → **409** "Desfaça antes a importação …". Desfazer A primeiro manteria a parcela (alterada depois) e apagaria o resto da série; desfazer B em seguida a devolveria a Pendente — **órfã**, sem lote que ainda a possa remover. Na ordem B → A, o undo de B devolve a parcela exatamente ao estado que A gravou e o de A a remove. Lote **anterior** que tocou o mesmo lançamento não bloqueia (a ordem já é a inversa).
+- Alteração **fora de um lote** (manual, ou por lote legado sem diário) só preserva — não há ordem a respeitar.
+- **Lock:** o POST lê o lote com `SELECT … FOR UPDATE` (`crud.get_import_batch_for_update`). Dois POST simultâneos (clique duplo, retry de rede) passariam os dois pela checagem de status no PostgreSQL; o segundo agora espera o commit do primeiro, relê `revertido` e recebe 409. SQLite ignora a cláusula (e serializa escritas).
+- **Arredondamento no confirm:** `ImportConfirmDecision.valor` é arredondado a 2 casas **antes** de gravar (e recusado se virar 0). Sem isso o banco arredonda por conta própria — o PostgreSQL recebe o repr `1.005` e grava `1.01`, enquanto o float em memória (`1.00499…`) formata `1.00` — e a assinatura calculada no confirm nunca bateria com o valor relido: o lançamento intocado pareceria editado.
+- **RN-052:** a transação vira `revertida` — e deixa de contar para a dedup (RN-042), permitindo reimportar o documento — **só se nenhum efeito dela foi preservado**. Se algo dela ficou gravado, ela continua `confirmada`, e é isso que impede o mesmo documento reimportado de lançar de novo o que o usuário decidiu manter.
+- Lote → `revertido`, `revertido_em = now`. Transações `descartada`/`duplicada` não mudam.
+- **Regras aprendidas (CR-054) não são revertidas:** uma regra errada volta com o badge "aprendido" e se corrige no confirm seguinte.
+- Atômico: um commit só ao final.
+- 409 para lote que não é `confirmado` (inclui já `revertido`), para lote sem diário e para lote com dependente posterior; 404 para lote de outro usuário. A prévia aplica as mesmas checagens (sem o lock).
+- **Lote pendente apontando para algo que o undo removeu:** um lote ainda em revisão com `expense_id_sugerido` para uma parcela que o undo apagou recebe 404 no confirm — o mesmo que já acontece quando o usuário apaga o planejado à mão. Fora do escopo do CR-056 (follow-up).
+
+**Limitação conhecida:** a transição de mês (RF-06) replica planejados **recorrentes** para o mês seguinte com o valor corrente. Se um planejado conciliado pela importação foi replicado antes do undo, a réplica mantém o valor real — ela é um lançamento do mês seguinte, criado pela transição e não pelo lote. Os planejados **criados** pela importação não têm esse problema: são `recorrente=False` e as parcelas futuras já nascem upfront.
+
+### Histórico
+
+`GET /api/imports?page=1&page_size=20` (`page >= 1`, `1 <= page_size <= 50`, senão 422) — todos os status, `created_at` desc com desempate por `id` (sem ele a paginação poderia repetir ou pular um lote). Contadores numa única query agregada `(batch_id, status) → count` para a página. Aplica a RN-048 aos lotes da página. Resposta: `{ items: [ImportHistoryItem], total, page, page_size }`, onde cada item é o resumo do lote + `total_transacoes`, `confirmadas`, `descartadas`, `duplicadas`, `revertidas`, `pode_desfazer`.
+
 ## Memória de categorização (CR-054 — item E-C do roadmap v2, frente backend)
 
 A IA erra as mesmas descrições todo mês. A memória grava a decisão do usuário por **padrão de descritor** e a reaplica na importação seguinte, antes da revisão.
@@ -173,7 +233,8 @@ A IA erra as mesmas descrições todo mês. A memória grava a decisão do usuá
 routers/imports.py  →  import_service.py  →  API Anthropic (PDF document block)
         │                     │
         │                     └─ prompts/import_extraction_{system,user}.txt
-        └─ crud.py (batches/transactions)  →  models: ImportBatch, ImportTransaction
+        ├─ import_undo.py (CR-056: diário, assinatura, plano e execução do undo)
+        └─ crud.py (batches/transactions)  →  models: ImportBatch, ImportTransaction, ImportEffect
 ```
 
 - `import_service.py`:
@@ -207,12 +268,14 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 | Lote `processando` há mais de 30 min é resolvido como `erro` na leitura | RN-048 (CR-052) |
 | Transação que corresponde a um planejado já **Pago** é marcada `ja_lancado` e chega desmarcada na revisão; conciliar um planejado já pago é recusado (422) | RN-050 (CR-055) |
 | Confirmar um gasto diário grava/atualiza uma regra de categorização do usuário, indexada pelo padrão do descritor do documento; a regra é reaplicada na importação seguinte e sobrescreve a sugestão da IA | RN-049 (CR-054) |
+| Desfazer um lote confirmado remove o que ele criou e restaura os planejados que conciliou; lançamento alterado depois é mantido, apagado é só reportado; regras aprendidas não são revertidas; só lotes com diário (confirmados a partir do CR-056); entre lotes dependentes, o mais recente é desfeito primeiro | RN-051 (CR-056) |
+| Transação de lote desfeito vira `revertida` e deixa de contar para a dedup — exceto se algum lançamento dela foi mantido, caso em que continua `confirmada` | RN-052 (CR-056) |
 
 ## Persistência (migration 009)
 
-**`import_batches`** — id (uuid str), user_id (FK CASCADE), filename, banco_detectado, tipo_documento (`extrato|fatura`), status (`processando|pendente_revisao|confirmado|descartado|erro`), **erro_mensagem** (CR-052), tokens_input/output, modelo, tempo_processamento_ms, created_at, updated_at. Índice `(user_id, status)`.
+**`import_batches`** — id (uuid str), user_id (FK CASCADE), filename, banco_detectado, tipo_documento (`extrato|fatura`), status (`processando|pendente_revisao|confirmado|descartado|erro|revertido`), **erro_mensagem** (CR-052), tokens_input/output, modelo, tempo_processamento_ms, **confirmado_em/revertido_em** (CR-056), created_at, updated_at. Índice `(user_id, status)`.
 
-**`import_transactions`** — id, batch_id (FK CASCADE), user_id (FK CASCADE), data, descricao, valor Numeric(10,2), classificacao (`gasto_diario|match_planejado|parcelamento|ignorar`), motivo_ignorar, expense_id_sugerido, categoria, subcategoria, metodo_pagamento, **parcela_atual, parcela_total** (CR-049), fingerprint (sha256 hex, 64), status (`pendente|confirmada|descartada|duplicada`), daily_expense_id_criado, expense_id_atualizado, **expense_id_criado** (CR-049), created_at, updated_at. Índice `(user_id, fingerprint)`.
+**`import_transactions`** — id, batch_id (FK CASCADE), user_id (FK CASCADE), data, descricao, valor Numeric(10,2), classificacao (`gasto_diario|match_planejado|parcelamento|ignorar`), motivo_ignorar, expense_id_sugerido, categoria, subcategoria, metodo_pagamento, **parcela_atual, parcela_total** (CR-049), fingerprint (sha256 hex, 64), status (`pendente|confirmada|descartada|duplicada|revertida`), daily_expense_id_criado, expense_id_atualizado, **expense_id_criado** (CR-049), created_at, updated_at. Índice `(user_id, fingerprint)`.
 
 **`import_category_rules`** (CR-054) — id, user_id (FK CASCADE), `padrao` (saída de `normalize_pattern`), `descricao_sugerida`, `categoria`, `subcategoria`, `metodo_pagamento`, `hits`, created_at, updated_at. Unique `(user_id, padrao)` — chave do upsert e do lookup, que é **sempre** filtrado por `user_id`.
 
@@ -221,6 +284,8 @@ Migration **011** (CR-052) adiciona `erro_mensagem` em `import_batches`. Os valo
 Migration **012** (CR-054) cria `import_category_rules` e adiciona em `import_transactions`: `origem_sugestao` (`aprendido` | nulo) e `descricao_original` (texto do documento — `descricao` pode ter sido reescrita por uma regra, e tanto o fingerprint quanto a realimentação da memória dependem do original). Ambas nullable; nulo equivale ao comportamento anterior, sem backfill.
 
 **CR-055 não altera schema:** reusa `expense_id_sugerido` para apontar o planejado já pago, e `classificacao` é `String(20)` sem constraint de enum.
+
+**`import_effects`** (CR-056, migration **013**) — id, batch_id (FK CASCADE, índice), transaction_id (FK CASCADE), user_id (FK CASCADE), `tipo` (`gasto_diario_criado|planejado_criado|planejado_conciliado`), `entidade_id` (**sem FK** — aponta para `daily_expenses` ou `expenses` conforme o tipo e precisa sobreviver ao usuário apagar o lançamento), `assinatura` (sha256), `status_anterior`/`valor_anterior` (só em conciliado), created_at. A 013 adiciona também `confirmado_em` e `revertido_em` em `import_batches`. Os status novos (`revertido` no lote, `revertida` na transação) não exigem DDL.
 
 Sem alteração nas tabelas existentes.
 
@@ -258,6 +323,7 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - Ownership: get/confirm/delete de lote de outro usuário → 404
 - PDF não persistido (nenhum arquivo escrito)
 - Planejado já pago (CR-055): casa por valor+data e reclassifica com `expense_id_sugerido`; não casa fora da janela de dias nem fora da tolerância; tolerância é absoluta (aluguel de R$ 3.000 não engole compra de R$ 2.980); só atua em `gasto_diario`; a melhor correspondência do **lote** vence a ordem das linhas; um planejado não é reivindicado por duas transações; planejado Pendente segue no caminho de conciliação; planejado pago de outro usuário nunca é alcançado; `atualizar_planejado` sobre Pago → 422, e duas linhas no mesmo planejado aberto reportam a causa certa; linha reclassificada preserva o que a memória preencheu
+- Histórico e desfazer (CR-056, `backend/tests/test_import_history_undo.py`): assinatura (Pendente≡Atrasado, Pago distinto, Decimal≡float, cada campo editável muda o hash); diário com um efeito por gasto, por **cada** parcela e por conciliação, parcela pré-existente da RN-046 registrada como conciliada; histórico com contadores, ordenação/paginação, 422 de parâmetros, isolamento por usuário, lote legado sem `pode_desfazer`, RN-048; undo completo (remove, restaura, `revertido`/`revertida`), prévia sem efeito colateral e igual ao undo, gasto editado preservado (transação segue `confirmada`), gasto apagado como `ja_removido`, parcela só atrasada removida, parcela paga à mão preservada, **parcela pré-existente restaurada e nunca apagada**, conciliado editado não restaurado, lançamento tocado duas vezes no lote volta ao original, parcela alterada por outro lote preservada, parcela alterada fora de um lote preservada, **lote com dependente posterior → 409 e a ordem B → A remove a série inteira**, lote mais recente desfazível mesmo com o anterior confirmado, valor com 3 casas não parece editado, valor que arredonda para zero → 422, reimportação após undo não é `duplicada` mas a do lançamento mantido é, regras permanecem; 409 (pendente, já revertido, sem diário), 404 (outro usuário), descartar revertido → 409; efeito apontando para dado alheio tratado como ausente
 - Memória de categorização (CR-054): `normalize_pattern` converge descritores do mesmo estabelecimento entre meses e mantém `UBER *TRIP`/`UBER *EATS` distintos; descritor genérico não produz padrão; confirm grava a regra a partir do texto do documento; reconfirmar sobrescreve e incrementa `hits` (uma vez por confirmação); linha já renomeada realimenta a regra **original**; regra vence palpite válido da IA; par inválido é ignorado na aplicação; método aprendido vale em extrato mas não em fatura; nome só é aprendido se editado; parcelamento/conciliação/ignorada não geram nem recebem regra; regra de outro usuário nunca alcança o lote; reimportar o mesmo documento depois da regra continua marcando `duplicada`
 
 ## Frontend (CR-047)
@@ -275,10 +341,11 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - `components/imports/ImportResult.tsx` — contadores do resultado + navegação (Gastos Diários / Planejados / importar outro)
 - `utils/importReview.ts` — helpers puros testados: `groupTransactions`, `buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`, `monthsToFetchForMatches`, `describeInstallmentSeries` (CR-049: prévia "cria até N parcelas … até MM/AAAA"), `nextStageForBatch` (CR-052: estágio correspondente ao status do lote), `isLearnedSuggestion`/`learnedTitle` (CR-054). CR-053: `normalizeForSearch`/`matchesFilter`/`filterGroups`/`isFilterActive` (filtro), `decisionValor`/`sumTransactions` (totais — valor efetivo é o editado quando finito e positivo, senão o da IA), `bulkTargetIds`/`bulkIncludeTargetIds`/`applyBulkPatch` (edição em massa). **`filterGroups` filtra só a lista de render**: `decisions` nunca é tocado, então linha escondida preserva a decisão e continua indo no payload do confirm
 - CR-049 na revisão: destino "Compra parcelada", campos de numeração `x/y` (máx. 120), rótulo "Data da compra" e prévia da série; `ImportResult` mostra o contador de parcelas criadas
-- `hooks/useImports.ts` — `useImportBatch` (CR-052: polling de 3s enquanto `processando`, `refetchOnWindowFocus` desligado, e segue tentando enquanto não houver status conhecido para não travar o spinner numa falha de rede), `usePendingImports`, `useMatchTargets` (mapa expense_id→Expense dos meses das transações + atual/anterior), `useUploadImport`, `useConfirmImport` (invalida `imports-pending`, `daily-expenses-summary`, `monthly-summary`, `dashboard`, `installments`, `alerts`), `useDiscardImport`
+- **CR-056 — histórico e desfazer:** `components/imports/ImportHistory.tsx` ("Importações anteriores", abaixo do upload; some quando não há lote) lista os lotes paginados (10 por página) com status, origem, contadores e as ações "Abrir" (lote em revisão/processando — reusa o fluxo de retomada) e "Desfazer" (`pode_desfazer`). `components/imports/ImportUndoDialog.tsx` busca a prévia e a mostra em seções — será removido / será restaurado ("volta para Pendente · R$ 200,00") / será mantido (alterado depois) / já removido —, avisa quando o undo não mudaria nada além do status, e só então executa. O resultado aparece como aviso na própria seção. Helpers puros em `utils/importHistory.ts` (`summarizeHistoryItem` — lote em revisão mostra o total extraído mais as duplicadas; `groupUndoItems`; `undoEmptyMessage` — distingue o lote que nunca gravou nada do lote cujos lançamentos foram todos alterados/apagados; `undoItemKind`; `restoreDetail`; `describeUndoResult`; `totalPages`; `canResume`). Erro da prévia (ex.: 409 de dependência) aparece no diálogo com o botão de executar desabilitado
+- `hooks/useImports.ts` — CR-056: `useImportHistory(page)` (`keepPreviousData` entre páginas), `useUndoPreview(batchId)` (`staleTime`/`gcTime` 0: a prévia descreve o estado de agora; `retry: false`, porque a falha típica é um 409 determinístico), `useUndoImport` (em erro, recarrega o histórico — lote desfeito em outra aba). Confirm e undo usam a **mesma** lista de invalidação (`invalidateImportedData`), que passou a incluir projeção de parcelas e score — o confirm cria séries inteiras e antes as deixava de fora; upload e descarte invalidam também o histórico. Fechar o diálogo de desfazer recarrega a lista. `useImportBatch` (CR-052: polling de 3s enquanto `processando`, `refetchOnWindowFocus` desligado, e segue tentando enquanto não houver status conhecido para não travar o spinner numa falha de rede), `usePendingImports`, `useMatchTargets` (mapa expense_id→Expense dos meses das transações + atual/anterior), `useUploadImport`, `useConfirmImport` (invalida `imports-pending`, `daily-expenses-summary`, `monthly-summary`, `dashboard`, `installments`, `alerts`), `useDiscardImport`
 - `services/api.ts`: `requestMultipart` — FormData sem Content-Type manual, Bearer token e interceptor refresh-401 com retry (erro pós-refresh expõe o `detail` do backend)
 
 ## Referências
 
-- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), CR-054 (memória de categorização — item E-C, frente backend), CR-055 (planejado já pago — recorte do B-6), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
+- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), CR-054 (memória de categorização — item E-C, frente backend), CR-055 (planejado já pago — recorte do B-6), CR-056 (histórico e desfazer — item E-D, primeira metade; ADR-022), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
 - Padrões reutilizados de F06: `docs/specs/09-analise-ia.md`, `backend/app/ai_analysis.py`
