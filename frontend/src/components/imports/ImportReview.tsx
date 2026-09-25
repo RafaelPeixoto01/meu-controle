@@ -25,6 +25,7 @@ import {
 import { useDailyExpensesCategories } from "../../hooks/useDailyExpenses";
 import ImportReviewGroup from "./ImportReviewGroup";
 import ImportReviewToolbar from "./ImportReviewToolbar";
+import ImportReconciliation from "./ImportReconciliation";
 
 // Referencias estaveis: `?? {}` inline criaria um objeto novo a cada render
 // enquanto a query de categorias nao resolve, anulando o memo da linha.
@@ -165,6 +166,8 @@ export default function ImportReview({
           {batch.banco_detectado ? ` · ${batch.banco_detectado}` : ""}
           {batch.tipo_documento ? ` · ${batch.tipo_documento}` : ""}
         </p>
+        {/* CR-057: conferencia com o total impresso no documento */}
+        <ImportReconciliation batch={batch} />
       </div>
 
       <ImportReviewToolbar

@@ -505,6 +505,9 @@ export interface ImportTransaction {
   valor: number;
   classificacao: ImportClassificacao;
   motivo_ignorar: string | null;
+  // CR-057: direcao da transacao — so insumo da conferencia de total (RN-053).
+  // Nulo no historico anterior.
+  natureza: "debito" | "credito" | null;
   expense_id_sugerido: string | null;
   categoria: string | null;
   subcategoria: string | null;
@@ -532,6 +535,10 @@ export interface ImportBatchSummary {
   created_at: string;
   confirmado_em: string | null; // CR-056
   revertido_em: string | null; // CR-056
+  // CR-057 (RN-053): total de debitos IMPRESSO no documento e soma dos debitos
+  // extraidos. Qualquer um nulo = conferencia indisponivel.
+  total_debitos_documento: number | null;
+  total_debitos_extraido: number | null;
 }
 
 export interface ImportBatch extends ImportBatchSummary {

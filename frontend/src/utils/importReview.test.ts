@@ -43,6 +43,7 @@ function makeTx(overrides: Partial<ImportTransaction>): ImportTransaction {
     parcela_total: null,
     origem_sugestao: null, // CR-054
     descricao_original: null, // CR-054
+    natureza: "debito", // CR-057
     status: "pendente",
     ...overrides,
   };
@@ -59,6 +60,8 @@ function makeBatch(transacoes: ImportTransaction[]): ImportBatch {
     created_at: "2026-08-12T10:00:00",
     confirmado_em: null, // CR-056
     revertido_em: null, // CR-056
+    total_debitos_documento: null, // CR-057
+    total_debitos_extraido: null, // CR-057
     transacoes,
   };
 }
@@ -381,6 +384,8 @@ describe("nextStageForBatch (CR-052)", () => {
       created_at: "2026-08-22T10:00:00",
       confirmado_em: null, // CR-056
       revertido_em: null, // CR-056
+      total_debitos_documento: null, // CR-057
+      total_debitos_extraido: null, // CR-057
     };
   }
 
