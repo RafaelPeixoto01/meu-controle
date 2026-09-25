@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 2026-09-25
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -252,7 +252,7 @@ ALTER TABLE import_batches ADD COLUMN revertido_em DATETIME;
 - [x] Revisão de segurança (checklist OWASP) executada (seção 12)
 - [x] Migration testada: `alembic upgrade head` + `alembic downgrade -1` em SQLite local
 - [x] Documentos afetados foram atualizados (seção 5)
-- [ ] CI verde após o push
+- [x] CI verde após o push (run 36173223541 — backend pytest + frontend tsc/eslint/vitest)
 
 > **Regra de conclusão (CR-037):** o Status só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (CI verde) mantém o CR "Em Implementação" até o follow-up.
 
@@ -388,3 +388,4 @@ Achado da validação runtime, fora da revisão: prévia repetida pelo `retry` g
 | 2026-09-25 | Claude | Implementação: backend (migration 013, `import_undo.py`, 3 endpoints) e frontend (`ImportHistory`, `ImportUndoDialog`) |
 | 2026-09-25 | Claude | Revisão de código: 10 findings, 8 corrigidos, 2 justificados (§12.1) — inclui ordem inversa entre lotes dependentes, arredondamento do `valor` e lock do undo |
 | 2026-09-25 | Claude | Validação runtime HTTP + Playwright (§11) e revisão de segurança (§12.2). Docs sincronizados. Status segue "Em Implementação" até o CI verde |
+| 2026-09-25 | Claude | Merge em master, CI verde (run 36173223541) — status: ✅ Concluído |
