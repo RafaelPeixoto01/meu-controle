@@ -9,7 +9,7 @@ import {
   restoreDetail,
   summarizeHistoryItem,
   totalPages,
-  undoChangesNothing,
+  undoEmptyMessage,
   undoItemKind,
 } from "./importHistory";
 
@@ -80,6 +80,11 @@ describe("summarizeHistoryItem", () => {
     expect(summarizeHistoryItem(item)).toBe("42 transações");
   });
 
+  it("lote em revisao com duplicadas mostra o total E as duplicadas (code review #9)", () => {
+    const item = makeItem({ status: "pendente_revisao", total_transacoes: 40, duplicadas: 2 });
+    expect(summarizeHistoryItem(item)).toBe("40 transações · 2 duplicadas");
+  });
+
   it("lote sem transacoes (erro) fica vazio", () => {
     expect(summarizeHistoryItem(makeItem({ status: "erro" }))).toBe("");
   });
@@ -119,14 +124,28 @@ describe("groupUndoItems", () => {
   });
 });
 
-describe("undoChangesNothing", () => {
-  it("true quando so ha itens mantidos ou ja removidos", () => {
-    expect(undoChangesNothing({ ...ZERO, preservados: 2, ja_removidos: 1 })).toBe(true);
+describe("undoEmptyMessage", () => {
+  it("nulo quando algo seria removido ou restaurado", () => {
+    expect(
+      undoEmptyMessage({ ...ZERO, planejados_restaurados: 1, itens: [makeUndoItem({ acao: "restaurar" })] })
+    ).toBeNull();
+    expect(
+      undoEmptyMessage({ ...ZERO, gastos_diarios_removidos: 1, itens: [makeUndoItem()] })
+    ).toBeNull();
   });
 
-  it("false quando algo seria removido ou restaurado", () => {
-    expect(undoChangesNothing({ ...ZERO, planejados_restaurados: 1 })).toBe(false);
-    expect(undoChangesNothing({ ...ZERO, gastos_diarios_removidos: 1 })).toBe(false);
+  it("todos alterados ou apagados depois", () => {
+    const msg = undoEmptyMessage({
+      ...ZERO, preservados: 1, ja_removidos: 1,
+      itens: [makeUndoItem({ acao: "preservar" }), makeUndoItem({ acao: "ja_removido" })],
+    });
+    expect(msg).toMatch(/alterados ou apagados/);
+  });
+
+  it("lote que nunca gravou nada nao culpa o usuario (code review #8)", () => {
+    const msg = undoEmptyMessage({ ...ZERO, itens: [] });
+    expect(msg).toMatch(/não gravou nenhum lançamento/);
+    expect(msg).not.toMatch(/alterados ou apagados/);
   });
 });
 

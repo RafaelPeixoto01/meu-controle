@@ -465,11 +465,14 @@ def discard_import_batch(
     db.commit()
 
 
-def _get_undoable_batch(db: Session, batch_id: str, user_id: str) -> ImportBatch:
-    batch = crud.get_import_batch_by_id(db, batch_id, user_id)
+def _get_undoable_batch(
+    db: Session, batch_id: str, user_id: str, lock: bool = False
+) -> ImportBatch:
+    buscar = crud.get_import_batch_for_update if lock else crud.get_import_batch_by_id
+    batch = buscar(db, batch_id, user_id)
     if not batch:
         raise HTTPException(status_code=404, detail="Lote de importação não encontrado")
-    motivo = import_undo.undo_blocker(batch)
+    motivo = import_undo.undo_blocker(batch) or import_undo.undo_blocker_dependencies(db, batch)
     if motivo:
         raise HTTPException(status_code=409, detail=motivo)
     return batch
@@ -504,7 +507,8 @@ def undo_import(
     restaura os planejados que ele conciliou e preserva o que foi alterado
     depois. Atomico: um commit so ao final.
     """
-    batch = _get_undoable_batch(db, batch_id, current_user.id)
+    # lock: o segundo de dois POST simultaneos espera o primeiro e recebe 409
+    batch = _get_undoable_batch(db, batch_id, current_user.id, lock=True)
     passos = import_undo.plan_undo(db, batch)
     contadores = import_undo.apply_undo(db, batch, passos)
     db.commit()

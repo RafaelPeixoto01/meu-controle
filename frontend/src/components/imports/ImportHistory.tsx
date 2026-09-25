@@ -159,7 +159,12 @@ export default function ImportHistory({ onResume }: ImportHistoryProps) {
       {undoTarget && (
         <ImportUndoDialog
           batch={undoTarget}
-          onClose={() => setUndoTarget(null)}
+          onClose={() => {
+            setUndoTarget(null);
+            // A previa pode ter falhado com 409 (lote desfeito em outra aba ou
+            // dependente de um mais recente): a lista precisa refletir o estado real
+            history.refetch();
+          }}
           onDone={(result) => {
             setUndoTarget(null);
             setNotice(describeUndoResult(result));

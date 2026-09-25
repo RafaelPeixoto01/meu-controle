@@ -8,7 +8,7 @@ import { formatBRL, formatDateBRWithYear } from "../../utils/format";
 import {
   groupUndoItems,
   restoreDetail,
-  undoChangesNothing,
+  undoEmptyMessage,
   undoItemKind,
   type UndoSection,
 } from "../../utils/importHistory";
@@ -30,6 +30,7 @@ export default function ImportUndoDialog({ batch, onClose, onDone }: ImportUndoD
   const preview = useUndoPreview(batch.id);
   const undo = useUndoImport();
   const secoes = preview.data ? groupUndoItems(preview.data.itens) : [];
+  const avisoVazio = preview.data ? undoEmptyMessage(preview.data) : null;
   const busy = undo.isPending;
 
   function handleConfirm() {
@@ -67,10 +68,9 @@ export default function ImportUndoDialog({ batch, onClose, onDone }: ImportUndoD
             </p>
           )}
 
-          {preview.data && undoChangesNothing(preview.data) && (
+          {avisoVazio && (
             <p className="text-sm text-text-muted bg-slate-50 rounded-xl px-4 py-3">
-              Nada a remover nem restaurar: todos os lançamentos foram alterados ou
-              apagados depois da importação. O lote será apenas marcado como desfeito.
+              {avisoVazio}
             </p>
           )}
 

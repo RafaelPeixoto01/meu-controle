@@ -4,6 +4,7 @@ import type {
   ImportHistoryItem,
   ImportUndoAcao,
   ImportUndoItem,
+  ImportUndoPreview,
   ImportUndoResponse,
 } from "../types";
 import { formatBRL } from "./format";
@@ -26,14 +27,16 @@ function plural(n: number, singular: string, pluralForm: string): string {
 /** "38 lançadas · 3 descartadas · 1 duplicada" — omite os contadores zerados. */
 export function summarizeHistoryItem(item: ImportHistoryItem): string {
   const partes: string[] = [];
+  // Lote ainda em revisao: nada foi decidido, entao o que informa e o total
+  // extraido (as duplicadas ja vem marcadas desde a extracao)
+  const emAberto = canResume(item);
+  if (emAberto && item.total_transacoes) {
+    partes.push(plural(item.total_transacoes, "transação", "transações"));
+  }
   if (item.confirmadas) partes.push(plural(item.confirmadas, "lançada", "lançadas"));
   if (item.revertidas) partes.push(plural(item.revertidas, "desfeita", "desfeitas"));
   if (item.descartadas) partes.push(plural(item.descartadas, "descartada", "descartadas"));
   if (item.duplicadas) partes.push(plural(item.duplicadas, "duplicada", "duplicadas"));
-  // Lote em revisao: nada decidido ainda, so o total extraido
-  if (partes.length === 0 && item.total_transacoes > 0) {
-    partes.push(plural(item.total_transacoes, "transação", "transações"));
-  }
   return partes.join(" · ");
 }
 
@@ -85,12 +88,26 @@ export function groupUndoItems(itens: ImportUndoItem[]): UndoSection[] {
   })).filter((s) => s.itens.length > 0);
 }
 
-/** True quando o undo so mudaria o status do lote — nada a remover nem restaurar. */
-export function undoChangesNothing(preview: ImportUndoResponse): boolean {
+/**
+ * Aviso para quando o undo so mudaria o status do lote, ou null se ele remove
+ * ou restaura algo. Distingue o lote que nunca gravou nada (tudo descartado no
+ * confirm) do lote cujos lancamentos foram todos alterados ou apagados depois.
+ */
+export function undoEmptyMessage(preview: ImportUndoPreview): string | null {
+  const mudaAlgo =
+    preview.gastos_diarios_removidos > 0 ||
+    preview.planejados_removidos > 0 ||
+    preview.planejados_restaurados > 0;
+  if (mudaAlgo) return null;
+  if (preview.itens.length === 0) {
+    return (
+      "Esta importação não gravou nenhum lançamento (todas as transações foram " +
+      "descartadas). O lote será apenas marcado como desfeito."
+    );
+  }
   return (
-    preview.gastos_diarios_removidos === 0 &&
-    preview.planejados_removidos === 0 &&
-    preview.planejados_restaurados === 0
+    "Nada a remover nem restaurar: todos os lançamentos foram alterados ou " +
+    "apagados depois da importação. O lote será apenas marcado como desfeito."
   );
 }
 

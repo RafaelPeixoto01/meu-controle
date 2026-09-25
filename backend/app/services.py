@@ -71,7 +71,9 @@ def create_expense_with_installments(
     Retorna (despesa da parcela informada, total de despesas criadas).
     NAO faz commit — quem chama controla a transacao.
     """
-    criadas = 0
+    # Fonte unica do que foi inserido: a contagem devolvida e o diario do
+    # CR-056 saem da mesma lista e nao tem como divergir
+    novas: list[Expense] = []
 
     # A propria parcela informada pode ja existir (fatura do mes seguinte
     # reimportada): concilia com ela em vez de criar uma segunda igual (RN-046).
@@ -104,9 +106,7 @@ def create_expense_with_installments(
             status=status_primeira,
         )
         db.add(expense_atual)
-        criadas += 1
-        if efeitos is not None:
-            efeitos.criadas.append(expense_atual)
+        novas.append(expense_atual)
 
     if parcela_total and parcela_total > 1:
         base = parcela_atual or 1
@@ -134,11 +134,11 @@ def create_expense_with_installments(
                 status=ExpenseStatus.PENDENTE.value,
             )
             db.add(futura)
-            criadas += 1
-            if efeitos is not None:
-                efeitos.criadas.append(futura)
+            novas.append(futura)
 
-    return expense_atual, criadas
+    if efeitos is not None:
+        efeitos.criadas = novas
+    return expense_atual, len(novas)
 
 
 def get_next_month(current: date) -> date:

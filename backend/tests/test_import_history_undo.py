@@ -458,18 +458,52 @@ class TestDesfazer:
         assert parcela.status == ExpenseStatus.PENDENTE.value
         assert float(parcela.valor) == 150.00
 
-    def test_parcela_conciliada_por_outro_lote_e_preservada(self, client, db):
-        """O lote B mexeu no que o lote A criou: desfazer A nao pode apagar."""
+    def test_parcela_alterada_fora_de_um_lote_e_preservada(self, client, db):
+        """Mudanca sem diario (manual, ou lote legado): so preserva, nao ha ordem."""
         lote_a = upload_batch(client, transacoes=[TX_PARCELAMENTO])
         confirmar(client, lote_a, [decisao_parcelado(lote_a["transacoes"][0]["id"])])
         parcela_4 = parcela_netshoes(db, 4)
-        parcela_4.status = ExpenseStatus.PAGO.value  # efeito do lote B
+        parcela_4.valor = 155.00
         db.commit()
 
         r = desfazer(client, lote_a["id"])
         assert r["preservados"] == 1
         db.expire_all()
         assert db.get(Expense, parcela_4.id) is not None
+
+    def _fatura_seguinte(self, client):
+        """Lote B: a parcela 4 da mesma compra, conciliada pela RN-046 na serie de A."""
+        lote_b = upload_batch(client, transacoes=[{**TX_PARCELAMENTO, "parcela_atual": 4}])
+        confirmar(client, lote_b, [decisao_parcelado(lote_b["transacoes"][0]["id"], parcela_atual=4)])
+        return lote_b
+
+    def test_lote_com_dependente_posterior_exige_desfazer_o_posterior_antes(self, client, db):
+        """Code review #1: A antes de B deixaria a parcela 4 orfa e em aberto."""
+        lote_a = upload_batch(client, transacoes=[TX_PARCELAMENTO])
+        confirmar(client, lote_a, [decisao_parcelado(lote_a["transacoes"][0]["id"])])
+        lote_b = self._fatura_seguinte(client)
+        assert parcela_netshoes(db, 4).status == ExpenseStatus.PAGO.value
+
+        r = client.post(f"/api/imports/{lote_a['id']}/undo")
+        assert r.status_code == 409
+        assert "Desfaça antes" in r.json()["detail"]
+        previa(client, lote_a["id"], esperado=409)
+
+        # Na ordem B → A a serie some por inteiro
+        assert desfazer(client, lote_b["id"])["planejados_restaurados"] == 1
+        r = desfazer(client, lote_a["id"])
+        assert r["planejados_removidos"] == 8 and r["preservados"] == 0
+        db.expire_all()
+        assert db.query(Expense).filter(Expense.nome == "Netshoes").count() == 0
+
+    def test_lote_anterior_desfeito_nao_bloqueia_o_mais_recente(self, client, db):
+        """A dependencia so olha para lotes confirmados DEPOIS e ainda confirmados."""
+        lote_a = upload_batch(client, transacoes=[TX_PARCELAMENTO])
+        confirmar(client, lote_a, [decisao_parcelado(lote_a["transacoes"][0]["id"])])
+        lote_b = self._fatura_seguinte(client)
+
+        # B e o mais recente: pode ser desfeito mesmo com A ainda confirmado
+        desfazer(client, lote_b["id"])
 
     def test_reimportar_depois_do_undo_nao_marca_duplicada(self, client, db):
         batch = lote_so_gasto(client)
@@ -486,6 +520,28 @@ class TestDesfazer:
 
         novo = upload_batch(client, transacoes=[TX_PADARIA])
         assert novo["transacoes"][0]["status"] == "duplicada"
+
+    def test_valor_com_mais_de_duas_casas_nao_parece_editado(self, client, db):
+        """
+        Code review #2: o banco arredonda por conta propria; sem arredondar
+        antes de gravar, a assinatura do confirm divergiria do valor relido.
+        """
+        # 1.005 em binario e 1.00499...: o float formata "1.00", mas o PostgreSQL
+        # recebe o repr "1.005" e grava 1.01. Arredondado antes, grava-se 1.00
+        # em qualquer banco e a assinatura bate.
+        batch = upload_batch(client, transacoes=[TX_PADARIA])
+        confirmar(client, batch, [decisao_gasto(batch["transacoes"][0]["id"], valor=1.005)])
+        assert float(db.query(DailyExpense).one().valor) == 1.00
+
+        r = desfazer(client, batch["id"])
+        assert r["gastos_diarios_removidos"] == 1 and r["preservados"] == 0
+
+    def test_valor_que_arredonda_para_zero_e_recusado(self, client):
+        batch = upload_batch(client, transacoes=[TX_PADARIA])
+        r = client.post(f"/api/imports/{batch['id']}/confirm", json={"transacoes": [
+            decisao_gasto(batch["transacoes"][0]["id"], valor=0.004)
+        ]})
+        assert r.status_code == 422
 
     def test_regras_aprendidas_permanecem(self, client, db):
         batch = upload_batch(client, transacoes=[TX_PADARIA])

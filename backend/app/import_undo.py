@@ -173,6 +173,28 @@ def undo_blocker(batch: ImportBatch) -> str | None:
     return None
 
 
+def undo_blocker_dependencies(db: Session, batch: ImportBatch) -> str | None:
+    """
+    Undo em ordem inversa entre lotes dependentes (RN-051).
+
+    Se o lote B, confirmado depois, conciliou uma parcela que A criou,
+    desfazer A primeiro manteria a parcela (alterada depois) e apagaria o resto
+    da serie; desfazer B em seguida a devolveria a Pendente — orfa, sem lote
+    que ainda a possa remover. Na ordem B → A, o undo de B devolve a parcela
+    exatamente ao estado que A gravou, e o de A a remove.
+
+    Alteracao manual (fora de um lote) continua sendo so preservada: nao ha
+    ordem a respeitar.
+    """
+    posterior = crud.get_later_batch_touching(db, batch)
+    if posterior is None:
+        return None
+    return (
+        f"Desfaça antes a importação \"{posterior.filename}\", confirmada depois "
+        "desta e que alterou lançamentos criados ou conciliados por ela"
+    )
+
+
 @dataclass
 class UndoStep:
     efeito: ImportEffect

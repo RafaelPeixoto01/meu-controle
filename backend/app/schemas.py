@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import date, datetime
 from typing import Optional
 
@@ -700,6 +700,23 @@ class ImportConfirmDecision(BaseModel):
     # CR-049: serie exige 2+ parcelas; o teto evita que um numero absurdo vindo
     # da IA gere milhares de despesas numa unica requisicao
     parcela_total: int | None = Field(None, ge=2, le=MAX_PARCELAS)
+
+    @field_validator("valor")
+    @classmethod
+    def round_valor(cls, valor: float | None) -> float | None:
+        """
+        CR-056: arredonda para as 2 casas da coluna ANTES de gravar. Sem isso o
+        banco arredonda por conta propria (o PostgreSQL grava 10.005 como 10.01,
+        enquanto o float em memoria formata como 10.00), e a assinatura do
+        diario — calculada sobre o valor em memoria — nunca bateria com o valor
+        relido no undo: o lancamento intocado pareceria editado.
+        """
+        if valor is None:
+            return None
+        arredondado = round(valor, 2)
+        if arredondado <= 0:
+            raise ValueError("valor deve ser maior que zero")
+        return arredondado
 
     @model_validator(mode="after")
     def validate_acao(self):

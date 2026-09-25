@@ -1,5 +1,11 @@
 // CR-047 (F07): hooks TanStack Query da importacao de extratos/faturas.
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import * as api from "../services/api";
 import type {
   Expense,
@@ -16,6 +22,26 @@ const PENDING_KEY = ["imports-pending"];
 // CR-056: todo evento que muda o status de um lote invalida o historico
 const HISTORY_KEY = ["imports-history"];
 export const HISTORY_PAGE_SIZE = 10;
+
+// CR-056: confirm e undo mexem nos mesmos dados (gastos diarios, series de
+// parcelas, planejados conciliados) — uma lista so, para que a proxima query
+// afetada nao entre numa e falte na outra. Projecao e score entraram aqui:
+// o confirm cria series inteiras e antes as deixava de fora.
+function invalidateImportedData(queryClient: QueryClient) {
+  for (const key of [
+    PENDING_KEY,
+    HISTORY_KEY,
+    ["daily-expenses-summary"],
+    ["monthly-summary"],
+    ["dashboard"],
+    ["installments"],
+    ["installment-projection"],
+    ["health-score"],
+    ["alerts"],
+  ]) {
+    queryClient.invalidateQueries({ queryKey: key });
+  }
+}
 
 export function usePendingImports() {
   const { user } = useAuth();
@@ -94,16 +120,8 @@ export function useConfirmImport() {
   return useMutation({
     mutationFn: ({ batchId, data }: { batchId: string; data: ImportConfirmRequest }) =>
       api.confirmImport(batchId, data),
-    onSuccess: () => {
-      // Confirmacao cria gastos diarios e atualiza planejados — invalida tudo que agrega
-      queryClient.invalidateQueries({ queryKey: PENDING_KEY });
-      queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
-      queryClient.invalidateQueries({ queryKey: ["daily-expenses-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["installments"] });
-      queryClient.invalidateQueries({ queryKey: ["alerts"] });
-    },
+    // Confirmacao cria gastos diarios e atualiza planejados — invalida tudo que agrega
+    onSuccess: () => invalidateImportedData(queryClient),
   });
 }
 
@@ -142,6 +160,10 @@ export function useUndoPreview(batchId: string | null) {
     staleTime: 0,
     gcTime: 0,
     refetchOnWindowFocus: false,
+    // A falha tipica e um 409 deterministico (lote ja desfeito, ou dependente
+    // de um mais recente): repetir so atrasaria a mensagem. Reabrir o dialogo
+    // tenta de novo.
+    retry: false,
   });
 }
 
@@ -149,18 +171,9 @@ export function useUndoImport() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (batchId: string) => api.undoImport(batchId),
-    onSuccess: () => {
-      // O undo apaga gastos e series de parcelas e restaura planejados: alem do
-      // que o confirm invalida, a projecao e o score mudam com a serie removida
-      queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
-      queryClient.invalidateQueries({ queryKey: PENDING_KEY });
-      queryClient.invalidateQueries({ queryKey: ["daily-expenses-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["installments"] });
-      queryClient.invalidateQueries({ queryKey: ["installment-projection"] });
-      queryClient.invalidateQueries({ queryKey: ["health-score"] });
-      queryClient.invalidateQueries({ queryKey: ["alerts"] });
-    },
+    onSuccess: () => invalidateImportedData(queryClient),
+    // 409 tipico: o lote ja foi desfeito em outra aba. Sem recarregar, a linha
+    // seguiria "Confirmado" com o botao Desfazer ativo
+    onError: () => queryClient.invalidateQueries({ queryKey: HISTORY_KEY }),
   });
 }
