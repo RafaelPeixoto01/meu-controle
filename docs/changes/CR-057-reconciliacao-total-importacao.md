@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 2026-09-25
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Alta
 
@@ -156,7 +156,7 @@ A revisão abre com uma **conferência**: "Débitos extraídos R$ 3.412,90 · to
 - [x] Revisão de segurança (checklist OWASP) executada (seção 12)
 - [x] Migration testada: `alembic upgrade head` + `alembic downgrade -1`
 - [x] Documentos afetados foram atualizados (seção 5)
-- [ ] CI verde após o push
+- [x] CI verde após o push (run 36175548043 — backend pytest + frontend tsc/eslint/vitest)
 
 > **Regra de conclusão (CR-037):** Status só vai para "Concluído" com todos os critérios `[x]` ou riscados com justificativa.
 
@@ -255,3 +255,4 @@ Encerramento: servidores derrubados e `local_cr057.db` removido.
 | 2026-09-25 | Claude | Implementação: prompt, migration 014, `validate_ai_result`, aviso na revisão |
 | 2026-09-25 | Claude | Revisão de código: 9 findings, 8 corrigidos, 1 atendido pela etapa de docs (§12.1) — inclui recálculo ao vivo e chip "entrada" |
 | 2026-09-25 | Claude | Validação runtime HTTP + Playwright (§11) e revisão de segurança (§12.2). Docs sincronizados. Status segue "Em Implementação" até o CI verde |
+| 2026-09-25 | Claude | Merge em master, CI verde (run 36175548043) — status: ✅ Concluído |
