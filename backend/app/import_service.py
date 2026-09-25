@@ -85,6 +85,13 @@ CLASSIFICACAO_JA_LANCADO = "ja_lancado"
 PAID_MATCH_VALUE_TOLERANCE = 1.00
 PAID_MATCH_WINDOW_DAYS = 7
 
+# CR-057 (RN-053): direcao da transacao — so insumo da conferencia de total
+NATUREZAS_VALIDAS = {"debito", "credito"}
+# Teto de Numeric(12,2): um total absurdo vindo da IA estouraria o INSERT no
+# PostgreSQL e derrubaria o lote inteiro para 'erro' por causa de um campo
+# informativo
+MAX_TOTAL_DOCUMENTO = 9_999_999_999.99
+
 # CR-054: descritores genericos que NAO identificam estabelecimento — o que os
 # distingue entre si e justamente a parte numerica que `normalize_pattern`
 # remove ("PIX ENVIADO 12/07" e "PIX ENVIADO 19/07" colapsam em "pix enviado").
@@ -408,6 +415,38 @@ def call_import_api(pdf_bytes: bytes, system_prompt: str, user_prompt: str) -> d
 
 # ========== Validacao do resultado da IA ==========
 
+def _parse_total_documento(valor) -> float | None:
+    """
+    CR-057: total de debitos impresso no documento, ou None. Aceita numero ou
+    string numerica; bool, nao numerico, <= 0 ou acima do teto viram None — a
+    conferencia simplesmente nao aparece.
+    """
+    if isinstance(valor, bool):
+        return None
+    try:
+        total = round(float(valor), 2)
+    except (TypeError, ValueError):
+        return None
+    if total <= 0 or total > MAX_TOTAL_DOCUMENTO:
+        return None
+    return total
+
+
+def sum_debitos(transacoes: list[dict]) -> float | None:
+    """
+    CR-057 (RN-053): soma dos debitos EXTRAIDOS — depois da sanitizacao, entao
+    linhas descartadas por malformacao tambem aparecem como divergencia. Conta
+    todas as classificacoes: compara-se o documento, nao o que sera gravado.
+
+    Direcao ausente em qualquer linha → None. Chutar a direcao faltante (ex.:
+    tratar como debito) produziria divergencia falsa, e alerta falso treina o
+    usuario a ignorar o aviso.
+    """
+    if not transacoes or any(tx.get("natureza") is None for tx in transacoes):
+        return None
+    return round(sum(tx["valor"] for tx in transacoes if tx["natureza"] == "debito"), 2)
+
+
 def _parse_parcelas(tx: dict) -> tuple[int | None, int | None]:
     """
     CR-049: le e valida o par parcela_atual/parcela_total de uma transacao.
@@ -554,6 +593,8 @@ def validate_ai_result(
       gasto_diario e marca a transacao como 'aprendido'
     - CR-055: `paid_expenses` reclassifica como 'ja_lancado' o gasto diario que
       corresponde a um planejado ja pago (RN-050)
+    - CR-057: `natureza` invalida → None; devolve tambem o total de debitos
+      impresso no documento e a soma dos debitos extraidos (RN-053)
     """
     banco = str(resultado.get("banco") or "")[:50] or None
     tipo_documento = resultado.get("tipo_documento")
@@ -615,6 +656,10 @@ def validate_ai_result(
         if classificacao != "ignorar":
             motivo = None
 
+        natureza = tx.get("natureza")  # CR-057
+        if natureza not in NATUREZAS_VALIDAS:
+            natureza = None
+
         # CR-054: a memoria so atua em gasto_diario (D4). Em 'parcelamento' a
         # descricao precisa continuar sendo a que a IA limpou da numeracao — e
         # ela que casa a parcela com a serie ja criada (RN-046); um nome
@@ -646,6 +691,7 @@ def validate_ai_result(
             "subcategoria": subcategoria,
             "metodo_pagamento": metodo,
             "motivo_ignorar": motivo,
+            "natureza": natureza,
             "parcela_atual": parcela_atual,
             "parcela_total": parcela_total,
         })
@@ -658,6 +704,9 @@ def validate_ai_result(
     return {
         "banco": banco,
         "tipo_documento": tipo_documento,
+        # CR-057 (RN-053): conferencia com o documento
+        "total_debitos_documento": _parse_total_documento(resultado.get("total_debitos_documento")),
+        "total_debitos_extraido": sum_debitos(transacoes_limpas),
         "transacoes": transacoes_limpas,
     }
 
@@ -814,6 +863,8 @@ def process_import_batch(session_factory, batch_id: str, user_id: str, pdf_bytes
 
         batch.banco_detectado = parsed["banco"]
         batch.tipo_documento = parsed["tipo_documento"]
+        batch.total_debitos_documento = parsed["total_debitos_documento"]  # CR-057
+        batch.total_debitos_extraido = parsed["total_debitos_extraido"]
         batch.tokens_input = api_result.get("tokens_input")
         batch.tokens_output = api_result.get("tokens_output")
         batch.modelo = api_result["modelo"]

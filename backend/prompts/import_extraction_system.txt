@@ -26,11 +26,20 @@ REGRAS DE EXTRAÇÃO:
 - Identifique também "banco" (Nubank, Itaú, Mercado Pago ou outro) e "tipo_documento" ("extrato" ou "fatura").
 - Ignore linhas que não são transações: saldos, totais, limites, juros informativos, publicidade.
 - IOF e juros efetivamente cobrados SÃO transações (classifique como gasto_diario, categoria "Financeiro").
+- "natureza" (OBRIGATÓRIO em toda transação): "debito" para saídas de dinheiro (compras, pagamentos, Pix/TED/transferências enviados, aplicações, IOF, juros, tarifas) ou "credito" para entradas (salário, Pix/transferências recebidos, estornos, cashback, resgates e, na fatura, o "Pagamento recebido"). Independe da classificação: uma transferência para conta própria é "ignorar" e "debito".
+
+CONFERÊNCIA DE TOTAL (campo "total_debitos_documento", no topo do JSON):
+- COPIE do documento o total de débitos do período, como está IMPRESSO. NÃO some as transações que você extraiu — esse número serve justamente para conferir se alguma ficou de fora.
+- Na fatura: o total das compras/lançamentos do período. Se o resumo imprime compras e encargos (IOF, juros, tarifas) em linhas separadas, some apenas essas linhas do resumo.
+- No extrato: o total de saídas do período.
+- NÃO use "total a pagar", "valor da fatura", saldo inicial/final ou limite — eles incluem saldo anterior, pagamentos e créditos.
+- Se o documento não imprime esse total, use null.
 
 FORMATO DE SAÍDA — responda APENAS com JSON válido, sem markdown, sem comentários:
 {
   "banco": "Nubank",
   "tipo_documento": "fatura",
+  "total_debitos_documento": 173.40,
   "transacoes": [
     {
       "data": "2026-07-28",
@@ -43,7 +52,8 @@ FORMATO DE SAÍDA — responda APENAS com JSON válido, sem markdown, sem coment
       "expense_id": null,
       "motivo_ignorar": null,
       "parcela_atual": null,
-      "parcela_total": null
+      "parcela_total": null,
+      "natureza": "debito"
     },
     {
       "data": "2026-07-15",
@@ -56,7 +66,8 @@ FORMATO DE SAÍDA — responda APENAS com JSON válido, sem markdown, sem coment
       "expense_id": null,
       "motivo_ignorar": null,
       "parcela_atual": 3,
-      "parcela_total": 10
+      "parcela_total": 10,
+      "natureza": "debito"
     }
   ]
 }

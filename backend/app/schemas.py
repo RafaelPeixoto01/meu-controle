@@ -605,6 +605,7 @@ class ImportTransactionResponse(BaseModel):
     # ja_lancado (CR-055) e produzida so pela deteccao do backend, nunca pela IA
     classificacao: str  # gasto_diario | match_planejado | parcelamento | ja_lancado | ignorar
     motivo_ignorar: str | None = None
+    natureza: str | None = None  # CR-057: debito | credito
     expense_id_sugerido: str | None = None
     categoria: str | None = None
     subcategoria: str | None = None
@@ -630,6 +631,9 @@ class ImportBatchSummary(BaseModel):
     created_at: datetime
     confirmado_em: datetime | None = None  # CR-056
     revertido_em: datetime | None = None  # CR-056
+    # CR-057 (RN-053): conferencia com o documento; nulos = indisponivel
+    total_debitos_documento: float | None = None
+    total_debitos_extraido: float | None = None
 
 
 class ImportBatchResponse(ImportBatchSummary):

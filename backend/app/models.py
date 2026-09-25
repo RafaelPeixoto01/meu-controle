@@ -235,6 +235,12 @@ class ImportBatch(Base):
     tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
     modelo: Mapped[str] = mapped_column(String(50), nullable=False)
     tempo_processamento_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # CR-057 (RN-053): conferencia com o documento. O primeiro e o total de
+    # debitos IMPRESSO (copiado pela IA, nunca somado por ela); o segundo e a
+    # soma dos debitos que sobreviveram a `validate_ai_result`. Nulos = sem
+    # conferencia (documento sem total, direcao ausente, ou lote anterior).
+    total_debitos_documento: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    total_debitos_extraido: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     # CR-056: nulo num lote confirmado = confirmado antes do diario de efeitos
     # existir, e por isso nao pode ser desfeito (RN-051)
     confirmado_em: Mapped[datetime | None] = mapped_column(nullable=True)
@@ -289,6 +295,9 @@ class ImportTransaction(Base):
         String(20), nullable=False
     )  # gasto_diario | match_planejado | parcelamento (CR-049) | ja_lancado (CR-055) | ignorar
     motivo_ignorar: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # CR-057: debito | credito. So insumo da conferencia de total (RN-053) — nao
+    # muda o que o confirm faz com a transacao. Nulo no historico anterior.
+    natureza: Mapped[str | None] = mapped_column(String(10), nullable=True)
     expense_id_sugerido: Mapped[str | None] = mapped_column(String(36), nullable=True)
     categoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
     subcategoria: Mapped[str | None] = mapped_column(String(50), nullable=True)
