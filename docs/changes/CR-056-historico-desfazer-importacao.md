@@ -85,6 +85,7 @@ Para cada efeito registrado no diário do lote:
 - **Só lotes com diário.** Lotes confirmados antes deste CR não têm diário (`confirmado_em` nulo) e **não podem ser desfeitos** — o undo sem o diário cairia exatamente nos furos da seção 3. Eles aparecem no histórico, sem o botão.
 - **Regras aprendidas (CR-054) não são revertidas** (decisão do autor, 2026-09-25). Uma regra errada aparece com o badge "aprendido" na próxima revisão e é corrigida no confirm seguinte (a última decisão vence).
 - **Atômico:** o undo inteiro roda numa transação; qualquer erro não deixa o lote meio desfeito.
+- **Ordem inversa entre lotes dependentes** (acrescentado na revisão de código, finding #1): se um lote confirmado **depois** tem efeito num lançamento que este criou ou conciliou, o undo deste → 409 "Desfaça antes a importação …". Na ordem inversa, o undo do mais recente devolve o lançamento exatamente ao estado que o mais antigo gravou, e o undo do mais antigo o remove.
 
 ### 4.3 Contratos
 
@@ -137,8 +138,8 @@ Para cada efeito registrado no diário do lote:
 ### 4.4 O que NÃO muda
 
 - Regras de classificação, prompt da IA, memória de categorização (CR-054) e detecção de já pago (CR-055).
-- Contrato do `POST /confirm` (request e response) e seus 409/422. Ele só passa a **também** gravar o diário e `confirmado_em`.
-- `DELETE /api/imports/{id}` (descartar) — continua recusando lote `confirmado` (409); desfazer é outra operação.
+- Contrato do `POST /confirm` (request e response) e seus 409/422. Ele só passa a **também** gravar o diário e `confirmado_em` — e, desde a revisão de código, a arredondar `valor` a 2 casas antes de gravar (valor que arredonda para 0 → 422). Sem efeito para valores com até 2 casas, que é o que a UI envia.
+- `DELETE /api/imports/{id}` (descartar) — continua recusando lote `confirmado` (409) e passa a recusar também `revertido`; desfazer é outra operação.
 - `/pending` — continua listando só `processando` e `pendente_revisao`.
 - Assinatura de `services.create_expense_with_installments` para o cadastro manual: o parâmetro novo (`efeitos`) é opcional e o retorno é o mesmo.
 - Fingerprint (RN-042) e seu cálculo. Só o conjunto de status que conta como "já confirmado" continua `confirmada` — `revertida` fica fora por construção.
@@ -172,7 +173,7 @@ Para cada efeito registrado no diário do lote:
 | Criar | `backend/app/import_undo.py` | `entity_signature`, registro de efeitos, `plan_undo` (puro sobre o estado lido) e `apply_undo` |
 | Modificar | `backend/app/services.py` | `SeriesEffects` + parâmetro opcional `efeitos` em `create_expense_with_installments` |
 | Modificar | `backend/app/routers/imports.py` | Confirm grava o diário; `GET ""` (histórico), `GET /{id}/undo-preview`, `POST /{id}/undo` |
-| Modificar | `backend/app/crud.py` | Histórico paginado + contadores agregados; efeitos do lote; `get_daily_expense_by_id` (se não existir) |
+| Modificar | `backend/app/crud.py` | Histórico paginado + contadores agregados; `get_daily_expenses_by_ids`/`get_expenses_by_ids` (em fatias, filtrados por usuário); `get_import_batch_for_update`; `get_later_batch_touching` |
 | Modificar | `backend/app/schemas.py` | `ImportHistoryItem`, `ImportHistoryPage`, `ImportUndoItem`, `ImportUndoPreview`, `ImportUndoResponse` |
 | Criar | `backend/tests/test_import_history_undo.py` | Testes do histórico, do diário e do undo |
 | Modificar | `frontend/src/types.ts` | Tipos novos + status `revertido`/`revertida` |
@@ -233,24 +234,24 @@ ALTER TABLE import_batches ADD COLUMN revertido_em DATETIME;
 
 ## 8. Critérios de Aceite
 
-- [ ] `GET /api/imports` lista todos os lotes do usuário, paginados, mais recentes primeiro, com contadores por status de transação e `pode_desfazer`
-- [ ] Lotes de outro usuário nunca aparecem no histórico; prévia/undo de lote alheio → 404
-- [ ] Confirm grava um efeito por gasto diário criado, por **cada** parcela criada da série e por planejado conciliado (incluindo a conciliação da RN-046), com status/valor anteriores nas conciliações
-- [ ] Parcela pré-existente conciliada pela RN-046 é **restaurada** no undo, nunca apagada
-- [ ] Undo remove os lançamentos criados sem alteração, restaura os conciliados e marca lote `revertido` / transações `revertida`
-- [ ] Lançamento alterado depois da importação é preservado e contado; lançamento apagado é contado como `ja_removido`
-- [ ] Parcela futura que só passou de `Pendente` para `Atrasado` (RF-05) é removida normalmente; parcela futura paga à mão é preservada
-- [ ] Transação com efeito preservado continua `confirmada` (dedup protege o que ficou); as demais viram `revertida` e o mesmo documento reimportado não é marcado `duplicada`
-- [ ] Undo de lote não confirmado, já revertido ou sem diário (confirmado antes do CR) → 409
-- [ ] Regras aprendidas (CR-054) permanecem após o undo
-- [ ] Tela de importação mostra "Importações anteriores" com paginação, e o diálogo de desfazer lista a prévia antes de executar
-- [ ] Testes existentes continuam passando (regressão)
-- [ ] Novos testes cobrem a mudança (backend + Vitest)
-- [ ] Fluxo afetado exercitado em runtime antes do merge (seção 11)
-- [ ] Revisão de código pré-merge (`/code-review`) executada, findings registrados (seção 12)
-- [ ] Revisão de segurança (checklist OWASP) executada (seção 12)
-- [ ] Migration testada: `alembic upgrade head` + `alembic downgrade -1` em SQLite local
-- [ ] Documentos afetados foram atualizados
+- [x] `GET /api/imports` lista todos os lotes do usuário, paginados, mais recentes primeiro, com contadores por status de transação e `pode_desfazer`
+- [x] Lotes de outro usuário nunca aparecem no histórico; prévia/undo de lote alheio → 404
+- [x] Confirm grava um efeito por gasto diário criado, por **cada** parcela criada da série e por planejado conciliado (incluindo a conciliação da RN-046), com status/valor anteriores nas conciliações
+- [x] Parcela pré-existente conciliada pela RN-046 é **restaurada** no undo, nunca apagada
+- [x] Undo remove os lançamentos criados sem alteração, restaura os conciliados e marca lote `revertido` / transações `revertida`
+- [x] Lançamento alterado depois da importação é preservado e contado; lançamento apagado é contado como `ja_removido`
+- [x] Parcela futura que só passou de `Pendente` para `Atrasado` (RF-05) é removida normalmente; parcela futura paga à mão é preservada
+- [x] Transação com efeito preservado continua `confirmada` (dedup protege o que ficou); as demais viram `revertida` e o mesmo documento reimportado não é marcado `duplicada`
+- [x] Undo de lote não confirmado, já revertido ou sem diário (confirmado antes do CR) → 409
+- [x] Regras aprendidas (CR-054) permanecem após o undo
+- [x] Tela de importação mostra "Importações anteriores" com paginação, e o diálogo de desfazer lista a prévia antes de executar
+- [x] Testes existentes continuam passando (regressão) — 251 → 291 backend, 138 → 157 Vitest, todos verdes
+- [x] Novos testes cobrem a mudança (backend + Vitest) — 40 em `tests/test_import_history_undo.py`, 19 Vitest (18 em `utils/importHistory.test.ts` + o caso `revertido` no `nextStageForBatch`)
+- [x] Fluxo afetado exercitado em runtime antes do merge (seção 11)
+- [x] Revisão de código pré-merge (`/code-review`) executada, findings registrados (seção 12)
+- [x] Revisão de segurança (checklist OWASP) executada (seção 12)
+- [x] Migration testada: `alembic upgrade head` + `alembic downgrade -1` em SQLite local
+- [x] Documentos afetados foram atualizados (seção 5)
 - [ ] CI verde após o push
 
 > **Regra de conclusão (CR-037):** o Status só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. Critério pendente de evento posterior (CI verde) mantém o CR "Em Implementação" até o follow-up.
@@ -266,7 +267,9 @@ ALTER TABLE import_batches ADD COLUMN revertido_em DATETIME;
 | 3 | Auto-status (RF-05) faz toda parcela vencida parecer "editada" e o undo não remove nada | Alta sem mitigação | Médio | Status normalizado na assinatura (`Pendente`≡`Atrasado`) |
 | 4 | Undo libera a dedup de algo que ficou gravado → reimportar duplica | Média | Alto | Transação com efeito preservado permanece `confirmada` |
 | 5 | Replicação de mês (RF-06) copia um planejado conciliado com o valor real, e o undo não alcança a réplica | Baixa | Baixo | Limitação conhecida (spec): a réplica é um lançamento do mês seguinte, criado pela transição e não pelo lote. Os planejados **criados** pela importação são `recorrente=False` e já têm as parcelas futuras criadas upfront — nada a replicar |
-| 6 | Dois undos simultâneos do mesmo lote | Baixa | Baixo | O segundo encontra os lançamentos já removidos (`ja_removido`) ou restaurados (assinatura difere → preservado); nenhum dado é perdido e o estado final é o mesmo |
+| 6 | Dois undos simultâneos do mesmo lote | Baixa | Baixo | `SELECT … FOR UPDATE` no lote durante o POST: o segundo espera o commit do primeiro, relê `revertido` e recebe 409 (a mitigação original — "o segundo vê `ja_removido`" — estava errada no READ COMMITTED do PostgreSQL; corrigida na revisão, finding #3) |
+| 8 | Lotes dependentes desfeitos fora de ordem deixam parcela órfã em aberto | Média | Médio | 409 exigindo desfazer o mais recente antes (finding #1) |
+| 9 | Banco arredonda valor com >2 casas diferente do float em memória → lançamento intocado parece editado | Baixa | Médio | `valor` arredondado no schema antes de gravar (finding #2) |
 | 7 | Regra aprendida errada sobrevive ao undo | Média | Baixo | Decisão explícita; badge "aprendido" + correção no confirm seguinte |
 
 ---
@@ -285,7 +288,7 @@ ALTER TABLE import_batches ADD COLUMN revertido_em DATETIME;
 
 - **Migration afetada:** `013_add_import_effects.py`
 - **Comando:** `alembic downgrade 012`
-- **Downgrade testado?** [ ] Sim / [ ] Não (preenchido na validação)
+- **Downgrade testado?** [x] Sim — `upgrade head` → `downgrade -1` (volta a `012`) → `upgrade head` em SQLite local (`DATABASE_URL=sqlite:///./local_cr056.db`, URL conferida antes)
 - **Downgrade é destrutivo?** [x] Sim — descarta o diário de efeitos e as duas colunas de data. Nenhum dado financeiro é afetado.
 
 ### 10.3 Impacto em Dados
@@ -309,13 +312,71 @@ ALTER TABLE import_batches ADD COLUMN revertido_em DATETIME;
 
 ## 11. Validação Runtime
 
-_(preenchido na validação)_
+Ambiente: backend local (`uvicorn` via launcher no scratchpad) com `DATABASE_URL=sqlite:///./local_cr056.db` (migrado do zero; URL conferida no launcher com `assert`), `call_import_api` stubbada (sem `ANTHROPIC_API_KEY` local) devolvendo uma fatura com padaria, Uber, CEMIG, Netshoes 3/6 e pagamento recebido; frontend `npm run dev`; usuário local `teste.cr056@local.dev`. Rodado **duas vezes** — antes e depois das correções da revisão de código —, sempre com o banco zerado.
+
+**HTTP** (`validate_cr056_http.py`, 14 verificações, todas ✅ na rodada final):
+
+| # | Exercitado | Resultado |
+|---|------------|-----------|
+| 1 | Upload → confirm com as 4 ações (2 gastos, conciliação da Energia, série 3/6, descarte) | `{2 gastos, 4 parcelas, 1 planejado pago, 1 descartada}` |
+| 2 | `GET /api/imports` | lote `confirmado`, 4 confirmadas / 1 descartada / 5 total, `pode_desfazer=true` |
+| 3 | `PATCH` no gasto "Uber" (18,90 → 20,00) e prévia | `1 gasto removido, 4 parcelas removidas, 1 restaurado, 1 preservado`; nada alterado pela prévia |
+| 4 | `POST /undo` | mesmos contadores da prévia |
+| 5 | Estado depois | Energia volta a R$ 200,00 em aberto (**Atrasado**, porque o vencimento 15/09 já passou — RF-05 sobre o `Pendente` restaurado); só o "Uber" editado ficou nos gastos diários; nenhuma Netshoes nos 8 meses seguintes |
+| 6 | Histórico depois | `revertido`, 3 revertidas + 1 confirmada (a do lançamento mantido) |
+| 7 | Undo repetido / DELETE do revertido | 409 / 409 |
+| 8 | Reimportar o mesmo PDF | PADARIA volta `pendente` (e chega "aprendido": a regra do CR-054 sobreviveu, como decidido); UBER segue `duplicada` (RN-052) |
+| 9 | `page_size=51` / prévia de lote inexistente | 422 / 404 |
+| 10 | **Lotes dependentes** (C1 cria Netshoes 3..6; C2 concilia a parcela 4 pela RN-046): undo de C1 | 409 "Desfaça antes a importação …" |
+| 11 | Undo de C2 e depois de C1 | C2 restaura 1; C1 remove as 4 parcelas, 0 preservadas |
+
+Duas falhas da **primeira** rodada foram do script, não do código: esperava `Pendente` literal (a RF-05 exibe `Atrasado` sobre o vencimento passado) e procurava a linha reimportada pelo nome original (a regra aprendida a renomeou). Script corrigido para buscar por `descricao_original`.
+
+**Playwright** (UI, duas sessões):
+
+- Aba Importar → seção "Importações anteriores" com os lotes, status ("Confirmado"/"Desfeito") e contadores ("2 lançadas · 2 descartadas · 1 duplicada").
+- "Desfazer" → diálogo com a prévia agrupada: "Será removido (1) — Padaria Stella · Gasto diário · 03/09/2026 · R$ 23,50" e "Será restaurado (1) — Energia elétrica · volta para Atrasado · R$ 200,00" (screenshot `.playwright-mcp/cr056-undo-preview.png`). Confirmado → aviso "Importação desfeita: 1 gasto diário removido · 1 planejado restaurado.", linha virou "Desfeito" sem botão; em Gastos Planejados a Energia apareceu com R$ 200,00 (cache invalidado) e o Dashboard ganhou o badge do alerta de atraso.
+- Depois das correções: "Desfazer" no lote mais antigo de um par dependente → diálogo mostra "Desfaça antes a importação "fatura-setembro.pdf"…" com o botão de executar desabilitado. Desfeito setembro (prévia: "Netshoes · Parcela 4 de 6 · volta para Pendente"), a prévia de agosto passou a listar as 4 parcelas para remoção e o undo as removeu.
+- Console: **0 warnings**. Erros apenas de rede esperados: dois 401 em `/users/me` do token antigo guardado no browser (o banco local foi recriado — comportamento pré-existente da tela de login) e as respostas 409 da prévia no caminho de erro testado. O 409 aparecia em dobro por causa do `retry: 1` global — corrigido com `retry: false` na prévia (a repetição só atrasava a mensagem).
+
+Encerramento: servidores derrubados e `local_cr056.db` removido.
 
 ---
 
 ## 12. Revisão de Código e Segurança
 
-_(preenchido após `/code-review` e checklist OWASP)_
+### 12.1 Revisão de código (`/code-review high` na branch)
+
+10 findings: **8 corrigidos**, 2 justificados.
+
+| # | Finding | Tratamento |
+|---|---------|-----------|
+| 1 | Lote B concilia parcela criada por A; desfazer A e depois B deixa a parcela órfã e em aberto | **Corrigido:** `undo_blocker_dependencies` → 409 exigindo desfazer o mais recente antes. 2 testes + cenário HTTP/Playwright |
+| 2 | Assinatura do confirm usa o float em memória, o undo relê o valor arredondado pelo banco — com >2 casas divergem no PostgreSQL | **Corrigido:** `ImportConfirmDecision.valor` arredondado a 2 casas antes de gravar (0 → 422). 2 testes |
+| 3 | Undo sem lock: dois POST simultâneos executam o mesmo plano; o risco #6 do CR dizia o contrário | **Corrigido:** `SELECT … FOR UPDATE` no POST; risco #6 reescrito |
+| 4 | Lote pendente com `expense_id_sugerido` para planejado removido pelo undo recebe 404 no confirm | **Justificado:** mesmo comportamento que já existe quando o usuário apaga o planejado à mão; o 404 aparece na revisão e o usuário troca a ação da linha. Follow-up registrado na spec |
+| 5 | Transações `revertida` mantêm os IDs de auditoria apontando para lançamentos removidos | **Justificado:** são histórico do que o confirm fez; o status `revertida` é o discriminador e nenhum código segue esses IDs. Apagá-los perderia a trilha |
+| 6 | `useConfirmImport` não invalida projeção/score, e a lista de invalidação era duplicada à mão no undo | **Corrigido:** `invalidateImportedData` compartilhado; o confirm passa a invalidar projeção e score (as séries criadas deixavam essas telas desatualizadas por até 5 min) |
+| 7 | Undo que falha (409 de outra aba) não recarrega o histórico | **Corrigido:** `onError` invalida o histórico e fechar o diálogo recarrega a lista |
+| 8 | Aviso "todos alterados ou apagados" falso para lote confirmado sem efeitos (tudo descartado) | **Corrigido:** `undoEmptyMessage` distingue os dois casos. 3 testes |
+| 9 | Lote em revisão com duplicadas mostrava só as duplicadas, sem o total extraído | **Corrigido:** total primeiro + duplicadas. 1 teste |
+| 10 | `SeriesEffects.criadas` e o contador retornado eram duas fontes da mesma informação | **Corrigido:** uma lista só (`novas`); contagem = `len(novas)`, retorno inalterado para o cadastro manual |
+
+Achado da validação runtime, fora da revisão: prévia repetida pelo `retry` global em 409 → `retry: false`.
+
+### 12.2 Segurança (checklist OWASP do CLAUDE.md)
+
+| Item | Resultado |
+|------|-----------|
+| Segredos hardcoded | OK — nenhum |
+| Inputs validados via Pydantic | OK — `page >= 1`, `1 <= page_size <= 50` (Query), `valor` arredondado e > 0; `batch_id` só é usado em lookup filtrado por usuário |
+| Tokens fora do `localStorage` | N/A — sem mudança de auth |
+| Ownership | OK — os 3 endpoints resolvem o lote por `get_import_batch_by_id(…, user_id)` (404 para lote alheio, testado); o plano busca os lançamentos **sempre** filtrados pelo dono do lote (efeito apontando para dado alheio é tratado como ausente — testado); contagem do histórico e busca de lote dependente filtram por `user_id` |
+| Queries ORM parametrizadas | OK — `IN` via ORM, em fatias de 500; sem SQL cru |
+| CORS / headers | Sem mudança |
+| Novas dependências | Nenhuma (backend e frontend) |
+| DoS | Histórico limitado a 50 por página; o undo é limitado ao tamanho do lote (teto de 120 parcelas por série já existente) |
+| Divulgação de informação | A mensagem de dependência cita o `filename` de outro lote **do próprio usuário** |
 
 ---
 
@@ -324,3 +385,6 @@ _(preenchido após `/code-review` e checklist OWASP)_
 | Data | Autor | Descrição |
 |------|-------|-----------|
 | 2026-09-25 | Claude | CR criado. Decisões do autor: E-D dividido em dois CRs (este + CR-057 reconciliação), diário de efeitos em vez das colunas propostas no roadmap, regras aprendidas não revertidas |
+| 2026-09-25 | Claude | Implementação: backend (migration 013, `import_undo.py`, 3 endpoints) e frontend (`ImportHistory`, `ImportUndoDialog`) |
+| 2026-09-25 | Claude | Revisão de código: 10 findings, 8 corrigidos, 2 justificados (§12.1) — inclui ordem inversa entre lotes dependentes, arredondamento do `valor` e lock do undo |
+| 2026-09-25 | Claude | Validação runtime HTTP + Playwright (§11) e revisão de segurança (§12.2). Docs sincronizados. Status segue "Em Implementação" até o CI verde |

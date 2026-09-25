@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 3.3
-**Data:** 2026-08-22
-**PRD Ref:** 01-PRD v3.3
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao), CR-055 (Deteccao de Planejado Ja Pago)
+**Versao:** 3.4
+**Data:** 2026-09-25
+**PRD Ref:** 01-PRD v3.6
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao), CR-055 (Deteccao de Planejado Ja Pago), CR-056 (Historico e Desfazer da Importacao — ADR-022)
 
 ---
 
@@ -122,7 +122,8 @@ Personal Finance/
 │   │       ├── 001_initial_schema.py
 │   │       ├── 002_add_users_and_auth.py    # CR-002
 │   │       ├── 004_add_daily_expenses.py    # CR-005
-│   │       └── 009_add_import_tables.py     # CR-046
+│   │       ├── 009_add_import_tables.py     # CR-046
+│   │       └── 013_add_import_effects.py    # CR-056: diario de efeitos do confirm (undo)
 │   ├── prompts/                             # Prompts de IA (CR-032: analise; CR-046: importacao)
 │   │   ├── import_extraction_system.txt     # CR-046: system prompt da extracao de extratos/faturas
 │   │   └── import_extraction_user.txt       # CR-046: user prompt (placeholders: categorias, planejados)
@@ -139,6 +140,7 @@ Personal Finance/
 │       ├── categories.py                    # Categorias compartilhadas (EXPENSE_CATEGORIES) + metodos pagamento + helpers (CR-005, CR-016)
 │       ├── email_service.py                 # CR-002: SendGrid integration
 │       ├── import_service.py                # CR-046: importacao de extratos (prompts, PDF document block, fingerprint/dedup)
+│       ├── import_undo.py                   # CR-056: diario de efeitos, assinatura, plano e execucao do desfazer
 │       └── routers/
 │           ├── __init__.py
 │           ├── expenses.py
@@ -149,7 +151,7 @@ Personal Finance/
 │           ├── daily_expenses.py            # CR-005: CRUD gastos diarios (5 endpoints)
 │           ├── dashboard.py                # CR-019: endpoints de agregacao para dashboard visual
 │           ├── alerts.py                  # CR-033: GET /api/alerts, PATCH seen/dismiss, GET/PUT config
-│           └── imports.py                 # CR-046: upload/pending/get/confirm/delete de importacoes (F07)
+│           └── imports.py                 # CR-046: upload/pending/get/confirm/delete; CR-056: historico, undo-preview, undo
 ├── frontend/
 │   ├── package.json
 │   ├── tsconfig.json
@@ -176,7 +178,7 @@ Personal Finance/
 │       │   ├── useAuth.ts                   # CR-002: Auth convenience hook
 │       │   ├── useDailyExpenses.ts          # CR-005: TanStack Query hooks gastos diarios
 │       │   ├── useDailyExpensesView.ts      # CR-005: Navegacao mensal gastos diarios
-│       │   └── useImports.ts                # CR-047: pending/upload/confirm/discard + match targets
+│       │   └── useImports.ts                # CR-047: pending/upload/confirm/discard + match targets; CR-056: historico/undo
 │       ├── components/
 │       │   ├── MonthNavigator.tsx
 │       │   ├── IncomeTable.tsx
@@ -191,7 +193,7 @@ Personal Finance/
 │       │   ├── DailyExpenseTable.tsx        # CR-005: Tabela gastos agrupada por dia
 │       │   ├── DailyExpenseFormModal.tsx    # CR-005: Modal formulario gasto diario
 │       │   ├── ViewSelector.tsx            # CR-005: Seletor de abas (6 abas desde CR-047)
-│       │   └── imports/                    # CR-047: ImportUpload, ImportReview, ImportResult
+│       │   └── imports/                    # CR-047: ImportUpload, ImportReview, ImportResult; CR-056: ImportHistory, ImportUndoDialog
 │       └── pages/
 │           ├── MonthlyView.tsx
 │           ├── LoginPage.tsx                # CR-002
@@ -516,10 +518,13 @@ erDiagram
 | filename               | String(255) | NOT NULL                        | Nome do arquivo enviado (metadado; PDF nao persiste)|
 | banco_detectado        | String(50)  | Nullable                        | Banco identificado pela IA (Nubank, Itau...)        |
 | tipo_documento         | String(20)  | Nullable                        | `extrato` ou `fatura`                               |
-| status                 | String(20)  | NOT NULL, default pendente_revisao | pendente_revisao, confirmado, descartado         |
+| status                 | String(20)  | NOT NULL, default pendente_revisao | processando (CR-052), pendente_revisao, confirmado, descartado, erro (CR-052), revertido (CR-056) |
+| erro_mensagem          | String(255) | Nullable                        | CR-052: motivo da falha (nunca conteudo do documento) |
 | tokens_input/output    | Integer     | Nullable                        | Consumo da chamada IA                               |
 | modelo                 | String(50)  | NOT NULL                        | Modelo Claude usado                                 |
 | tempo_processamento_ms | Integer     | Nullable                        | Duracao da chamada IA                               |
+| confirmado_em          | DateTime    | Nullable                        | CR-056: momento do confirm. Nulo em lote confirmado = anterior ao diario, nao desfazivel |
+| revertido_em           | DateTime    | Nullable                        | CR-056: momento do undo                             |
 | created_at/updated_at  | DateTime    | NOT NULL, default now()         | Timestamps                                          |
 
 > **Index:** `ix_import_batches_user_status (user_id, status)`
@@ -542,7 +547,7 @@ erDiagram
 | metodo_pagamento         | String(30)   | Nullable                                 | Sugestao da IA                                    |
 | parcela_atual/total      | Integer      | Nullable                                 | CR-049: numeracao lida da fatura (so parcelamento) |
 | fingerprint              | String(64)   | NOT NULL                                 | sha256 para dedup entre uploads (RN-042)          |
-| status                   | String(20)   | NOT NULL, default pendente               | pendente, confirmada, descartada, duplicada       |
+| status                   | String(20)   | NOT NULL, default pendente               | pendente, confirmada, descartada, duplicada, revertida (CR-056 — fora da dedup) |
 | daily_expense_id_criado  | String(36)   | Nullable                                 | Auditoria: DailyExpense criado na confirmacao     |
 | expense_id_atualizado    | String(36)   | Nullable                                 | Auditoria: Expense conciliado na confirmacao      |
 | expense_id_criado        | String(36)   | Nullable                                 | CR-049: Expense ancora da serie de parcelas criada |
@@ -570,6 +575,25 @@ Memoria de categorizacao: o que o usuario decidiu na revisao para um padrao de d
 >
 > A tabela e derivada: apagar tudo nao perde dado financeiro nenhum, so a memoria, que volta a ser aprendida no uso seguinte.
 
+#### ImportEffect (`import_effects`) — CR-056
+
+Diario do que cada confirm gravou — fonte da verdade do desfazer (RN-051, ADR-022).
+
+| Campo                    | Tipo         | Restricoes                              | Descricao                                        |
+|--------------------------|--------------|------------------------------------------|---------------------------------------------------|
+| id                       | String(36)   | PK, UUID                                 | Identificador unico                               |
+| batch_id                 | String(36)   | NOT NULL, FK→import_batches.id, CASCADE | Lote que produziu o efeito                        |
+| transaction_id           | String(36)   | NOT NULL, FK→import_transactions.id, CASCADE | Transacao de origem                          |
+| user_id                  | String(36)   | NOT NULL, FK→users.id, CASCADE          | Usuario dono (isolamento)                         |
+| tipo                     | String(30)   | NOT NULL                                 | gasto_diario_criado, planejado_criado, planejado_conciliado |
+| entidade_id              | String(36)   | NOT NULL, **sem FK**                     | DailyExpense ou Expense conforme o tipo; sobrevive ao usuario apagar o lancamento |
+| assinatura               | String(64)   | NOT NULL                                 | sha256 do estado gravado pelo confirm (`import_undo.entity_signature`) |
+| status_anterior          | String(20)   | Nullable                                 | So em planejado_conciliado: status que o undo restaura |
+| valor_anterior           | Numeric(10,2)| Nullable                                 | So em planejado_conciliado: valor que o undo restaura |
+| created_at               | DateTime     | NOT NULL, default now()                  | Timestamp                                         |
+
+> **Index:** `ix_import_effects_batch (batch_id)`. Um efeito por lancamento por lote: tocado duas vezes no mesmo confirm, vale o primeiro registro (o que guarda o estado de antes do lote).
+
 ### Relacionamentos
 
 ```
@@ -583,6 +607,7 @@ Usuario (1) ---- possui ----> ConfiguracaoAlertas (1)
 Usuario (1) ---- possui ----> ImportBatch (N)
 Usuario (1) ---- possui ----> ImportCategoryRule (N)
 ImportBatch (1) ---- possui ----> ImportTransaction (N)
+ImportBatch (1) ---- registra ---> ImportEffect (N)   (CR-056; entidade_id aponta para GastoDiario ou Despesa, sem FK)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
 Receita (N) ---- pertence a ----> Mes de referencia (1)
 GastoDiario (N) ---- pertence a ----> Mes de referencia (1)
@@ -943,6 +968,21 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
 
 ---
 
+### ADR-022: Diario de efeitos para desfazer importacao, em vez dos campos de auditoria (CR-056)
+
+- **Status:** Aceito
+- **Contexto:** O roadmap F07 v2 (E-D) propunha desfazer um lote a partir dos campos de auditoria que o confirm ja gravava (`daily_expense_id_criado`, `expense_id_atualizado`, `expense_id_criado`) mais duas colunas de estado anterior. A exploracao mostrou quatro furos: (1) so a parcela **ancora** da serie e registrada — as futuras nao deixam rastro; (2) na RN-046 `expense_id_criado` aponta para uma parcela que **ja existia** e foi so conciliada — um undo guiado por ele apagaria um lancamento do usuario; (3) nao ha estado anterior das conciliacoes; (4) `updated_at` nao distingue edicao do usuario, porque a RF-05 persiste `Pendente → Atrasado` sozinha.
+- **Decisao:** O confirm grava uma tabela-diario (`import_effects`), uma linha por efeito — gasto criado, **cada** parcela criada, planejado conciliado com status/valor anteriores —, com a **assinatura** (sha256) do estado gravado. O undo compara a assinatura atual de cada lancamento com a do diario: igual → remove/restaura; diferente → preserva; ausente → reporta. `create_expense_with_installments` ganhou o parametro opcional `efeitos` (`SeriesEffects`) para devolver criadas × conciliada sem mudar o retorno usado pelo cadastro manual. Decisao do autor em 2026-09-25, junto com a de dividir o E-D em dois CRs.
+- **Alternativas descartadas:** colunas em `import_transactions` (proposta do roadmap) — exigiria inferir as parcelas futuras por nome+numeracao, sem distinguir as que ja existiam; comparacao por `updated_at` — falso positivo em toda parcela vencida.
+- **Consequencias:**
+  - Status entra **normalizado** na assinatura (`Pendente`≡`Atrasado`); valores monetarios formatados com 2 casas, e o confirm passa a **arredondar** `valor` antes de gravar (senao o banco arredonda diferente do float em memoria).
+  - Lotes confirmados antes do CR-056 nao tem diario (`confirmado_em` nulo) e **nao podem ser desfeitos** — nao ha backfill possivel.
+  - Entre lotes dependentes (o mais recente alterou lancamentos do mais antigo), o undo exige **ordem inversa** (409), para nao deixar parcela orfa.
+  - `entidade_id` sem FK: o diario precisa sobreviver ao usuario apagar o lancamento.
+  - Regras aprendidas (CR-054) ficam fora do diario — o undo nao as reverte.
+
+---
+
 ## 9. Deploy e Infraestrutura
 
 ### 9.1 Plataforma de Producao
@@ -1043,4 +1083,4 @@ npm outdated                       # Lista pacotes com versao mais nova disponiv
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Atualizado para v2.8 em 2026-03-16 (CR-026: Score de Saude Financeira — ScoreHistorico model, ER diagram, health_score.py, routers/score.py). Atualizado para v2.9 em 2026-07-08 (CR-035: requirements-dev.txt na politica de pinning; CI GitHub Actions documentado no Deploy Guide secao 9). Atualizado para v2.10 em 2026-07-09 (CR-039: Vitest+jsdom e ESLint na stack; recharts corrigido para 3.x). Atualizado para v2.11 em 2026-07-15 (CR-041: pip-audit na auditoria via CI; backend/.env.example como template de env vars; .claude/ versionado). Atualizado para v2.12 em 2026-07-15 (CR-042: fastapi 0.139/starlette 1.3, python-jose 3.5, python-dotenv 1.2, pytest 9 — correcao de 15 advisories; ecdsa registrado como risco aceito). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005, CR-010, CR-026, CR-035, CR-039, CR-041 e CR-042.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Atualizado para v2.8 em 2026-03-16 (CR-026: Score de Saude Financeira — ScoreHistorico model, ER diagram, health_score.py, routers/score.py). Atualizado para v2.9 em 2026-07-08 (CR-035: requirements-dev.txt na politica de pinning; CI GitHub Actions documentado no Deploy Guide secao 9). Atualizado para v2.10 em 2026-07-09 (CR-039: Vitest+jsdom e ESLint na stack; recharts corrigido para 3.x). Atualizado para v2.11 em 2026-07-15 (CR-041: pip-audit na auditoria via CI; backend/.env.example como template de env vars; .claude/ versionado). Atualizado para v2.12 em 2026-07-15 (CR-042: fastapi 0.139/starlette 1.3, python-jose 3.5, python-dotenv 1.2, pytest 9 — correcao de 15 advisories; ecdsa registrado como risco aceito). Atualizado para v3.4 em 2026-09-25 (CR-056: historico e desfazer da importacao — ImportEffect/`import_effects`, `confirmado_em`/`revertido_em` em ImportBatch, status `revertido`/`revertida`, `import_undo.py`, ADR-022). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005, CR-010, CR-026, CR-035, CR-039, CR-041, CR-042 e CR-056.*

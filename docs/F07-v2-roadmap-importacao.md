@@ -1,10 +1,10 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.6
-**Data:** 2026-09-01
+**Versão:** 1.7
+**Data:** 2026-09-25
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
-**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa) / CR-054 (memória de categorização)
+**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa) / CR-054 (memória de categorização) / CR-056 (histórico e desfazer)
 
 ---
 
@@ -176,13 +176,17 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 ---
 
-### E-D — Rede de segurança: reconciliação, histórico e desfazer
+### E-D — Rede de segurança: reconciliação, histórico e desfazer 🟡 Parcial (CR-056)
 
 | Campo | Valor |
 |-------|-------|
 | Lacuna | L3 |
 | Complexidade | Alta (migration + endpoints + tela nova) |
 | Depende de | E-A (o undo precisa desfazer também `criar_planejado_parcelado`, incluindo as parcelas futuras) |
+| Frente **histórico + desfazer** | ✅ [CR-056](changes/CR-056-historico-desfazer-importacao.md) — migration 013, ADR-022 |
+| Frente **reconciliação de total** | ⬜ CR-057 (mexe no prompt — risco independente) |
+
+> **Por que dividido** (decisão do autor, 2026-09-25). Histórico e desfazer compartilham a tela e a migration e mexem em dados do usuário; a reconciliação mexe no prompt da IA. Riscos independentes, revisões independentes.
 
 **Problema.** Não há como saber se a IA **omitiu** transações — uma fatura parcialmente lida passa despercebida. E um confirm errado com 60 lançamentos só se resolve apagando à mão, apesar de os campos de auditoria já estarem gravados.
 
@@ -195,6 +199,15 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
   - **restaura** status e valor dos planejados conciliados — o que exige gravar o estado anterior no momento do confirm: colunas novas `expense_status_anterior` e `expense_valor_anterior` em `import_transactions` (migration);
   - lançamentos que o usuário já apagou ou editou à mão são ignorados e reportados nos contadores, em vez de bloquear o undo inteiro;
   - status novo de batch: `revertido`.
+
+> **Como ficou (CR-056).** Fonte da verdade: [spec F07 — Histórico e desfazer](specs/10-importacao-extratos.md) e [ADR-022](02-ARCHITECTURE.md). Cinco pontos saíram diferentes deste desenho inicial:
+> - **Diário de efeitos no lugar dos IDs de auditoria + 2 colunas.** Os IDs registram só a parcela âncora da série e, na RN-046, `expense_id_criado` aponta para uma parcela que **já existia** — um undo guiado por eles apagaria um lançamento do usuário. A tabela `import_effects` grava uma linha por lançamento criado ou conciliado, com o estado anterior.
+> - **"Editado à mão" é detectado por assinatura, não por `updated_at`.** A RF-05 persiste `Pendente → Atrasado` sozinha; por `updated_at`, toda parcela vencida pareceria editada. A assinatura normaliza os dois status como "em aberto".
+> - **Transação de lote desfeito vira `revertida` e sai da dedup — exceto se algo dela foi mantido.** Senão, reimportar o documento lançaria de novo o que o usuário decidiu manter (RN-052).
+> - **Ordem inversa entre lotes dependentes.** Se a fatura seguinte conciliou uma parcela que o lote anterior criou, desfazer o anterior primeiro deixaria essa parcela órfã e em aberto; o undo exige desfazer o mais recente antes (409).
+> - **Lotes confirmados antes do CR-056 não podem ser desfeitos** (sem diário, sem backfill possível), e as **regras aprendidas não são revertidas** (decisão do autor).
+>
+> A **reconciliação de total** segue aberta, para o CR-057.
 
 **Riscos:**
 
@@ -214,7 +227,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 | 1º | **E-A** ✅ | Maior valor percebido e a única isolada no par revisão/confirm — não depende de nada |
 | 2º | **E-B** ✅ | Muda o contrato do upload; feito cedo, todo o trabalho de UI seguinte já se apoia na forma final |
 | 3º | **E-C** ✅ | Dividida: a revisão em massa saiu no CR-053 (frontend puro, sem dependência real da E-A) e a memória de categorização no CR-054 (backend + migration 012). O few-shot ficou de fora e virou o B-9 |
-| 4º | **E-D** | O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras); antes disso garantiria retrabalho |
+| 4º | **E-D** 🟡 | Dividida: histórico + desfazer no CR-056 (migration 013); a reconciliação de total vai no CR-057. O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras) |
 
 Cada evolução vira um CR próprio no momento da implementação (numeração sequencial a partir de CR-049, via `/sdd-pipeline`). Este roadmap **não** reserva os números: CRs criados com antecedência envelhecem antes de serem executados.
 
@@ -273,7 +286,8 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | E-C | Revisão em massa ✅ CR-053 | Alta | E-A | Não |
 | E-C | Memória de categorização ✅ CR-054 | Alta | E-A | Sim (012) |
 | B-9 | Few-shot das regras aprendidas no prompt | Baixa | E-C ✅ | Não |
-| E-D | Reconciliação, histórico e desfazer | Alta | E-A | Sim |
+| E-D | Histórico e desfazer ✅ CR-056 | Alta | E-A | Sim (013) |
+| E-D | Reconciliação de total do documento | Alta | E-A | Sim |
 | B-1 | Importar OFX/CSV | Baixa | — | Talvez |
 | B-2 | Múltiplos arquivos + drag & drop | Baixa | E-B ✅ | Não |
 | B-3 | Confiança por transação | Baixa | — | Sim |
@@ -295,3 +309,4 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | 2026-08-22 | Claude | E-B implementada no CR-052 (RN-047/048). Nota: a janela do lote órfão é 30 min — precisa ficar acima do pior caso da extração (~27 min), senão mata task viva |
 | 2026-08-22 | Claude | E-C dividida em duas frentes; a de revisão em massa saiu no CR-053 (frontend puro, sem migration). Nota: o filtro é a seleção — não há checkbox de seleção por linha —, e "marcar em lote" exclui duplicadas para não dobrar lançamento. A frente de memória de categorização segue aberta |
 | 2026-08-27 | Claude | E-C concluída: memória de categorização no CR-054 (RN-049, migration 012). Notas: `normalize_description` não pôde ser reusada (alimenta fingerprints persistidos); descritor genérico não vira regra; `descricao_original` é estrutural para dedup e realimentação; em fatura o método do documento vence a regra. O few-shot virou o B-9 |
+| 2026-09-25 | Claude | E-D dividida em dois CRs; histórico e desfazer entregues no CR-056 (RN-051/052, migration 013, ADR-022). Notas: diário de efeitos no lugar dos IDs de auditoria (RN-046 faria o undo apagar parcela pré-existente); edição detectada por assinatura com Pendente≡Atrasado; ordem inversa entre lotes dependentes. Reconciliação de total segue para o CR-057 |
