@@ -23,6 +23,9 @@ import type {
   ImportBatchSummary,
   ImportConfirmRequest,
   ImportConfirmResponse,
+  ImportHistoryPage,
+  ImportUndoPreview,
+  ImportUndoResponse,
   ImportUploadResponse,
 } from "../types";
 
@@ -308,6 +311,20 @@ export function confirmImport(
 
 export function deleteImportBatch(batchId: string): Promise<void> {
   return request<void>(`/imports/${batchId}`, { method: "DELETE" });
+}
+
+// CR-056: historico e desfazer
+
+export function fetchImportHistory(page: number, pageSize: number): Promise<ImportHistoryPage> {
+  return request<ImportHistoryPage>(`/imports?page=${page}&page_size=${pageSize}`);
+}
+
+export function fetchUndoPreview(batchId: string): Promise<ImportUndoPreview> {
+  return request<ImportUndoPreview>(`/imports/${batchId}/undo-preview`);
+}
+
+export function undoImport(batchId: string): Promise<ImportUndoResponse> {
+  return request<ImportUndoResponse>(`/imports/${batchId}/undo`, { method: "POST" });
 }
 
 // ========== Alerts (CR-033) ==========

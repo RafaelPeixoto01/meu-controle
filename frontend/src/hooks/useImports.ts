@@ -1,16 +1,21 @@
 // CR-047 (F07): hooks TanStack Query da importacao de extratos/faturas.
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "../services/api";
 import type {
   Expense,
   ImportBatch,
   ImportBatchSummary,
   ImportConfirmRequest,
+  ImportHistoryPage,
+  ImportUndoPreview,
 } from "../types";
 import { useAuth } from "./useAuth";
 import { monthsToFetchForMatches } from "../utils/importReview";
 
 const PENDING_KEY = ["imports-pending"];
+// CR-056: todo evento que muda o status de um lote invalida o historico
+const HISTORY_KEY = ["imports-history"];
+export const HISTORY_PAGE_SIZE = 10;
 
 export function usePendingImports() {
   const { user } = useAuth();
@@ -79,6 +84,7 @@ export function useUploadImport() {
     mutationFn: (file: File) => api.uploadImport(file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PENDING_KEY });
+      queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
     },
   });
 }
@@ -91,6 +97,7 @@ export function useConfirmImport() {
     onSuccess: () => {
       // Confirmacao cria gastos diarios e atualiza planejados — invalida tudo que agrega
       queryClient.invalidateQueries({ queryKey: PENDING_KEY });
+      queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
       queryClient.invalidateQueries({ queryKey: ["daily-expenses-summary"] });
       queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -106,6 +113,54 @@ export function useDiscardImport() {
     mutationFn: (batchId: string) => api.deleteImportBatch(batchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PENDING_KEY });
+      queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
+    },
+  });
+}
+
+// ========== CR-056: historico e desfazer ==========
+
+export function useImportHistory(page: number) {
+  const { user } = useAuth();
+  return useQuery<ImportHistoryPage>({
+    queryKey: [...HISTORY_KEY, user?.id, page],
+    queryFn: () => api.fetchImportHistory(page, HISTORY_PAGE_SIZE),
+    enabled: !!user,
+    // Trocar de pagina mantem a anterior na tela ate a nova chegar
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useUndoPreview(batchId: string | null) {
+  const { user } = useAuth();
+  return useQuery<ImportUndoPreview>({
+    queryKey: ["import-undo-preview", user?.id, batchId],
+    queryFn: () => api.fetchUndoPreview(batchId!),
+    enabled: !!user && !!batchId,
+    // A previa descreve o estado de AGORA: reabrir o dialogo depois de editar
+    // um lancamento nao pode mostrar o plano antigo do cache
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useUndoImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: string) => api.undoImport(batchId),
+    onSuccess: () => {
+      // O undo apaga gastos e series de parcelas e restaura planejados: alem do
+      // que o confirm invalida, a projecao e o score mudam com a serie removida
+      queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
+      queryClient.invalidateQueries({ queryKey: PENDING_KEY });
+      queryClient.invalidateQueries({ queryKey: ["daily-expenses-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["monthly-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["installments"] });
+      queryClient.invalidateQueries({ queryKey: ["installment-projection"] });
+      queryClient.invalidateQueries({ queryKey: ["health-score"] });
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
     },
   });
 }
