@@ -1,6 +1,6 @@
-# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa / CR-054 memória de categorização / CR-055 planejado já pago / CR-056 histórico e desfazer)
+# Spec — Importação de Extratos e Faturas em PDF (F07, CR-046 backend / CR-047 frontend / CR-049 parcelamentos / CR-052 upload assíncrono / CR-053 revisão em massa / CR-054 memória de categorização / CR-055 planejado já pago / CR-056 histórico e desfazer / CR-057 reconciliação de total)
 
-**PRD Ref:** RF-21, US-29, US-30, RN-038..RN-052
+**PRD Ref:** RF-21, US-29, US-30, RN-038..RN-053
 
 ## Visão Geral
 
@@ -145,6 +145,37 @@ O caminho de **parcelas** já era protegido: `crud.get_expense_installment` não
 
 **Limitação conhecida:** valor real que diverge muito do planejado estimado (conta variável) não é detectado. É o comportamento anterior, sem regressão — a tolerância estreita prioriza precisão, porque sinalizar demais treina o usuário a ignorar o grupo.
 
+## Reconciliação de total do documento (CR-057 — item E-D do roadmap v2, segunda metade)
+
+Sem ela, uma fatura lida pela metade passa despercebida: a revisão mostra 30 linhas corretas de 60, o usuário confirma e o mês fica subestimado. É o único detector de extração **silenciosamente incompleta** — e também de linhas que `validate_ai_result` descartou por malformação.
+
+**O que a IA devolve a mais:**
+
+- `natureza` em **toda** transação: `debito` (saídas — compras, pagamentos, Pix/TED enviados, aplicações, IOF, juros, tarifas) ou `credito` (entradas — salário, recebidos, estornos, cashback, resgates e, na fatura, o "Pagamento recebido"). Independe da classificação: transferência para conta própria é `ignorar` **e** `debito`.
+- `total_debitos_documento` no topo: o total de débitos do período **copiado do resumo/totais impressos**, nunca a soma das transações listadas — um total somado pela própria IA a partir do que ela leu esconderia exatamente a omissão que se quer pegar. Fatura: total de compras/lançamentos do período (se o resumo divide em linhas como "compras" e "outros lançamentos", a soma dessas linhas **do resumo**); extrato: total de saídas. Proibido usar "total a pagar", "valor da fatura", saldo ou limite (incluem saldo anterior, pagamentos e créditos). Número JSON, ou `null` se o documento não imprime.
+
+**Só débitos** (RN-053, decisão do autor em 2026-09-25): estornos, pagamentos e receitas chegam como `ignorar` com valor positivo, e um total líquido exigiria reconstruir saldo anterior e pagamentos — alerta falso frequente. É a transação de **gasto** omitida que importa.
+
+**No backend** (`validate_ai_result`):
+
+- `natureza` fora de `NATUREZAS_VALIDAS` → `None`.
+- `_parse_total_documento`: **só número JSON**. String é recusada de propósito — o documento é pt-BR, e `"3.412"` (três mil) viraria `3.412` num `float()`, gerando alarme falso de milhares de reais. Também recusa bool, NaN/infinito (NaN passaria pelas comparações, todas falsas para ele), `<= 0` e acima de `MAX_TOTAL_DOCUMENTO` (teto de `Numeric(12,2)`: um campo informativo não pode estourar o INSERT e derrubar o lote para `erro`).
+- `sum_debitos(transacoes)` → `total_debitos_extraido`: soma, **depois da sanitização**, dos `valor` com `natureza = debito`, em **todas** as classificações e status (compara-se o documento, não o que será gravado). `None` se alguma linha não tem direção (chutar produziria divergência falsa), se o lote é vazio ou se a soma passa do teto.
+- Os dois totais vão para o lote em `process_import_batch`; `natureza` vai para cada transação.
+
+**Na revisão** (`ImportReconciliation`, no cabeçalho): compara o total do documento com os débitos **listados na revisão, com o valor efetivo de cada linha** (`liveDebitTotal` — o editado pelo usuário quando houver, marcada ou não). O `total_debitos_extraido` do lote é fixo; sem recalcular, corrigir um valor mal lido deixaria o aviso aceso, e aviso que não apaga treina o usuário a ignorá-lo. Comparação em **centavos inteiros**.
+
+| Estado | Aviso |
+|--------|-------|
+| Igual ao centavo | "Conferido com o documento: débitos listados R$ X · total de débitos do documento R$ X." |
+| Documento > listado | "Faltam R$ Z em relação ao documento" — alguma transação pode não ter sido lida |
+| Listado > documento | "A soma listada passa do documento em R$ Z" — transação lida em dobro ou crédito lido como débito |
+| Qualquer total nulo | Nada |
+
+Linhas de crédito levam o chip **"entrada"** (`ImportReviewRow`): sem a direção visível, o aviso de "crédito lido como débito" não teria como ser localizado. O aviso é **informativo** e não bloqueia o confirm.
+
+**Limitação conhecida:** a qualidade depende de a IA copiar o total em vez de somar. Com o total somado a partir do que ela leu, a conferência sempre "confere" e não detecta nada — não é verificável sem a API real; observar as primeiras importações em produção.
+
 ## Histórico e desfazer (CR-056 — item E-D do roadmap v2, primeira metade)
 
 Antes do CR-056 um lote confirmado saía do `/pending` e sumia da interface, e um confirm errado só se resolvia apagando à mão. Agora o histórico lista todos os lotes e um lote confirmado pode ser **desfeito**.
@@ -251,7 +282,8 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
   - `resolve_stale_batch(db, batch)` (CR-052) — RN-048; `STALE_PROCESSING_MINUTES = 30`, acima do pior caso da extração (3 tentativas do retry próprio × 3 do SDK × 180s ≈ 27 min)
   - `call_import_api(pdf_bytes, system_prompt, user_prompt)` — `client.messages.create` com content blocks `[document(base64 pdf), text(user_prompt)]`, `max_tokens=8192`, retry/backoff e `_parse_ai_json` reutilizado do padrão F06; timeout `IMPORT_TIMEOUT_SECONDS` (default 90s)
   - `validate_ai_result(resultado)` — descarta/normaliza transações malformadas (data inválida, valor <= 0, classificação desconhecida vira `gasto_diario` sem categoria → pendente de revisão); par categoria/subcategoria inválido zera os campos (usuário define na revisão)
-- A IA devolve: `{"banco": str, "tipo_documento": "extrato"|"fatura", "transacoes": [{data, descricao, valor, classificacao, expense_id?, motivo_ignorar?, categoria?, subcategoria?, metodo_pagamento?}]}`
+- A IA devolve: `{"banco": str, "tipo_documento": "extrato"|"fatura", "total_debitos_documento": number|null (CR-057), "transacoes": [{data, descricao, valor, classificacao, natureza (CR-057), expense_id?, motivo_ignorar?, categoria?, subcategoria?, metodo_pagamento?, parcela_atual?, parcela_total?}]}`
+  - `sum_debitos(transacoes)` / `_parse_total_documento(valor)` (CR-057) — ver "Reconciliação de total"
 - Dedup no upload: fingerprints com status `confirmada` do usuário → transação nasce `duplicada` (RN-042)
 
 ## Regras de Negócio
@@ -270,10 +302,11 @@ routers/imports.py  →  import_service.py  →  API Anthropic (PDF document blo
 | Confirmar um gasto diário grava/atualiza uma regra de categorização do usuário, indexada pelo padrão do descritor do documento; a regra é reaplicada na importação seguinte e sobrescreve a sugestão da IA | RN-049 (CR-054) |
 | Desfazer um lote confirmado remove o que ele criou e restaura os planejados que conciliou; lançamento alterado depois é mantido, apagado é só reportado; regras aprendidas não são revertidas; só lotes com diário (confirmados a partir do CR-056); entre lotes dependentes, o mais recente é desfeito primeiro | RN-051 (CR-056) |
 | Transação de lote desfeito vira `revertida` e deixa de contar para a dedup — exceto se algum lançamento dela foi mantido, caso em que continua `confirmada` | RN-052 (CR-056) |
+| A revisão confere a soma dos débitos listados com o total de débitos impresso no documento (copiado, nunca somado pela IA); divergência é sinalizada e não bloqueia o confirm; sem total impresso ou sem direção em alguma transação, não há conferência | RN-053 (CR-057) |
 
 ## Persistência (migration 009)
 
-**`import_batches`** — id (uuid str), user_id (FK CASCADE), filename, banco_detectado, tipo_documento (`extrato|fatura`), status (`processando|pendente_revisao|confirmado|descartado|erro|revertido`), **erro_mensagem** (CR-052), tokens_input/output, modelo, tempo_processamento_ms, **confirmado_em/revertido_em** (CR-056), created_at, updated_at. Índice `(user_id, status)`.
+**`import_batches`** — id (uuid str), user_id (FK CASCADE), filename, banco_detectado, tipo_documento (`extrato|fatura`), status (`processando|pendente_revisao|confirmado|descartado|erro|revertido`), **erro_mensagem** (CR-052), tokens_input/output, modelo, tempo_processamento_ms, **confirmado_em/revertido_em** (CR-056), **total_debitos_documento/total_debitos_extraido** (CR-057, Numeric(12,2)), created_at, updated_at. Índice `(user_id, status)`.
 
 **`import_transactions`** — id, batch_id (FK CASCADE), user_id (FK CASCADE), data, descricao, valor Numeric(10,2), classificacao (`gasto_diario|match_planejado|parcelamento|ignorar`), motivo_ignorar, expense_id_sugerido, categoria, subcategoria, metodo_pagamento, **parcela_atual, parcela_total** (CR-049), fingerprint (sha256 hex, 64), status (`pendente|confirmada|descartada|duplicada|revertida`), daily_expense_id_criado, expense_id_atualizado, **expense_id_criado** (CR-049), created_at, updated_at. Índice `(user_id, fingerprint)`.
 
@@ -286,6 +319,8 @@ Migration **012** (CR-054) cria `import_category_rules` e adiciona em `import_tr
 **CR-055 não altera schema:** reusa `expense_id_sugerido` para apontar o planejado já pago, e `classificacao` é `String(20)` sem constraint de enum.
 
 **`import_effects`** (CR-056, migration **013**) — id, batch_id (FK CASCADE, índice), transaction_id (FK CASCADE), user_id (FK CASCADE), `tipo` (`gasto_diario_criado|planejado_criado|planejado_conciliado`), `entidade_id` (**sem FK** — aponta para `daily_expenses` ou `expenses` conforme o tipo e precisa sobreviver ao usuário apagar o lançamento), `assinatura` (sha256), `status_anterior`/`valor_anterior` (só em conciliado), created_at. A 013 adiciona também `confirmado_em` e `revertido_em` em `import_batches`. Os status novos (`revertido` no lote, `revertida` na transação) não exigem DDL.
+
+Migration **014** (CR-057) adiciona `total_debitos_documento` e `total_debitos_extraido` (Numeric(12,2)) em `import_batches` e `natureza` (String(10)) em `import_transactions`. Tudo nullable; nulo = sem conferência (lote anterior, documento sem total ou direção ausente). Sem backfill.
 
 Sem alteração nas tabelas existentes.
 
@@ -323,6 +358,7 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - Ownership: get/confirm/delete de lote de outro usuário → 404
 - PDF não persistido (nenhum arquivo escrito)
 - Planejado já pago (CR-055): casa por valor+data e reclassifica com `expense_id_sugerido`; não casa fora da janela de dias nem fora da tolerância; tolerância é absoluta (aluguel de R$ 3.000 não engole compra de R$ 2.980); só atua em `gasto_diario`; a melhor correspondência do **lote** vence a ordem das linhas; um planejado não é reivindicado por duas transações; planejado Pendente segue no caminho de conciliação; planejado pago de outro usuário nunca é alcançado; `atualizar_planejado` sobre Pago → 422, e duas linhas no mesmo planejado aberto reportam a causa certa; linha reclassificada preserva o que a memória preencheu
+- Reconciliação de total (CR-057): o prompt pede `natureza` e o total **copiado** (e nomeia "total a pagar" como proibido); a soma conta só débitos, em todas as classificações; linha descartada na sanitização aparece como divergência; direção ausente/ inválida → conferência indisponível; total inválido (texto, ≤ 0, bool, acima do teto, NaN, infinito) e total em **string** (inclusive pt-BR "3.412") → `null`; soma extraída acima do teto → `null`; lote e histórico expõem os totais, lote antigo volta nulo; duplicadas entram na soma; divergência não bloqueia o confirm
 - Histórico e desfazer (CR-056, `backend/tests/test_import_history_undo.py`): assinatura (Pendente≡Atrasado, Pago distinto, Decimal≡float, cada campo editável muda o hash); diário com um efeito por gasto, por **cada** parcela e por conciliação, parcela pré-existente da RN-046 registrada como conciliada; histórico com contadores, ordenação/paginação, 422 de parâmetros, isolamento por usuário, lote legado sem `pode_desfazer`, RN-048; undo completo (remove, restaura, `revertido`/`revertida`), prévia sem efeito colateral e igual ao undo, gasto editado preservado (transação segue `confirmada`), gasto apagado como `ja_removido`, parcela só atrasada removida, parcela paga à mão preservada, **parcela pré-existente restaurada e nunca apagada**, conciliado editado não restaurado, lançamento tocado duas vezes no lote volta ao original, parcela alterada por outro lote preservada, parcela alterada fora de um lote preservada, **lote com dependente posterior → 409 e a ordem B → A remove a série inteira**, lote mais recente desfazível mesmo com o anterior confirmado, valor com 3 casas não parece editado, valor que arredonda para zero → 422, reimportação após undo não é `duplicada` mas a do lançamento mantido é, regras permanecem; 409 (pendente, já revertido, sem diário), 404 (outro usuário), descartar revertido → 409; efeito apontando para dado alheio tratado como ausente
 - Memória de categorização (CR-054): `normalize_pattern` converge descritores do mesmo estabelecimento entre meses e mantém `UBER *TRIP`/`UBER *EATS` distintos; descritor genérico não produz padrão; confirm grava a regra a partir do texto do documento; reconfirmar sobrescreve e incrementa `hits` (uma vez por confirmação); linha já renomeada realimenta a regra **original**; regra vence palpite válido da IA; par inválido é ignorado na aplicação; método aprendido vale em extrato mas não em fatura; nome só é aprendido se editado; parcelamento/conciliação/ignorada não geram nem recebem regra; regra de outro usuário nunca alcança o lote; reimportar o mesmo documento depois da regra continua marcando `duplicada`
 
@@ -341,11 +377,12 @@ Leitura da resposta via `extract_response_text` (compartilhada com a F06). `stop
 - `components/imports/ImportResult.tsx` — contadores do resultado + navegação (Gastos Diários / Planejados / importar outro)
 - `utils/importReview.ts` — helpers puros testados: `groupTransactions`, `buildInitialDecisions`, `validateDecision`, `buildConfirmPayload`, `monthsToFetchForMatches`, `describeInstallmentSeries` (CR-049: prévia "cria até N parcelas … até MM/AAAA"), `nextStageForBatch` (CR-052: estágio correspondente ao status do lote), `isLearnedSuggestion`/`learnedTitle` (CR-054). CR-053: `normalizeForSearch`/`matchesFilter`/`filterGroups`/`isFilterActive` (filtro), `decisionValor`/`sumTransactions` (totais — valor efetivo é o editado quando finito e positivo, senão o da IA), `bulkTargetIds`/`bulkIncludeTargetIds`/`applyBulkPatch` (edição em massa). **`filterGroups` filtra só a lista de render**: `decisions` nunca é tocado, então linha escondida preserva a decisão e continua indo no payload do confirm
 - CR-049 na revisão: destino "Compra parcelada", campos de numeração `x/y` (máx. 120), rótulo "Data da compra" e prévia da série; `ImportResult` mostra o contador de parcelas criadas
+- **CR-057 — conferência de total:** `components/imports/ImportReconciliation.tsx` no cabeçalho da revisão (confere / faltando / excedente; nada quando indisponível), alimentado por `liveDebitTotal` (débitos com o valor efetivo, recalculado a cada edição); `utils/importReconciliation.ts` (`reconcile`, `liveDebitTotal`, `reconciliationMessage` — o texto do aviso é função pura para os ramos serem testados); chip "entrada" nas linhas de crédito (`ImportReviewRow`)
 - **CR-056 — histórico e desfazer:** `components/imports/ImportHistory.tsx` ("Importações anteriores", abaixo do upload; some quando não há lote) lista os lotes paginados (10 por página) com status, origem, contadores e as ações "Abrir" (lote em revisão/processando — reusa o fluxo de retomada) e "Desfazer" (`pode_desfazer`). `components/imports/ImportUndoDialog.tsx` busca a prévia e a mostra em seções — será removido / será restaurado ("volta para Pendente · R$ 200,00") / será mantido (alterado depois) / já removido —, avisa quando o undo não mudaria nada além do status, e só então executa. O resultado aparece como aviso na própria seção. Helpers puros em `utils/importHistory.ts` (`summarizeHistoryItem` — lote em revisão mostra o total extraído mais as duplicadas; `groupUndoItems`; `undoEmptyMessage` — distingue o lote que nunca gravou nada do lote cujos lançamentos foram todos alterados/apagados; `undoItemKind`; `restoreDetail`; `describeUndoResult`; `totalPages`; `canResume`). Erro da prévia (ex.: 409 de dependência) aparece no diálogo com o botão de executar desabilitado
 - `hooks/useImports.ts` — CR-056: `useImportHistory(page)` (`keepPreviousData` entre páginas), `useUndoPreview(batchId)` (`staleTime`/`gcTime` 0: a prévia descreve o estado de agora; `retry: false`, porque a falha típica é um 409 determinístico), `useUndoImport` (em erro, recarrega o histórico — lote desfeito em outra aba). Confirm e undo usam a **mesma** lista de invalidação (`invalidateImportedData`), que passou a incluir projeção de parcelas e score — o confirm cria séries inteiras e antes as deixava de fora; upload e descarte invalidam também o histórico. Fechar o diálogo de desfazer recarrega a lista. `useImportBatch` (CR-052: polling de 3s enquanto `processando`, `refetchOnWindowFocus` desligado, e segue tentando enquanto não houver status conhecido para não travar o spinner numa falha de rede), `usePendingImports`, `useMatchTargets` (mapa expense_id→Expense dos meses das transações + atual/anterior), `useUploadImport`, `useConfirmImport` (invalida `imports-pending`, `daily-expenses-summary`, `monthly-summary`, `dashboard`, `installments`, `alerts`), `useDiscardImport`
 - `services/api.ts`: `requestMultipart` — FormData sem Content-Type manual, Bearer token e interceptor refresh-401 com retry (erro pós-refresh expõe o `detail` do backend)
 
 ## Referências
 
-- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), CR-054 (memória de categorização — item E-C, frente backend), CR-055 (planejado já pago — recorte do B-6), CR-056 (histórico e desfazer — item E-D, primeira metade; ADR-022), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
+- CR-046 (backend), CR-047 (frontend), CR-049 (compras parceladas), CR-052 (upload assíncrono — item E-B), CR-053 (revisão em massa — item E-C, frente frontend), CR-054 (memória de categorização — item E-C, frente backend), CR-055 (planejado já pago — recorte do B-6), CR-056 (histórico e desfazer — item E-D, primeira metade; ADR-022), CR-057 (reconciliação de total — item E-D, segunda metade), plano de brainstorming 2026-08-12, [roadmap F07 v2](../F07-v2-roadmap-importacao.md)
 - Padrões reutilizados de F06: `docs/specs/09-analise-ia.md`, `backend/app/ai_analysis.py`

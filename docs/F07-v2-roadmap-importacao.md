@@ -1,10 +1,10 @@
 # Roadmap de Evolução — F07 Importação de Extratos e Faturas (v2)
 
-**Versão:** 1.7
+**Versão:** 1.8
 **Data:** 2026-09-25
 **Autor:** Rafael (via Claude)
 **Origem:** Brainstorming de evolução da F07 (2026-08-16)
-**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa) / CR-054 (memória de categorização) / CR-056 (histórico e desfazer)
+**Spec vigente:** [`docs/specs/10-importacao-extratos.md`](specs/10-importacao-extratos.md) — CR-046 (backend) / CR-047 (frontend) / CR-049 (parcelamentos) / CR-052 (upload assíncrono) / CR-053 (revisão em massa) / CR-054 (memória de categorização) / CR-056 (histórico e desfazer) / CR-057 (reconciliação de total)
 
 ---
 
@@ -176,7 +176,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 
 ---
 
-### E-D — Rede de segurança: reconciliação, histórico e desfazer 🟡 Parcial (CR-056)
+### E-D — Rede de segurança: reconciliação, histórico e desfazer ✅ Implementada (CR-056 + CR-057)
 
 | Campo | Valor |
 |-------|-------|
@@ -184,7 +184,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 | Complexidade | Alta (migration + endpoints + tela nova) |
 | Depende de | E-A (o undo precisa desfazer também `criar_planejado_parcelado`, incluindo as parcelas futuras) |
 | Frente **histórico + desfazer** | ✅ [CR-056](changes/CR-056-historico-desfazer-importacao.md) — migration 013, ADR-022 |
-| Frente **reconciliação de total** | ⬜ CR-057 (mexe no prompt — risco independente) |
+| Frente **reconciliação de total** | ✅ [CR-057](changes/CR-057-reconciliacao-total-importacao.md) — migration 014 |
 
 > **Por que dividido** (decisão do autor, 2026-09-25). Histórico e desfazer compartilham a tela e a migration e mexem em dados do usuário; a reconciliação mexe no prompt da IA. Riscos independentes, revisões independentes.
 
@@ -207,7 +207,12 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 > - **Ordem inversa entre lotes dependentes.** Se a fatura seguinte conciliou uma parcela que o lote anterior criou, desfazer o anterior primeiro deixaria essa parcela órfã e em aberto; o undo exige desfazer o mais recente antes (409).
 > - **Lotes confirmados antes do CR-056 não podem ser desfeitos** (sem diário, sem backfill possível), e as **regras aprendidas não são revertidas** (decisão do autor).
 >
-> A **reconciliação de total** segue aberta, para o CR-057.
+> **Como ficou a reconciliação (CR-057).** Três pontos saíram diferentes do desenho acima:
+> - **Só débitos, não o total líquido** (decisão do autor). "Total da fatura ou saldo/movimentação do extrato" misturaria saldo anterior, pagamentos e estornos — que chegam todos como `ignorar` com valor positivo — e daria alerta falso com frequência. A IA passa a devolver a `natureza` de cada transação e o total de **débitos** copiado do resumo; é transação de gasto omitida o que importa detectar.
+> - **A revisão compara com os valores já corrigidos**, não com o `total_extraido` gravado: corrigir um valor mal lido apaga o aviso. O total extraído fica no lote como registro do que a IA leu.
+> - **Total só como número JSON.** Em pt-BR, `"3.412"` é três mil — aceitar string geraria alarme falso de milhares de reais.
+>
+> Limitação: a conferência só detecta omissão se a IA **copiar** o total em vez de somar o que leu — não verificável sem a API real; observar as primeiras importações.
 
 **Riscos:**
 
@@ -227,7 +232,7 @@ O que já existe e **não** é reaberto por este roadmap: staging obrigatório (
 | 1º | **E-A** ✅ | Maior valor percebido e a única isolada no par revisão/confirm — não depende de nada |
 | 2º | **E-B** ✅ | Muda o contrato do upload; feito cedo, todo o trabalho de UI seguinte já se apoia na forma final |
 | 3º | **E-C** ✅ | Dividida: a revisão em massa saiu no CR-053 (frontend puro, sem dependência real da E-A) e a memória de categorização no CR-054 (backend + migration 012). O few-shot ficou de fora e virou o B-9 |
-| 4º | **E-D** 🟡 | Dividida: histórico + desfazer no CR-056 (migration 013); a reconciliação de total vai no CR-057. O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras) |
+| 4º | **E-D** ✅ | Dividida: histórico + desfazer no CR-056 (migration 013); reconciliação de total no CR-057 (migration 014). O undo precisa saber desfazer **todas** as ações, inclusive a que a E-A introduz (e suas parcelas futuras) |
 
 Cada evolução vira um CR próprio no momento da implementação (numeração sequencial a partir de CR-049, via `/sdd-pipeline`). Este roadmap **não** reserva os números: CRs criados com antecedência envelhecem antes de serem executados.
 
@@ -255,7 +260,7 @@ Dividir uma compra em duas ou mais categorias (mercado + farmácia na mesma nota
 
 ### B-5 — Chunking de PDF por páginas
 
-Fatiar faturas muito grandes em várias chamadas para não estourar `max_tokens`. Hoje `max_tokens=16000` com effort low cobre os casos observados, e a reconciliação de total da **E-D é o detector** do caso em que não cobrir — implementar o chunking antes de ter esse detector seria otimização sem evidência.
+Fatiar faturas muito grandes em várias chamadas para não estourar `max_tokens`. Hoje `max_tokens=16000` com effort low cobre os casos observados, e a reconciliação de total da **E-D é o detector** do caso em que não cobrir — implementar o chunking antes de ter esse detector seria otimização sem evidência. **Detector entregue no CR-057:** a evidência para abrir este item é o aviso "Faltam R$ …" aparecendo em faturas grandes.
 
 ### B-6 — Match de planejados mais rico 🟡 Parcial (CR-055)
 
@@ -287,12 +292,12 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | E-C | Memória de categorização ✅ CR-054 | Alta | E-A | Sim (012) |
 | B-9 | Few-shot das regras aprendidas no prompt | Baixa | E-C ✅ | Não |
 | E-D | Histórico e desfazer ✅ CR-056 | Alta | E-A | Sim (013) |
-| E-D | Reconciliação de total do documento | Alta | E-A | Sim |
+| E-D | Reconciliação de total do documento ✅ CR-057 | Alta | E-A | Sim (014) |
 | B-1 | Importar OFX/CSV | Baixa | — | Talvez |
 | B-2 | Múltiplos arquivos + drag & drop | Baixa | E-B ✅ | Não |
 | B-3 | Confiança por transação | Baixa | — | Sim |
 | B-4 | Split de transação | Baixa | — | Talvez |
-| B-5 | Chunking de PDF | Baixa | E-D | Não |
+| B-5 | Chunking de PDF | Baixa | E-D ✅ | Não |
 | B-6 | Match de planejados mais rico 🟡 parcial (CR-055: planejado já pago) | Baixa | — | Não |
 | B-7 | Custo e tokens visíveis | Baixa | — | Não |
 | B-8 | Limite de páginas do PDF | Baixa | — | Não |
@@ -310,3 +315,4 @@ Defesa em profundidade adicional contra prompt injection via documento e contra 
 | 2026-08-22 | Claude | E-C dividida em duas frentes; a de revisão em massa saiu no CR-053 (frontend puro, sem migration). Nota: o filtro é a seleção — não há checkbox de seleção por linha —, e "marcar em lote" exclui duplicadas para não dobrar lançamento. A frente de memória de categorização segue aberta |
 | 2026-08-27 | Claude | E-C concluída: memória de categorização no CR-054 (RN-049, migration 012). Notas: `normalize_description` não pôde ser reusada (alimenta fingerprints persistidos); descritor genérico não vira regra; `descricao_original` é estrutural para dedup e realimentação; em fatura o método do documento vence a regra. O few-shot virou o B-9 |
 | 2026-09-25 | Claude | E-D dividida em dois CRs; histórico e desfazer entregues no CR-056 (RN-051/052, migration 013, ADR-022). Notas: diário de efeitos no lugar dos IDs de auditoria (RN-046 faria o undo apagar parcela pré-existente); edição detectada por assinatura com Pendente≡Atrasado; ordem inversa entre lotes dependentes. Reconciliação de total segue para o CR-057 |
+| 2026-09-25 | Claude | E-D concluída: reconciliação de total no CR-057 (RN-053, migration 014). Notas: compara só débitos, com o total copiado do resumo do documento; a revisão confere contra os valores já corrigidos; total só como número JSON ("3.412" em pt-BR é três mil). B-5 ganha o detector de que dependia |

@@ -142,20 +142,20 @@ A revisão abre com uma **conferência**: "Débitos extraídos R$ 3.412,90 · to
 
 ## 8. Critérios de Aceite
 
-- [ ] A IA é instruída a devolver `natureza` em toda transação e `total_debitos_documento` copiado do documento (ou `null`)
-- [ ] `total_debitos_extraido` soma só os débitos que sobreviveram à sanitização, em todas as classificações
-- [ ] Transação sem `natureza` válida torna a conferência indisponível (`total_debitos_extraido = null`)
-- [ ] Total do documento inválido (não numérico, ≤ 0) vira `null`
-- [ ] Lote e transações expõem os campos novos; lotes antigos voltam com eles nulos
-- [ ] A revisão mostra "confere" quando os totais batem ao centavo, e o valor faltante/excedente quando divergem; nada quando indisponível
-- [ ] O confirm não é bloqueado pela divergência
-- [ ] Testes existentes continuam passando (regressão)
-- [ ] Novos testes cobrem a mudança (backend + Vitest)
-- [ ] Fluxo afetado exercitado em runtime antes do merge (seção 11)
-- [ ] Revisão de código pré-merge (`/code-review`) executada (seção 12)
-- [ ] Revisão de segurança (checklist OWASP) executada (seção 12)
-- [ ] Migration testada: `alembic upgrade head` + `alembic downgrade -1`
-- [ ] Documentos afetados foram atualizados
+- [x] A IA é instruída a devolver `natureza` em toda transação e `total_debitos_documento` copiado do documento (ou `null`)
+- [x] `total_debitos_extraido` soma só os débitos que sobreviveram à sanitização, em todas as classificações
+- [x] Transação sem `natureza` válida torna a conferência indisponível (`total_debitos_extraido = null`)
+- [x] Total do documento inválido (não numérico, ≤ 0) vira `null` — e também string, NaN, infinito e acima do teto (revisão de código)
+- [x] Lote e transações expõem os campos novos; lotes antigos voltam com eles nulos
+- [x] A revisão mostra "confere" quando os totais batem ao centavo, e o valor faltante/excedente quando divergem; nada quando indisponível — recalculado com os valores corrigidos na revisão
+- [x] O confirm não é bloqueado pela divergência
+- [x] Testes existentes continuam passando (regressão) — 291 → 308 backend, 157 → 171 Vitest
+- [x] Novos testes cobrem a mudança (backend + Vitest) — 17 em `test_imports.py` (`TestPromptDaConferencia`, `TestValidateAiResultConferencia`, `TestConferenciaNoLote`) + 14 em `utils/importReconciliation.test.ts`
+- [x] Fluxo afetado exercitado em runtime antes do merge (seção 11)
+- [x] Revisão de código pré-merge (`/code-review`) executada (seção 12)
+- [x] Revisão de segurança (checklist OWASP) executada (seção 12)
+- [x] Migration testada: `alembic upgrade head` + `alembic downgrade -1`
+- [x] Documentos afetados foram atualizados (seção 5)
 - [ ] CI verde após o push
 
 > **Regra de conclusão (CR-037):** Status só vai para "Concluído" com todos os critérios `[x]` ou riscados com justificativa.
@@ -180,7 +180,7 @@ A revisão abre com uma **conferência**: "Débitos extraídos R$ 3.412,90 · to
 
 ### 10.2 Rollback de Migration
 - **Migration:** `014_add_import_reconciliation.py` — `alembic downgrade 013`
-- **Downgrade testado?** [ ] Sim / [ ] Não (preenchido na validação)
+- **Downgrade testado?** [x] Sim — `upgrade head` → `downgrade -1` (volta a `013`) → `upgrade head` em SQLite local (`local_cr057.db`, URL conferida)
 - **Destrutivo?** [x] Sim, só dos campos de conferência — nenhum dado financeiro
 
 ### 10.3 Impacto em Dados
@@ -197,13 +197,53 @@ A revisão abre com uma **conferência**: "Débitos extraídos R$ 3.412,90 · to
 
 ## 11. Validação Runtime
 
-_(preenchido na validação)_
+Ambiente: backend local com `DATABASE_URL=sqlite:///./local_cr057.db` (migrado do zero, URL conferida no launcher), `call_import_api` stubbada devolvendo `natureza` em cada linha e `total_debitos_documento` — o conteúdo do PDF escolhe o cenário: **completo** (documento R$ 379,62 = 23,50 + 18,90 + 187,32 + 149,90) ou **divergente** (documento R$ 424,62: uma compra de R$ 45,00 que a "IA" não listou). Pagamento recebido de R$ 2.500,00 como crédito. Frontend `npm run dev`. Rodado antes e depois das correções da revisão.
+
+**HTTP** (`validate_cr057_http.py`): lote completo com `total_debitos_documento = total_debitos_extraido = 379.62` e naturezas corretas (pagamento recebido `credito`, demais `debito`); lote divergente com 424.62 × 379.62; histórico expondo os totais. ✅ nas duas rodadas.
+
+**Playwright:**
+
+- Lote divergente → aviso âmbar "Faltam R$ 45,00 em relação ao documento — Débitos listados R$ 379,62 · total de débitos do documento R$ 424,62. Alguma transação pode não ter sido lida…" (screenshot `.playwright-mcp/cr057-divergente.png`).
+- Lote completo → "Conferido com o documento: Débitos listados R$ 379,62 · total de débitos do documento R$ 379,62."; a linha "PAGAMENTO RECEBIDO" com o chip **entrada**.
+- Depois das correções: editar o valor da padaria de 23,50 para 25,30 acendeu na hora "A soma listada passa do documento em R$ 1,80" (com a dica das entradas marcadas); voltar para 23,50 apagou o aviso ("Conferido…").
+- Console: **0 warnings**; erros apenas os 401 em `/users/me` e `/auth/refresh` do token de uma sessão anterior guardado no browser (o banco local foi recriado) — comportamento pré-existente da tela de login.
+
+**Não verificável localmente:** o comportamento do modelo real diante do prompt novo (copiar o total × somar o que leu). Registrado como risco #1 e como limitação conhecida na spec — observar as primeiras importações em produção.
+
+Encerramento: servidores derrubados e `local_cr057.db` removido.
 
 ---
 
 ## 12. Revisão de Código e Segurança
 
-_(preenchido após `/code-review` e checklist OWASP)_
+### 12.1 Revisão de código (`/code-review high` na branch)
+
+9 findings: **8 corrigidos**, 1 atendido pela etapa de documentação.
+
+| # | Finding | Tratamento |
+|---|---------|-----------|
+| 1 | O aviso comparava com o `total_debitos_extraido` fixo e não acompanhava as correções de valor feitas na revisão — aviso que não apaga treina o usuário a ignorá-lo | **Corrigido:** `liveDebitTotal` recalcula com o valor efetivo de cada linha (o mesmo `decisionValor` do subtotal); validado no browser |
+| 2 | O aviso de "excedente" cita crédito lido como débito, mas a direção não aparecia em lugar nenhum da revisão | **Corrigido:** chip "entrada" nas linhas de crédito; o aviso diz como encontrá-las |
+| 3 | NaN passava por `_parse_total_documento` (todas as comparações são falsas para NaN) | **Corrigido:** `math.isfinite`; teste com NaN e infinito |
+| 4 | String pt-BR ("3.412" = três mil) seria lida como 3,412 por `float()`, gerando alarme falso | **Corrigido:** só número JSON é aceito (string → `null` + log); o prompt pede número sem aspas e sem separador de milhar |
+| 5 | Prompt contraditório: "NÃO some" seguido de "some as linhas do resumo" | **Corrigido:** reescrito — o valor vem do RESUMO, nunca da lista de transações; a soma permitida é só das linhas do resumo que dividem o total |
+| 6 | `total_debitos_extraido` sem o teto de `Numeric(12,2)` que o total do documento tem | **Corrigido:** mesmo teto; teste com soma acima dele |
+| 7 | Nenhum teste cobria os ramos de mensagem do componente | **Corrigido:** texto extraído para `reconciliationMessage` (função pura) com 3 testes — o projeto testa helpers puros, sem render de componente |
+| 8 | Documentos da seção 5 não atualizados na branch | **Atendido:** era a etapa seguinte do pipeline; todos atualizados antes do merge |
+| 9 | Import no meio do arquivo de testes com `noqa` | **Corrigido:** movido para o bloco de imports do topo |
+
+### 12.2 Segurança (checklist OWASP do CLAUDE.md)
+
+| Item | Resultado |
+|------|-----------|
+| Segredos hardcoded | OK — nenhum |
+| Inputs validados | OK — a saída da IA é tratada como não confiável: `natureza` por lista branca, total só numérico, finito, positivo e abaixo do teto |
+| Tokens / sessão | N/A — sem mudança |
+| Ownership | Sem endpoint novo; os campos saem pelos endpoints de lote já filtrados por usuário |
+| Queries | Sem query nova |
+| Prompt injection via documento | Sem superfície nova: o total é só exibido, nunca usado para decidir o que gravar; a conferência é informativa |
+| Novas dependências | Nenhuma |
+| CORS / headers | Sem mudança |
 
 ---
 
@@ -212,3 +252,6 @@ _(preenchido após `/code-review` e checklist OWASP)_
 | Data | Autor | Descrição |
 |------|-------|-----------|
 | 2026-09-25 | Claude | CR criado. Decisão do autor: comparar só débitos, com o total copiado do documento |
+| 2026-09-25 | Claude | Implementação: prompt, migration 014, `validate_ai_result`, aviso na revisão |
+| 2026-09-25 | Claude | Revisão de código: 9 findings, 8 corrigidos, 1 atendido pela etapa de docs (§12.1) — inclui recálculo ao vivo e chip "entrada" |
+| 2026-09-25 | Claude | Validação runtime HTTP + Playwright (§11) e revisão de segurança (§12.2). Docs sincronizados. Status segue "Em Implementação" até o CI verde |

@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 3.4
+**Versao:** 3.5
 **Data:** 2026-09-25
-**PRD Ref:** 01-PRD v3.6
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao), CR-055 (Deteccao de Planejado Ja Pago), CR-056 (Historico e Desfazer da Importacao — ADR-022)
+**PRD Ref:** 01-PRD v3.7
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao), CR-055 (Deteccao de Planejado Ja Pago), CR-056 (Historico e Desfazer da Importacao — ADR-022), CR-057 (Reconciliacao de Total da Importacao)
 
 ---
 
@@ -123,7 +123,8 @@ Personal Finance/
 │   │       ├── 002_add_users_and_auth.py    # CR-002
 │   │       ├── 004_add_daily_expenses.py    # CR-005
 │   │       ├── 009_add_import_tables.py     # CR-046
-│   │       └── 013_add_import_effects.py    # CR-056: diario de efeitos do confirm (undo)
+│   │       ├── 013_add_import_effects.py    # CR-056: diario de efeitos do confirm (undo)
+│   │       └── 014_add_import_reconciliation.py # CR-057: totais de debitos + natureza
 │   ├── prompts/                             # Prompts de IA (CR-032: analise; CR-046: importacao)
 │   │   ├── import_extraction_system.txt     # CR-046: system prompt da extracao de extratos/faturas
 │   │   └── import_extraction_user.txt       # CR-046: user prompt (placeholders: categorias, planejados)
@@ -523,6 +524,8 @@ erDiagram
 | tokens_input/output    | Integer     | Nullable                        | Consumo da chamada IA                               |
 | modelo                 | String(50)  | NOT NULL                        | Modelo Claude usado                                 |
 | tempo_processamento_ms | Integer     | Nullable                        | Duracao da chamada IA                               |
+| total_debitos_documento | Numeric(12,2) | Nullable                      | CR-057: total de debitos IMPRESSO no documento (copiado pela IA) |
+| total_debitos_extraido | Numeric(12,2) | Nullable                       | CR-057: soma dos debitos extraidos apos a sanitizacao; nulo se alguma transacao nao tem direcao |
 | confirmado_em          | DateTime    | Nullable                        | CR-056: momento do confirm. Nulo em lote confirmado = anterior ao diario, nao desfazivel |
 | revertido_em           | DateTime    | Nullable                        | CR-056: momento do undo                             |
 | created_at/updated_at  | DateTime    | NOT NULL, default now()         | Timestamps                                          |
@@ -542,6 +545,7 @@ erDiagram
 | valor                    | Numeric(10,2)| NOT NULL                                 | Valor da transacao                                |
 | classificacao            | String(20)   | NOT NULL                                 | gasto_diario, match_planejado, parcelamento, ja_lancado (CR-055), ignorar |
 | motivo_ignorar           | String(255)  | Nullable                                 | Justificativa quando classificacao=ignorar        |
+| natureza                 | String(10)   | Nullable                                 | CR-057: debito ou credito — so insumo da conferencia de total |
 | expense_id_sugerido      | String(36)   | Nullable                                 | Planejado sugerido pela IA para conciliacao; em `ja_lancado`, o planejado ja PAGO detectado (CR-055) |
 | categoria/subcategoria   | String(50)   | Nullable                                 | Sugestao da IA (par validado no backend)          |
 | metodo_pagamento         | String(30)   | Nullable                                 | Sugestao da IA                                    |
@@ -1083,4 +1087,4 @@ npm outdated                       # Lista pacotes com versao mais nova disponiv
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Atualizado para v2.8 em 2026-03-16 (CR-026: Score de Saude Financeira — ScoreHistorico model, ER diagram, health_score.py, routers/score.py). Atualizado para v2.9 em 2026-07-08 (CR-035: requirements-dev.txt na politica de pinning; CI GitHub Actions documentado no Deploy Guide secao 9). Atualizado para v2.10 em 2026-07-09 (CR-039: Vitest+jsdom e ESLint na stack; recharts corrigido para 3.x). Atualizado para v2.11 em 2026-07-15 (CR-041: pip-audit na auditoria via CI; backend/.env.example como template de env vars; .claude/ versionado). Atualizado para v2.12 em 2026-07-15 (CR-042: fastapi 0.139/starlette 1.3, python-jose 3.5, python-dotenv 1.2, pytest 9 — correcao de 15 advisories; ecdsa registrado como risco aceito). Atualizado para v3.4 em 2026-09-25 (CR-056: historico e desfazer da importacao — ImportEffect/`import_effects`, `confirmado_em`/`revertido_em` em ImportBatch, status `revertido`/`revertida`, `import_undo.py`, ADR-022). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005, CR-010, CR-026, CR-035, CR-039, CR-041, CR-042 e CR-056.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Atualizado para v2.8 em 2026-03-16 (CR-026: Score de Saude Financeira — ScoreHistorico model, ER diagram, health_score.py, routers/score.py). Atualizado para v2.9 em 2026-07-08 (CR-035: requirements-dev.txt na politica de pinning; CI GitHub Actions documentado no Deploy Guide secao 9). Atualizado para v2.10 em 2026-07-09 (CR-039: Vitest+jsdom e ESLint na stack; recharts corrigido para 3.x). Atualizado para v2.11 em 2026-07-15 (CR-041: pip-audit na auditoria via CI; backend/.env.example como template de env vars; .claude/ versionado). Atualizado para v2.12 em 2026-07-15 (CR-042: fastapi 0.139/starlette 1.3, python-jose 3.5, python-dotenv 1.2, pytest 9 — correcao de 15 advisories; ecdsa registrado como risco aceito). Atualizado para v3.4 em 2026-09-25 (CR-056: historico e desfazer da importacao — ImportEffect/`import_effects`, `confirmado_em`/`revertido_em` em ImportBatch, status `revertido`/`revertida`, `import_undo.py`, ADR-022). Atualizado para v3.5 em 2026-09-25 (CR-057: `total_debitos_documento`/`total_debitos_extraido` em ImportBatch e `natureza` em ImportTransaction — reconciliacao de total, migration 014). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005, CR-010, CR-026, CR-035, CR-039, CR-041, CR-042, CR-056 e CR-057.*
