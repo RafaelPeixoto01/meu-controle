@@ -29,11 +29,11 @@ REGRAS DE EXTRAÇÃO:
 - "natureza" (OBRIGATÓRIO em toda transação): "debito" para saídas de dinheiro (compras, pagamentos, Pix/TED/transferências enviados, aplicações, IOF, juros, tarifas) ou "credito" para entradas (salário, Pix/transferências recebidos, estornos, cashback, resgates e, na fatura, o "Pagamento recebido"). Independe da classificação: uma transferência para conta própria é "ignorar" e "debito".
 
 CONFERÊNCIA DE TOTAL (campo "total_debitos_documento", no topo do JSON):
-- COPIE do documento o total de débitos do período, como está IMPRESSO. NÃO some as transações que você extraiu — esse número serve justamente para conferir se alguma ficou de fora.
-- Na fatura: o total das compras/lançamentos do período. Se o resumo imprime compras e encargos (IOF, juros, tarifas) em linhas separadas, some apenas essas linhas do resumo.
-- No extrato: o total de saídas do período.
+- Esse valor vem do RESUMO/TOTAIS impressos no documento, nunca da lista de transações. NÃO some as transações que você extraiu: o número serve justamente para conferir se alguma ficou de fora.
+- Na fatura: o total de compras/lançamentos do período impresso no resumo. Alguns resumos dividem esse total em linhas próprias (ex.: "compras" e "outros lançamentos"/encargos) — nesse caso informe a soma dessas linhas do resumo, e só delas.
+- No extrato: o total de saídas do período impresso no documento.
 - NÃO use "total a pagar", "valor da fatura", saldo inicial/final ou limite — eles incluem saldo anterior, pagamentos e créditos.
-- Se o documento não imprime esse total, use null.
+- Responda como número JSON (ex.: 3412.90), sem aspas e sem separador de milhar. Se o documento não imprime esse total, use null.
 
 FORMATO DE SAÍDA — responda APENAS com JSON válido, sem markdown, sem comentários:
 {

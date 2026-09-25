@@ -28,12 +28,14 @@ from app.models import (
 from app.ai_analysis import DEFAULT_MODEL, AiRefusalError
 from app.import_service import (
     STALE_PROCESSING_MINUTES,
+    build_import_prompts,  # CR-057
     call_import_api,
     compute_fingerprint,
     detect_already_paid,  # CR-055
     mark_duplicates,  # CR-054
     normalize_description,
     normalize_pattern,  # CR-054
+    sum_debitos,  # CR-057
     validate_ai_result,
 )
 
@@ -2009,8 +2011,6 @@ class TestConciliarPlanejadoPago:
 
 # ========== CR-057: reconciliacao de total do documento (RN-053) ==========
 
-from app.import_service import build_import_prompts, sum_debitos  # noqa: E402
-
 
 def _debito(tx, natureza="debito"):
     return {**tx, "natureza": natureza}
@@ -2079,13 +2079,27 @@ class TestValidateAiResultConferencia:
         assert r["total_debitos_extraido"] is None
 
     def test_total_do_documento_invalido_vira_none(self):
-        for total in ("mil reais", -10, 0, True, 1e13):
+        for total in ("mil reais", -10, 0, True, 1e13, float("nan"), float("inf")):
             r = self._validar([_debito(TX_PADARIA)], total=total)
             assert r["total_debitos_documento"] is None, total
 
-    def test_total_como_string_numerica_e_aceito_e_arredondado(self):
-        r = self._validar([_debito(TX_PADARIA)], total="23.504")
+    def test_total_em_string_e_recusado(self):
+        """
+        Code review #4: "3.412" e tres mil em pt-BR, mas 3.412 num float() —
+        aceitar string geraria alarme falso de milhares de reais.
+        """
+        for total in ("3.412", "3.412,90", "R$ 23,50", "23.50"):
+            r = self._validar([_debito(TX_PADARIA)], total=total)
+            assert r["total_debitos_documento"] is None, total
+
+    def test_total_numerico_e_arredondado(self):
+        r = self._validar([_debito(TX_PADARIA)], total=23.504)
         assert r["total_debitos_documento"] == 23.50
+
+    def test_soma_extraida_acima_do_teto_vira_none(self):
+        """Code review #6: nao pode estourar Numeric(12,2) e derrubar o lote."""
+        linhas = [_debito({**TX_PADARIA, "valor": 99_999_999.99}) for _ in range(101)]
+        assert self._validar(linhas)["total_debitos_extraido"] is None
 
     def test_sem_total_no_resultado(self):
         r = self._validar([_debito(TX_PADARIA)])

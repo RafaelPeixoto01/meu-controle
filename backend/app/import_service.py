@@ -12,6 +12,7 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -417,16 +418,22 @@ def call_import_api(pdf_bytes: bytes, system_prompt: str, user_prompt: str) -> d
 
 def _parse_total_documento(valor) -> float | None:
     """
-    CR-057: total de debitos impresso no documento, ou None. Aceita numero ou
-    string numerica; bool, nao numerico, <= 0 ou acima do teto viram None — a
-    conferencia simplesmente nao aparece.
+    CR-057: total de debitos impresso no documento, ou None — a conferencia
+    simplesmente nao aparece.
+
+    So aceita NUMERO JSON. String fica de fora de proposito: o documento e
+    pt-BR, e "3.412" (tres mil) viraria 3.412 num float(), gerando um alarme
+    falso de milhares de reais; "3.412,90" nem converte. Tambem recusa bool,
+    NaN/infinito (NaN passaria pelas comparacoes abaixo, que sao todas falsas
+    para ele), <= 0 e acima do teto da coluna.
     """
-    if isinstance(valor, bool):
+    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+        if valor is not None:
+            logger.warning("total_debitos_documento em formato inesperado: %s", type(valor).__name__)
         return None
-    try:
-        total = round(float(valor), 2)
-    except (TypeError, ValueError):
+    if not math.isfinite(valor):
         return None
+    total = round(float(valor), 2)
     if total <= 0 or total > MAX_TOTAL_DOCUMENTO:
         return None
     return total
@@ -444,7 +451,10 @@ def sum_debitos(transacoes: list[dict]) -> float | None:
     """
     if not transacoes or any(tx.get("natureza") is None for tx in transacoes):
         return None
-    return round(sum(tx["valor"] for tx in transacoes if tx["natureza"] == "debito"), 2)
+    total = round(sum(tx["valor"] for tx in transacoes if tx["natureza"] == "debito"), 2)
+    # Mesmo teto do total do documento: um campo informativo nao pode estourar
+    # o INSERT e derrubar o lote inteiro
+    return total if total <= MAX_TOTAL_DOCUMENTO else None
 
 
 def _parse_parcelas(tx: dict) -> tuple[int | None, int | None]:

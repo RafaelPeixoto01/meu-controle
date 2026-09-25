@@ -26,6 +26,7 @@ import { useDailyExpensesCategories } from "../../hooks/useDailyExpenses";
 import ImportReviewGroup from "./ImportReviewGroup";
 import ImportReviewToolbar from "./ImportReviewToolbar";
 import ImportReconciliation from "./ImportReconciliation";
+import { liveDebitTotal } from "../../utils/importReconciliation";
 
 // Referencias estaveis: `?? {}` inline criaria um objeto novo a cada render
 // enquanto a query de categorias nao resolve, anulando o memo da linha.
@@ -72,6 +73,8 @@ export default function ImportReview({
 
   const incluidas = Object.values(decisions).filter((d) => d.incluida).length;
   const totalIncluidas = sumTransactions(batch.transacoes, decisions, { onlyIncluded: true });
+  // CR-057: recalculado a cada edicao — corrigir um valor mal lido apaga o aviso
+  const debitosListados = liveDebitTotal(batch.transacoes, decisions);
   const visiveisTx = flattenGroups(visibleGroups);
   const alvoIds = bulkTargetIds(visibleGroups, decisions);
   const incluiveisIds = bulkIncludeTargetIds(visibleGroups);
@@ -167,7 +170,10 @@ export default function ImportReview({
           {batch.tipo_documento ? ` · ${batch.tipo_documento}` : ""}
         </p>
         {/* CR-057: conferencia com o total impresso no documento */}
-        <ImportReconciliation batch={batch} />
+        <ImportReconciliation
+          documento={batch.total_debitos_documento}
+          listado={debitosListados}
+        />
       </div>
 
       <ImportReviewToolbar
