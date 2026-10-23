@@ -1,6 +1,6 @@
 import uuid
 import enum
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import String, Date, Boolean, Integer, Numeric, Text, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -41,6 +41,7 @@ class User(Base):
     configuracao_alertas = relationship("ConfiguracaoAlertas", back_populates="user", uselist=False, cascade="all, delete-orphan")  # CR-033
     import_batches = relationship("ImportBatch", back_populates="user", cascade="all, delete-orphan")  # CR-046
     import_category_rules = relationship("ImportCategoryRule", back_populates="user", cascade="all, delete-orphan")  # CR-054
+    integration_tokens = relationship("IntegrationToken", back_populates="user", cascade="all, delete-orphan")  # CR-058
 
 
 class Expense(Base):
@@ -148,6 +149,32 @@ class RefreshToken(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.now)
 
     user = relationship("User", back_populates="refresh_tokens")
+
+
+def utc_now() -> datetime:
+    """Agora em UTC, sem fuso (como o SQLite guarda): os horarios dos tokens de integracao
+    independem do fuso do servidor e vao para a API com +00:00 (CR-058)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class IntegrationToken(Base):
+    """CR-058: token de integracao do Lumi (RF-22, RN-054). So o hash e gravado; horarios em UTC."""
+    __tablename__ = "integration_tokens"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(40), nullable=False)
+    prefix: Mapped[str] = mapped_column(String(8), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+    last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    user = relationship("User", back_populates="integration_tokens")
 
 
 class ScoreHistorico(Base):

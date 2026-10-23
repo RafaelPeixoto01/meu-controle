@@ -1,15 +1,17 @@
 import os
 import hashlib
+import secrets
 from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import crud
+from app.models import utc_now
 
 # Configuração
 SECRET_KEY = os.environ.get("SECRET_KEY")
@@ -93,4 +95,48 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
+    return user
+
+
+# ========== Token de integracao (CR-058, RN-054, ADR-023) ==========
+
+INTEGRATION_TOKEN_PREFIX = "mc_"
+LAST_USED_EVERY = timedelta(minutes=1)  # last_used_at gravado no maximo uma vez por minuto
+integration_scheme = HTTPBearer(auto_error=False)
+
+
+def generate_integration_token() -> tuple[str, str, str]:
+    """Novo token de integracao: (token, prefixo para a lista, hash SHA-256). So o hash e gravado."""
+    secret = secrets.token_urlsafe(32)
+    token = INTEGRATION_TOKEN_PREFIX + secret
+    return token, secret[:8], hash_token(token)
+
+
+def get_integration_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(integration_scheme),
+    db: Session = Depends(get_db),
+):
+    """
+    FastAPI dependency das rotas /api/integration/v1: so aceita o token de integracao
+    (o JWT do login e recusado aqui, e o token nao passa no get_current_user).
+    """
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token de integração inválido",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if credentials is None or not credentials.credentials.startswith(INTEGRATION_TOKEN_PREFIX):
+        raise invalid
+
+    token = crud.get_integration_token_by_hash(db, hash_token(credentials.credentials))
+    if token is None:
+        raise invalid
+    user = crud.get_user_by_id(db, token.user_id)
+    if user is None:
+        raise invalid
+
+    now = utc_now()
+    if token.last_used_at is None or now - token.last_used_at >= LAST_USED_EVERY:
+        token.last_used_at = now
+        db.commit()
     return user

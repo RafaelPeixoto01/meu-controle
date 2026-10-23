@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from datetime import date
 
-from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas, ImportBatch, ImportTransaction, ImportCategoryRule, ImportEffect  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira; CR-033: AlertaEstado, ConfiguracaoAlertas; CR-046: ImportBatch, ImportTransaction; CR-054: ImportCategoryRule; CR-056: ImportEffect
+from app.models import Expense, Income, User, RefreshToken, DailyExpense, ScoreHistorico, AnaliseFinanceira, AlertaEstado, ConfiguracaoAlertas, ImportBatch, ImportTransaction, ImportCategoryRule, ImportEffect, IntegrationToken  # CR-002: User, RefreshToken; CR-005: DailyExpense; CR-026: ScoreHistorico; CR-032: AnaliseFinanceira; CR-033: AlertaEstado, ConfiguracaoAlertas; CR-046: ImportBatch, ImportTransaction; CR-054: ImportCategoryRule; CR-056: ImportEffect; CR-058: IntegrationToken
 
 
 # ========== Expenses ==========
@@ -187,6 +187,25 @@ def get_daily_expenses_by_month(db: Session, mes_referencia: date, user_id: str)
     return list(db.scalars(stmt).all())
 
 
+def get_daily_expenses_between(
+    db: Session,
+    user_id: str,
+    de: date,
+    ate: date,
+    categoria: str | None = None,
+    subcategoria: str | None = None,
+) -> list[DailyExpense]:
+    """CR-058: gastos diarios de um usuario pela data do gasto (nao pelo mes de referencia)."""
+    stmt = select(DailyExpense).where(
+        DailyExpense.user_id == user_id, DailyExpense.data >= de, DailyExpense.data <= ate
+    )
+    if categoria is not None:
+        stmt = stmt.where(DailyExpense.categoria == categoria)
+    if subcategoria is not None:
+        stmt = stmt.where(DailyExpense.subcategoria == subcategoria)
+    return list(db.scalars(stmt.order_by(DailyExpense.data)).all())
+
+
 def get_daily_expense_by_id(db: Session, daily_expense_id: str, user_id: str) -> DailyExpense | None:
     """Retorna um gasto diario por ID se pertence ao usuario."""
     stmt = (
@@ -280,6 +299,51 @@ def delete_user_refresh_tokens(db: Session, user_id: str) -> None:
     for token in tokens:
         db.delete(token)
     db.commit()
+
+
+# ========== Integration Tokens (CR-058) ==========
+
+def create_integration_token(db: Session, token: IntegrationToken) -> IntegrationToken:
+    """Persiste um token de integracao (so o hash)."""
+    db.add(token)
+    db.commit()
+    db.refresh(token)
+    return token
+
+
+def get_active_integration_tokens(db: Session, user_id: str) -> list[IntegrationToken]:
+    """Tokens ativos (nao revogados) de um usuario, do mais novo para o mais antigo."""
+    stmt = (
+        select(IntegrationToken)
+        .where(IntegrationToken.user_id == user_id, IntegrationToken.revoked_at.is_(None))
+        .order_by(IntegrationToken.created_at.desc())
+    )
+    return list(db.scalars(stmt).all())
+
+
+def count_active_integration_tokens(db: Session, user_id: str) -> int:
+    stmt = select(func.count()).select_from(IntegrationToken).where(
+        IntegrationToken.user_id == user_id, IntegrationToken.revoked_at.is_(None)
+    )
+    return int(db.scalar(stmt) or 0)
+
+
+def get_active_integration_token(db: Session, token_id: str, user_id: str) -> IntegrationToken | None:
+    """Token ativo por ID se pertence ao usuario, ou None (ownership check)."""
+    stmt = select(IntegrationToken).where(
+        IntegrationToken.id == token_id,
+        IntegrationToken.user_id == user_id,
+        IntegrationToken.revoked_at.is_(None),
+    )
+    return db.scalars(stmt).first()
+
+
+def get_integration_token_by_hash(db: Session, token_hash: str) -> IntegrationToken | None:
+    """Token ativo pelo hash, ou None."""
+    stmt = select(IntegrationToken).where(
+        IntegrationToken.token_hash == token_hash, IntegrationToken.revoked_at.is_(None)
+    )
+    return db.scalars(stmt).first()
 
 
 # ========== Dashboard Aggregates (CR-019) ==========

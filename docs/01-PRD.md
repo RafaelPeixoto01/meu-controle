@@ -1,10 +1,10 @@
 # PRD — Meu Controle
 
-**Versao:** 3.7
-**Data:** 2026-09-25
+**Versao:** 3.8
+**Data:** 2026-10-23
 **Status:** Aprovado
-**Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos
-**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052, CR-053, CR-054, CR-055, CR-056, CR-057
+**Fase:** 1 + 3 + Gastos Diarios + Parcelas + Categorias + Dashboard + Score + Alertas + IA + Importacao — Registro de Despesas + Autenticacao + Gastos Diarios + Consulta Parcelas + Categorizacao + Dashboard Visual + Score de Saude Financeira + Alertas Inteligentes + Analise por IA + Importacao de Extratos + Integracao com o Lumi
+**CR Ref:** CR-002, CR-004, CR-005, CR-007, CR-016, CR-019, CR-021, CR-026, CR-032, CR-033, CR-046, CR-047, CR-049, CR-052, CR-053, CR-054, CR-055, CR-056, CR-057, CR-058
 
 ---
 
@@ -267,6 +267,21 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - Historico e desfazer (CR-056): a tela de importacao lista as **importacoes anteriores** (todos os lotes, paginados, com status e contadores). Um lote confirmado pode ser **desfeito**: uma previa mostra o que sera removido (gastos diarios e parcelas criados pelo lote), o que sera restaurado (planejados que o lote marcou como pagos voltam ao status e valor de antes) e o que sera mantido — lancamentos alterados depois da importacao nao sao tocados, e os ja apagados so sao reportados. Depois do undo o mesmo documento pode ser importado de novo. Lotes confirmados antes do CR-056 aparecem no historico mas nao podem ser desfeitos (nao ha registro do que gravaram); regras aprendidas (CR-054) nao sao revertidas.
 - Conferencia com o documento (CR-057): a revisao compara a soma dos debitos listados com o total de debitos **impresso** no documento (fatura: total de compras/lancamentos; extrato: total de saidas) e avisa quando falta ou sobra dinheiro — o sinal de que a IA pode ter deixado transacoes de fora. O aviso acompanha as correcoes feitas na revisao, e linhas de credito aparecem marcadas como "entrada". E informativo: nao impede confirmar. Documento sem total impresso fica sem conferencia.
 
+### Modulo: Integracao com o Lumi (CR-058)
+
+| ID    | Requisito | Prioridade | Persona |
+|-------|-----------|------------|---------|
+| RF-22 | Token de integracao gerado pelo usuario no Perfil, com acesso restrito a uma API propria, para o Lumi (companion de voz do usuario) lancar gastos diarios, consultar gastos, ver e marcar contas planejadas e ler o resumo do mes | Media | Rafael |
+
+**RF-22 — Detalhamento:**
+- No Perfil, secao "Integracoes": gerar token (nome, padrao "Lumi"), listar os ativos (nome, inicio do token, criado em, ultimo uso) e revogar com confirmacao. Ate 5 tokens ativos por usuario.
+- O token aparece **uma vez**, na criacao, com botao "Copiar". O banco guarda so o hash SHA-256 e os 8 primeiros caracteres para identificar na lista. Revogado, deixa de valer na hora; apagar a conta apaga os tokens.
+- O token so abre a API de integracao (`/api/integration/v1`): categorias, lancar gasto diario, resumo de gastos diarios por periodo, resumo do mes, despesas planejadas do mes e mudanca do status de uma despesa planejada para Pago ou Pendente. Nao apaga, nao edita valores, nao mexe em receitas, importacao, score, alertas nem perfil.
+- O token de integracao nao abre as rotas do app, e o JWT do login nao abre as rotas de integracao.
+- Limite de 60 chamadas por minuto por token (somando todas as rotas) e 120 por minuto por IP, checado antes da autenticacao; `last_used_at` registra o ultimo uso, mostrado no fuso de quem ve.
+- Marcar como pago so registra o status: o Meu Controle nao paga nada.
+- O Lumi (projeto ai-companion-esp32, CR-014 de la) pede a confirmacao do usuario antes de gravar.
+
 ### Modulo: Autenticacao e Usuarios (CR-002)
 
 | ID    | Requisito | Prioridade | Persona |
@@ -467,6 +482,13 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
     - [x] Lancamentos que alterei depois da importacao nao sao removidos nem restaurados.
     - [x] Depois de desfeito, posso importar o mesmo documento de novo sem que ele seja marcado como duplicado.
 
+- **US-31:** Como usuario, quero que o Lumi, meu companion de voz, lance e consulte meus gastos no Meu Controle com um acesso que eu controlo, para registrar um gasto na hora sem abrir o app e cortar o acesso quando quiser. (CR-058)
+  - Criterios de aceite:
+    - [ ] No Perfil, gero um token para o Lumi, vejo o token uma vez so e o copio.
+    - [ ] Com o token, o Lumi lanca um gasto diario que aparece na tela de Gastos Diarios.
+    - [ ] A lista mostra quando o token foi usado pela ultima vez.
+    - [ ] Depois de revogar o token, o Lumi nao consegue mais acessar o Meu Controle.
+
 ---
 
 ## 7. Regras de Negocio
@@ -526,6 +548,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-051 | Desfazer um lote confirmado remove os lancamentos que ele criou e restaura status e valor dos planejados que ele conciliou. Lancamento alterado depois da importacao e mantido; lancamento ja apagado e apenas reportado. Regras de categorizacao aprendidas nao sao revertidas. So lotes confirmados a partir do CR-056 (com registro do que gravaram) podem ser desfeitos, e entre lotes dependentes (o mais recente alterou lancamentos do mais antigo) o mais recente deve ser desfeito primeiro | Importacao (RF-21, CR-056) |
 | RN-052 | Transacao de lote desfeito passa a `revertida` e deixa de contar para a deduplicacao (RN-042), permitindo reimportar o documento — exceto quando algum lancamento dela foi mantido pelo undo, caso em que continua confirmada e segue protegida contra reimportacao | Importacao (RF-21, CR-056) |
 | RN-053 | A revisao da importacao confere a soma dos debitos listados com o total de debitos impresso no documento — copiado pela IA do resumo do documento, nunca somado por ela. Divergencia e sinalizada e nao bloqueia a confirmacao; sem total impresso ou sem a direcao (debito/credito) de alguma transacao, nao ha conferencia | Importacao (RF-21, CR-057) |
+| RN-054 | Token de integracao: aparece uma unica vez, e guardado so como hash, vale ate ser revogado e abre apenas a API de integracao, com os dados do proprio usuario. O JWT do login nao abre a API de integracao, e o token nao abre as rotas do app. Ate 5 ativos por usuario, 60 chamadas por minuto por token (somando as rotas) e 120 por minuto por IP. O lancamento pela integracao aceita valor ate R$ 50.000 e data de ate um ano atras | Integracao com o Lumi (RF-22, CR-058) |
 
 ---
 
@@ -541,6 +564,7 @@ Os itens abaixo **nao** estao no escopo atual:
 - ~~Contas bancarias e conciliacao~~ — **Conciliacao manual via importacao de PDF implementada via CR-046/CR-047 (RF-21)**; gestao de contas bancarias segue fora de escopo
 - Metas de economia e orcamento por categoria
 - Integracao com bancos ou APIs externas (Open Finance) — importacao e manual, via upload de PDF (RF-21)
+- API aberta a terceiros. O token de integracao (RF-22) e do proprio usuario, para o Lumi, com escopo restrito e sem apagar dados
 - Importacao de extratos em CSV/OFX ou por imagem/print (v1 do RF-21 e somente PDF)
 - Aplicativo mobile nativo
 - Modo offline / PWA
@@ -603,6 +627,8 @@ Os itens abaixo **nao** estao no escopo atual:
 | Diario de efeitos | Registro, gravado no confirm, de cada lancamento que o lote criou ou conciliou, com o estado anterior — base do desfazer (CR-056) |
 | Fingerprint | Impressao digital de uma transacao importada (hash de usuario + data + valor + descricao normalizada) usada para detectar duplicatas entre uploads (CR-046) |
 | Conciliacao | Vinculo entre uma transacao do extrato/fatura e um gasto planejado existente, confirmando o pagamento e o valor real (CR-046) |
+| Token de integracao | Credencial gerada pelo usuario no Perfil para o Lumi acessar a API de integracao, com escopo restrito, guardada so como hash e revogavel (CR-058) |
+| Lumi | Companion de mesa por voz do usuario (projeto ai-companion-esp32), que lanca e consulta gastos pela API de integracao (CR-058) |
 
 ---
 
@@ -638,6 +664,7 @@ Os itens abaixo **nao** estao no escopo atual:
 ### Fase 7 — Integracoes (parcialmente implementada via CR-046/CR-047)
 - Integracao com Open Finance para importacao automatica de transacoes
 - ~~Conciliacao entre despesas planejadas e transacoes reais~~ — RF-21, via importacao de PDF (CR-046/CR-047)
+- ~~Integracao com o Lumi (companion de voz do usuario)~~ — RF-22, token e API de integracao (CR-058)
 
 ### Fase 8 — Expansao (ver roadmap detalhado em `/docs/meucontrole-roadmap-funcionalidades.md`)
 - Copiloto financeiro via WhatsApp (F11)
@@ -656,6 +683,7 @@ Os itens abaixo **nao** estao no escopo atual:
 *Atualizado para v3.2 em 2026-08-16. CR-049: importacao de compras parceladas (F07, item E-A do roadmap v2) — RF-21 estendido com a classificacao `parcelamento` e a acao `criar_planejado_parcelado`; RN-044 a RN-046 novas; RN-042 passa a considerar a numeracao da parcela. Receitas seguem em `ignorar` (RN-041 inalterada).*
 
 *Atualizado para v3.1 em 2026-08-12. RF-21: Importacao de Extratos e Faturas em PDF via IA — F07 (CR-046 backend, CR-047 frontend). US-29, RN-038 a RN-043, Fora de Escopo, Glossario, Dependencias e Roadmap Fase 7. UI entregue no CR-047 (mesma data) — conteudo do RF-21 ja cobria a feature completa.*
+*Atualizado para v3.8 em 2026-10-23. CR-058: token de integracao e API para o Lumi — modulo Integracao com o Lumi (RF-22), US-31, RN-054, fora de escopo (API aberta a terceiros), glossario (Token de integracao, Lumi) e roadmap Fase 7. Migration 015 (`integration_tokens`).*
 *Atualizado para v3.7 em 2026-09-25. CR-057: reconciliacao de total do documento na importacao (F07, segunda metade do item E-D do roadmap v2 — fecha o E-D) — RF-21 detalhado com a conferencia; RN-053 nova. Migration 014. A IA passa a devolver a direcao de cada transacao e o total de debitos impresso.*
 *Atualizado para v3.6 em 2026-09-25. CR-056: historico e desfazer da importacao (F07, primeira metade do item E-D do roadmap v2) — RF-21 detalhado com o historico de lotes e o desfazer; US-30; RN-051 e RN-052 novas; glossario com "Desfazer importacao" e "Diario de efeitos". Migration 013 (`import_effects`). A reconciliacao de total do documento, segunda metade do E-D, fica para o CR-057.*
 *Atualizado para v3.5 em 2026-09-01. CR-055: deteccao de planejado ja pago na importacao (F07, recorte do B-6 do roadmap v2) — RF-21 detalhado com a sinalizacao; RN-050 nova. Sem migration e sem endpoint novo; a deteccao e deterministica e roda depois da IA, e a revisao segue obrigatoria.*

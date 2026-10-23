@@ -655,3 +655,18 @@ export interface RegisterData {
 export interface TokenResponse extends AuthTokens {
   user?: User;
 }
+
+// ========== Integracao com o Lumi (CR-058) ==========
+
+export interface IntegrationToken {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+/** Resposta da criacao: a unica vez em que o token aparece. */
+export interface IntegrationTokenCreated extends IntegrationToken {
+  token: string;
+}

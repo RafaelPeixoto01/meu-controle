@@ -211,13 +211,14 @@ Personal Finance/
 │   ├── changes/                #   Change Requests CR-XXX + INDEX.md (histórico completo)
 │   └── templates/              #   Templates obrigatórios dos documentos
 ├── backend/
-│   ├── alembic/versions/       # Migrations 001..014 (aplicar antes de rodar o backend)
+│   ├── alembic/versions/       # Migrations 001..015 (aplicar antes de rodar o backend)
 │   ├── prompts/                # System/user prompts da análise IA (CR-032) e importação (CR-046)
 │   ├── app/                    # main, database, models, schemas, crud, services, utils, auth,
 │   │   │                       #   rate_limit (CR-044), health_score, ai_analysis, alerts,
 │   │   │                       #   categories, email_service, import_service (CR-046), import_undo (CR-056)
 │   │   └── routers/            # auth, users, expenses, incomes, months, daily_expenses,
-│   │                           #   dashboard, score, ai_analysis, alerts, imports (todos exigem auth)
+│   │                           #   dashboard, score, ai_analysis, alerts, imports, integration_tokens (todos exigem auth);
+│   │                           #   integration (CR-058: API do Lumi, so com token de integracao)
 │   ├── scripts/                # seed_demo.py (idempotente) + scripts one-off
 │   └── tests/                  # pytest: services, installment_projection, health_score,
 │                               #   ai_analysis, alerts, imports, import_history_undo, security_headers, static_spa
@@ -274,7 +275,7 @@ Personal Finance/
 | HTTP Client    | fetch nativo                | —         |
 | Backend        | Python + FastAPI            | 0.139     |
 | Auth (BE)      | python-jose + passlib/bcrypt| 3.5/1.7   |
-| Rate Limit (BE)| slowapi                     | 0.1       |
+| Rate Limit (BE)| slowapi + limits (CR-058)   | 0.1 / 5   |
 | Env Config     | python-dotenv               | 1.0+      |
 | Email          | SendGrid                    | 6.11      |
 | ORM            | SQLAlchemy (sincrono)       | 2.0+      |
@@ -315,11 +316,11 @@ Template em [`backend/.env.example`](backend/.env.example) (CR-041) — copie pa
 ### Change Requests
 > **Histórico completo (CR-001..CR-040) em [`docs/changes/INDEX.md`](docs/changes/INDEX.md)** — mantido aqui apenas os 5 mais recentes (CR-038). Ao concluir um CR novo: adicionar aqui, mover o mais antigo dos 5 para o INDEX.md.
 
-- CR-053: Revisão em massa da importação (F07, item E-C do [roadmap v2](docs/F07-v2-roadmap-importacao.md) — frente frontend) — busca por descrição (insensível a caixa/acento, casando o texto da IA ou o editado), chips de filtro por grupo, edição em lote de categoria/subcategoria/método/ação e totais por grupo/alvo/lote; `ImportReview` dividido em Row (`React.memo`)/Group/Toolbar (441 → 174 linhas); **o filtro é a seleção** (sem checkbox de seleção por linha) e marcar em lote exclui duplicadas; sem backend e sem migration; 50 testes Vitest (70 → 120) (concluido)
 - CR-054: Memória de categorização da importação (F07, item E-C do [roadmap v2](docs/F07-v2-roadmap-importacao.md) — frente backend, **fecha a E-C**) — confirmar um gasto diário grava uma regra por usuário (`import_category_rules`, migration 012) ligando o padrão do descritor do documento à decisão revisada; na importação seguinte a regra sobrescreve o palpite da IA e a linha ganha o badge "aprendido". `normalize_pattern()` é **função nova** — `normalize_description` alimenta fingerprints já persistidos (RN-042) e não pode mudar; match exato sem fallback por prefixo (`UBER *TRIP` ≠ `UBER *EATS`) e descritor genérico ("PIX ENVIADO") não vira regra; `descricao_original` persistida porque dedup e realimentação dependem do texto cru; em fatura o método do documento vence a regra; RN-049; 27 testes backend (202 → 230) + 10 Vitest (120 → 130) (concluido)
 - CR-055: Detecção de planejado já pago na importação (F07, recorte do **B-6** do [roadmap v2](docs/F07-v2-roadmap-importacao.md)) — transação que corresponde a um gasto planejado **já Pago** chegava como gasto diário marcada e confirmar duplicava o valor (a dedup RN-042 só compara com transações importadas, não com lançamentos manuais). Detecção **determinística** depois da IA (valor ±R$ 1,00, ±7 dias do vencimento), **sem tocar no prompt** e **sem migration** (reusa `expense_id_sugerido`); grupo próprio "Já lançados" nascendo desmarcado e fora do marcar-em-lote. Atribuição **global** — casar na ordem das linhas invertia o CR, deixando a duplicata real marcada; confirm passa a recusar (422) conciliar planejado já Pago; RN-050; 21 testes backend (230 → 251) + 8 Vitest (130 → 138) (concluido)
 - CR-056: Histórico e desfazer da importação (F07, primeira metade do **E-D** do [roadmap v2](docs/F07-v2-roadmap-importacao.md); a reconciliação de total vai no CR-057) — `GET /api/imports` paginado, `GET /{id}/undo-preview` e `POST /{id}/undo`. O confirm grava um **diário de efeitos** (`import_effects`, migration 013, ADR-022) em vez de confiar nos IDs de auditoria: eles registram só a âncora da série e, na RN-046, apontam para parcela **pré-existente** — o undo a apagaria. Edição posterior detectada por **assinatura** com `Pendente`≡`Atrasado` (a RF-05 alterna sozinha); alterado é mantido, apagado é reportado; transação `revertida` sai da dedup só se nada dela ficou (RN-052); lotes dependentes exigem ordem inversa (409); lote anterior ao CR não é desfazível; regras aprendidas não revertem; `valor` do confirm arredondado a 2 casas antes de gravar; RN-051/052; 40 testes backend (251 → 291) + 19 Vitest (138 → 157) (concluido)
 - CR-057: Reconciliação de total do documento na importação (F07, segunda metade do **E-D** do [roadmap v2](docs/F07-v2-roadmap-importacao.md) — **fecha o E-D**) — a IA devolve a `natureza` (débito/crédito) de cada transação e o total de débitos **copiado** do resumo do documento (nunca somado por ela); a revisão avisa "faltam R$ X"/"passa em R$ X" comparando com os débitos **listados com os valores já corrigidos** (recalculado ao vivo) e marca linhas de crédito como "entrada". Só débitos (o total líquido misturaria saldo anterior e pagamentos); total só como número JSON (`"3.412"` em pt-BR é três mil); informativo, não bloqueia o confirm; migration 014; RN-053; 17 testes backend (291 → 308) + 14 Vitest (157 → 171) (concluido)
+- CR-058: Token de integração e API para o Lumi (RF-22, companion de voz do dono, CR-014 do projeto ai-companion-esp32) — token gerado no Perfil (seção "Integrações"), mostrado uma vez, guardado só como hash (`integration_tokens`, migration 015, ADR-023), revogável, até 5 ativos; API própria `/api/integration/v1` (categorias, lançar gasto diário, resumo por período, resumo do mês, despesas planejadas e status Pago/Pendente) que o JWT não abre e cujo token não abre o app; limite antes da autenticação, 60/min por token somando as rotas e 120/min por IP (`limits`); horários do token em UTC com o fuso; validação do gasto compartilhada com a rota do app (`services.new_daily_expense`); RN-054; 31 testes backend (308 → 339) + 10 Vitest (171 → 181) (concluido)
 
 ---
 

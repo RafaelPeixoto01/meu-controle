@@ -27,6 +27,8 @@ import type {
   ImportUndoPreview,
   ImportUndoResponse,
   ImportUploadResponse,
+  IntegrationToken,
+  IntegrationTokenCreated,
 } from "../types";
 
 const BASE_URL = "/api";
@@ -350,4 +352,21 @@ export function updateAlertsConfig(data: Partial<ConfiguracaoAlertas>): Promise<
     method: "PUT",
     body: JSON.stringify(data),
   });
+}
+
+// ========== Integracao com o Lumi (CR-058) ==========
+
+export function fetchIntegrationTokens(): Promise<IntegrationToken[]> {
+  return request<IntegrationToken[]>("/integration-tokens");
+}
+
+export function createIntegrationToken(name: string): Promise<IntegrationTokenCreated> {
+  return request<IntegrationTokenCreated>("/integration-tokens", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function revokeIntegrationToken(tokenId: string): Promise<void> {
+  return request<void>(`/integration-tokens/${tokenId}`, { method: "DELETE" });
 }
