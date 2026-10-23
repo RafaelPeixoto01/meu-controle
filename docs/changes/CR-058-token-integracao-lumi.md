@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 2026-10-23
-**Status:** Em Implementação
+**Status:** Concluído
 **Autor:** Rafael (via Claude)
 **Prioridade:** Média
 
@@ -315,3 +315,4 @@ CREATE INDEX ix_integration_tokens_user_id ON integration_tokens (user_id);
 | 2026-10-23 | Rafael (via Claude) | CR aprovado pelo dono; implementação iniciada. CR-T-01: PRD 3.8, Arquitetura 3.6 (ADR-023), specs/11-integracao-lumi.md, índice 3.5, Deploy Guide (migration 015). O resumo do mês ganhou `saldo_apos_diarios` e o limite de meses |
 | 2026-10-23 | Rafael (via Claude) | CR-T-02 a CR-T-06: backend (migration 015, autenticação, gestão, API de integração), seção "Integrações" do Perfil e validação em runtime com banco local (§11), que trouxe dois ajustes na tela. Testes: backend 332 (308 + 24), frontend 176 (171 + 5) |
 | 2026-10-23 | Rafael (via Claude) | CR-T-07: revisão de código (15 findings: 12 corrigidos, 3 justificados, §12) e de segurança (§13); spec 11, PRD (RN-054) e Arquitetura (ADR-023) com os ajustes. Testes: backend 339, frontend 181. Aguardando o dono liberar o merge (publica no Railway) |
+| 2026-10-23 | Rafael (via Claude) | Merge em `master` e publicação no Railway autorizados pelo dono — status: ✅. Fica o CR-T-08: o dono gera o token em produção quando o CR-014 do Lumi estiver pronto |
