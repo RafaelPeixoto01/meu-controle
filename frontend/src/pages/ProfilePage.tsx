@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { updateProfile, changePassword } from "../services/authApi";
+import IntegrationTokens from "../components/IntegrationTokens";
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
@@ -229,6 +230,9 @@ export default function ProfilePage() {
           </div>
         </form>
       </div>
+
+      {/* CR-058: tokens de integracao do Lumi */}
+      <IntegrationTokens />
     </div>
   );
 }

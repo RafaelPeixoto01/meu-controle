@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchMonthlySummary, deleteExpense, uploadImport } from "./api";
+import {
+  fetchMonthlySummary,
+  deleteExpense,
+  uploadImport,
+  fetchIntegrationTokens,
+  createIntegrationToken,
+  revokeIntegrationToken,
+} from "./api";
 
 // Response minima compativel com o que request() consome
 function makeResponse(status: number, body?: unknown): Response {
@@ -170,5 +177,29 @@ describe("requestMultipart — upload de importacao (CR-047)", () => {
 
     await expect(uploadImport(pdfFile)).rejects.toThrow("Sessão expirada");
     expect(localStorage.getItem("access_token")).toBeNull();
+  });
+});
+
+describe("tokens de integracao do Lumi (CR-058)", () => {
+  it("lista, cria com o nome e revoga pelas rotas do Perfil", async () => {
+    localStorage.setItem("access_token", "tok-123");
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(200, []))
+      .mockResolvedValueOnce(makeResponse(201, { id: "t1", token: "mc_x" }))
+      .mockResolvedValueOnce(makeResponse(204));
+
+    await fetchIntegrationTokens();
+    const created = await createIntegrationToken("Lumi");
+    await revokeIntegrationToken("t1");
+
+    expect(created.token).toBe("mc_x");
+    expect(fetchMock.mock.calls.map((c) => [c[0], c[1].method ?? "GET"])).toEqual([
+      ["/api/integration-tokens", "GET"],
+      ["/api/integration-tokens", "POST"],
+      ["/api/integration-tokens/t1", "DELETE"],
+    ]);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ name: "Lumi" });
+    // o token criado nao vai para o localStorage
+    expect(Object.keys(localStorage)).toEqual(["access_token"]);
   });
 });
