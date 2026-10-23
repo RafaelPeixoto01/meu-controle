@@ -231,9 +231,37 @@ CREATE INDEX ix_integration_tokens_user_id ON integration_tokens (user_id);
 
 ---
 
+## 11. Validação em runtime (2026-10-23)
+
+**Ambiente:**
+- Backend e frontend locais (`uvicorn` na 8000 e `npm run dev` na 5173), com um SQLite novo no scratchpad.
+- `DATABASE_URL` sobrescrito e conferido com `engine.url` antes de qualquer escrita, por causa do incidente do CR-049. `alembic upgrade head` até a 015.
+- Usuário de teste cadastrado pela API local, uma despesa planejada e uma receita criadas pelas rotas do app, e o Playwright no Perfil.
+- Os tokens foram lidos e usados dentro do mesmo script, sem aparecer na saída.
+
+| # | Roteiro | Resultado |
+|---|---|---|
+| 1 | Perfil (pelo menu do usuário) → "Gerar token para o Lumi" | Quadro com o token (`mc_` + 43 caracteres), o aviso "Guarde agora" e "Copiar" |
+| 2 | API de integração com o token | `/categories` 200 (6 formas de pagamento). `POST /daily-expenses` (Padaria, 45, Pix, hoje) 201, com categoria Alimentação e `mes_referencia` do mês. Subcategoria "Padoca" 422 |
+| 3 | Resumo e mês | `/daily-expenses/summary` do mês: total 45, 1 gasto, `{Padaria: 45}`. `/months` do mês: receitas 5000, planejadas 350, diários 45, saldo livre 4650, saldo após diários 4605. Mês do ano seguinte: 422 |
+| 4 | Contas | `/expenses` do mês: Energia elétrica e Internet, Pendente. `PATCH` para Pago: 200. `PATCH` com `valor`: 422 |
+| 5 | Acesso cruzado | JWT do login em `/api/integration/v1/categories`: 401. Token de integração em `/api/months/...`: 401. O token não ficou no `localStorage` |
+| 6 | Fechar o quadro | O token some da página; a lista mostra só `mc_<prefixo>…`, "criado em …" e "nunca usado"; o token inteiro não está no HTML |
+| 7 | Usar o token, sair do Perfil e voltar | "último uso em 23/10/2026 13:25". Na primeira tentativa a lista continuou "nunca usado" por 5 min (cache do TanStack Query): **corrigido** com a busca a cada abertura do Perfil (commit `296db7d`) |
+| 8 | "Revogar" com confirmação | O diálogo dizia "Excluir": **corrigido** com o rótulo "Revogar" (`confirmLabel`, commit `296db7d`). Depois de revogar, "Nenhuma integração ativa." e o mesmo token passa a dar 401 |
+| 9 | Gastos Diários do app | O gasto lançado pela integração aparece (Padaria, R$ 45,00) |
+| 10 | Banco | `last_used_at` e `revoked_at` gravados; só o hash e o prefixo, nunca o token |
+| 11 | Console do navegador e log do backend | Sem erros nem avisos. O log de acesso do uvicorn mostra caminhos e status, nunca o token (ele vai no cabeçalho) |
+| 12 | Migration | `alembic upgrade head` → 015; `alembic downgrade -1` → 014, sem a tabela; `upgrade` de novo → 015, num SQLite descartável |
+
+**Fora do escopo, comportamento que já existia:** abrir `/profile` direto na barra de endereço (ou recarregar a página nele) volta para "/". Pelo menu do usuário, o Perfil abre normalmente. Não foi mexido.
+
+---
+
 ## Changelog
 
 | Data | Autor | Descrição |
 |---|---|---|
 | 2026-10-23 | Rafael (via Claude) | CR criado com as decisões do dono para a integração com o Lumi (CR-014 do Lumi) |
 | 2026-10-23 | Rafael (via Claude) | CR aprovado pelo dono; implementação iniciada. CR-T-01: PRD 3.8, Arquitetura 3.6 (ADR-023), specs/11-integracao-lumi.md, índice 3.5, Deploy Guide (migration 015). O resumo do mês ganhou `saldo_apos_diarios` e o limite de meses |
+| 2026-10-23 | Rafael (via Claude) | CR-T-02 a CR-T-06: backend (migration 015, autenticação, gestão, API de integração), seção "Integrações" do Perfil e validação em runtime com banco local (§11), que trouxe dois ajustes na tela. Testes: backend 332 (308 + 24), frontend 176 (171 + 5) |

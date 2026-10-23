@@ -78,7 +78,7 @@ IntegrationExpense = {id, nome, valor, vencimento, status, categoria|null, subca
 
 ## Frontend — seção "Integrações" do Perfil
 
-- Lista: nome, `mc_<prefix>…`, "criado em", "último uso" (ou "nunca usado") e "Revogar", com `window.confirm`.
+- Lista: nome, `mc_<prefix>…`, "criado em", "último uso" (ou "nunca usado") e "Revogar", com o `ConfirmDialog` do app (botão "Revogar", pelo `confirmLabel` opcional, que tem "Excluir" como padrão). A lista busca de novo toda vez que o Perfil abre (`staleTime: 0`), porque o "último uso" muda fora da tela.
 - "Gerar token para o Lumi": campo de nome (padrão "Lumi") e o botão. O token criado aparece num quadro com "Copiar" e o aviso "Guarde agora: ele não aparece de novo". Fechar o quadro some com o token da memória da página.
 - Sem tokens: "Nenhuma integração ativa." Com 5 ativos, o botão fica desabilitado, com o motivo.
 - O token nunca vai para o `localStorage`.
