@@ -278,7 +278,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 - O token aparece **uma vez**, na criacao, com botao "Copiar". O banco guarda so o hash SHA-256 e os 8 primeiros caracteres para identificar na lista. Revogado, deixa de valer na hora; apagar a conta apaga os tokens.
 - O token so abre a API de integracao (`/api/integration/v1`): categorias, lancar gasto diario, resumo de gastos diarios por periodo, resumo do mes, despesas planejadas do mes e mudanca do status de uma despesa planejada para Pago ou Pendente. Nao apaga, nao edita valores, nao mexe em receitas, importacao, score, alertas nem perfil.
 - O token de integracao nao abre as rotas do app, e o JWT do login nao abre as rotas de integracao.
-- Limite de 60 chamadas por minuto por token; `last_used_at` registra o ultimo uso.
+- Limite de 60 chamadas por minuto por token (somando todas as rotas) e 120 por minuto por IP, checado antes da autenticacao; `last_used_at` registra o ultimo uso, mostrado no fuso de quem ve.
 - Marcar como pago so registra o status: o Meu Controle nao paga nada.
 - O Lumi (projeto ai-companion-esp32, CR-014 de la) pede a confirmacao do usuario antes de gravar.
 
@@ -548,7 +548,7 @@ O **Meu Controle** e uma aplicacao web que digitaliza o fluxo de planejamento e 
 | RN-051 | Desfazer um lote confirmado remove os lancamentos que ele criou e restaura status e valor dos planejados que ele conciliou. Lancamento alterado depois da importacao e mantido; lancamento ja apagado e apenas reportado. Regras de categorizacao aprendidas nao sao revertidas. So lotes confirmados a partir do CR-056 (com registro do que gravaram) podem ser desfeitos, e entre lotes dependentes (o mais recente alterou lancamentos do mais antigo) o mais recente deve ser desfeito primeiro | Importacao (RF-21, CR-056) |
 | RN-052 | Transacao de lote desfeito passa a `revertida` e deixa de contar para a deduplicacao (RN-042), permitindo reimportar o documento — exceto quando algum lancamento dela foi mantido pelo undo, caso em que continua confirmada e segue protegida contra reimportacao | Importacao (RF-21, CR-056) |
 | RN-053 | A revisao da importacao confere a soma dos debitos listados com o total de debitos impresso no documento — copiado pela IA do resumo do documento, nunca somado por ela. Divergencia e sinalizada e nao bloqueia a confirmacao; sem total impresso ou sem a direcao (debito/credito) de alguma transacao, nao ha conferencia | Importacao (RF-21, CR-057) |
-| RN-054 | Token de integracao: aparece uma unica vez, e guardado so como hash, vale ate ser revogado e abre apenas a API de integracao, com os dados do proprio usuario. O JWT do login nao abre a API de integracao, e o token nao abre as rotas do app. Ate 5 ativos por usuario e 60 chamadas por minuto por token | Integracao com o Lumi (RF-22, CR-058) |
+| RN-054 | Token de integracao: aparece uma unica vez, e guardado so como hash, vale ate ser revogado e abre apenas a API de integracao, com os dados do proprio usuario. O JWT do login nao abre a API de integracao, e o token nao abre as rotas do app. Ate 5 ativos por usuario, 60 chamadas por minuto por token (somando as rotas) e 120 por minuto por IP. O lancamento pela integracao aceita valor ate R$ 50.000 e data de ate um ano atras | Integracao com o Lumi (RF-22, CR-058) |
 
 ---
 

@@ -702,7 +702,7 @@ AlertaEstado (N) ---- pertence a ----> Mes de referencia (1)
 - **Armazenamento frontend (CR-010):** Access token em `localStorage` (incluso automaticamente via wrapper `request()` em `api.ts`). Refresh token em HttpOnly cookie — inacessivel via JavaScript, enviado automaticamente pelo browser nas chamadas a `/api/auth/refresh` e `/api/auth/logout`.
 - **Security headers (CR-010):** `SecurityHeadersMiddleware` adiciona `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` em todas as respostas.
 - **CORS (CR-010):** Headers restritos a `["Authorization", "Content-Type"]`. Origins configuravel via env var `ALLOWED_ORIGINS` (CSV, default `http://localhost:5173`).
-- **Token de integracao (CR-058, ADR-023):** `mc_` + `secrets.token_urlsafe(32)`, gravado so como SHA-256. `get_integration_user` (em `auth.py`) so aceita esse formato, nas rotas `/api/integration/v1`; o JWT do login e recusado ali, e o token de integracao nao passa no `get_current_user` (nao e um JWT). Limite de 60/min por token (slowapi, chave = hash do token).
+- **Token de integracao (CR-058, ADR-023):** `mc_` + `secrets.token_urlsafe(32)`, gravado so como SHA-256. `get_integration_user` (em `auth.py`) so aceita esse formato, nas rotas `/api/integration/v1`; o JWT do login e recusado ali, e o token de integracao nao passa no `get_current_user` (nao e um JWT). Limite (`rate_limit.integration_rate_limit`, dependencia do router, antes da autenticacao): 60/min por token, somando as rotas, e 120/min por IP, com a biblioteca `limits` (a do slowapi, agora fixada em `requirements.txt`). Horarios do token em UTC (`models.utc_now`), devolvidos com o fuso.
 
 ### Estilo de Codigo
 
@@ -1026,7 +1026,7 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
 - **Consequencias:**
   - Um contrato estavel para o Lumi, separado das rotas que o frontend muda; mudancas incompativeis viram `/v2`.
   - O token nao expira sozinho (uso continuo); a revogacao e manual, e `last_used_at` ajuda a perceber uso estranho.
-  - Limite de chamadas por token, nao por IP: o Lumi roda numa unica origem (Railway).
+  - Limite de chamadas por token (somando as rotas) e por IP (contra tokens inventados), checado antes da autenticacao. O limite do slowapi por rota (`@limiter.limit`) foi descartado na revisao de codigo do CR-058: contava cada rota a parte e rodava depois da autenticacao.
 
 ---
 

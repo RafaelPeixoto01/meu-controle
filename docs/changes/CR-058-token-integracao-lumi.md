@@ -60,7 +60,7 @@ O dono quer lançar e consultar gastos por voz, pelo Lumi, sem abrir o app. O se
 | 2 | Perfil | Dados, senha | + seção "Integrações": gerar, listar e revogar tokens |
 | 3 | API | Rotas da aplicação, com JWT | + `/api/integration-tokens` (gestão, com JWT) e `/api/integration/v1/*` (uso, só com token de integração) |
 | 4 | Autenticação | `get_current_user` (JWT) | + `get_integration_user`: hash do token, não revogado, usuário existente; atualiza `last_used_at` |
-| 5 | Limite de chamadas | Só no login e na recuperação de senha | + 60/min por token nas rotas de integração |
+| 5 | Limite de chamadas | Só no login e na recuperação de senha | + nas rotas de integração, antes da autenticação: 60/min por token (somando as rotas) e 120/min por IP |
 
 ### 4.2 Token
 
@@ -85,7 +85,7 @@ Prefixo `/api/integration/v1`. O JWT do login é recusado (401), e o token de in
 | Método | Path | Uso no Lumi | Detalhe |
 |---|---|---|---|
 | `GET` | `/categories` | Lista para a IA escolher a subcategoria | `{categorias: {categoria: [subcategorias]}, metodos_pagamento: [...]}` (o mesmo de `/api/daily-expenses/categories`) |
-| `POST` | `/daily-expenses` | "Anota 45 de padaria no Pix" | Body `DailyExpenseCreate` (`descricao`, `valor`, `data`, `subcategoria`, `metodo_pagamento`); `mes_referencia` = mês de `data`; as mesmas validações da rota atual. 201 com o gasto |
+| `POST` | `/daily-expenses` | "Anota 45 de padaria no Pix" | Body `DailyExpenseCreate` (`descricao`, `valor`, `data`, `subcategoria`, `metodo_pagamento`); `mes_referencia` = mês de `data`; as mesmas validações da rota atual, mais valor até 50.000 e data de até um ano atrás (não futura). 201 com o gasto |
 | `GET` | `/daily-expenses/summary?de=AAAA-MM-DD&ate=AAAA-MM-DD[&categoria=][&subcategoria=]` | "Quanto gastei com mercado este mês?" | `{de, ate, total, quantidade, por_categoria: {..}, por_subcategoria: {..}}`; até 93 dias por consulta (422 acima disso) |
 | `GET` | `/months/{year}/{month}` | "Como estou este mês?" | `{mes_referencia, total_receitas, total_despesas, total_gastos_diarios, saldo_livre, saldo_apos_diarios, total_pago, total_pendente, total_atrasado}`: o saldo livre da Visão Mensal (receitas − planejadas) e o do Dashboard (− gastos diários) |
 | `GET` | `/expenses/{year}/{month}` | "A conta de luz já foi paga?" | `[{id, nome, valor, vencimento, status, categoria, subcategoria, parcela_atual, parcela_total}]`: as despesas planejadas do mês, com a transição de mês e o status automático de sempre (RF-05) |
@@ -171,20 +171,20 @@ CREATE INDEX ix_integration_tokens_user_id ON integration_tokens (user_id);
 
 ## 8. Critérios de Aceite
 
-- [ ] O token aparece uma vez na criação; o banco guarda só o hash e o prefixo
-- [ ] Token válido abre as rotas de integração; revogado, inexistente ou JWT do login → 401
-- [ ] Token de integração nas rotas comuns → 401
-- [ ] As seis rotas do §4.4 respondem conforme o contrato, só com os dados do dono do token
-- [ ] `PATCH /expenses/{id}` só muda o status, para Pago ou Pendente
-- [ ] Mais de 60 chamadas por minuto com o mesmo token → 429
-- [ ] Perfil: gerar, copiar, listar e revogar, com até 5 ativos
-- [ ] `last_used_at` atualizado no uso
-- [ ] Testes existentes continuam passando (regressão)
-- [ ] Novos testes cobrem a mudança
-- [ ] Fluxo afetado exercitado em runtime antes do merge, com banco local — registrar o que foi validado (CR-037)
-- [ ] Revisão de código pré-merge (`/code-review` no diff da branch), com findings corrigidos ou justificados (CR-040)
-- [ ] Revisão de segurança (checklist OWASP do CLAUDE.md): nova forma de autenticação, rotas novas, dados financeiros
-- [ ] Documentos afetados foram atualizados
+- [x] O token aparece uma vez na criação; o banco guarda só o hash e o prefixo (testes de gestão; runtime 1, 6 e 10)
+- [x] Token válido abre as rotas de integração; revogado, inexistente ou JWT do login → 401 (testes de autenticação; runtime 5 e 8)
+- [x] Token de integração nas rotas comuns → 401 (testes; runtime 5)
+- [x] As seis rotas do §4.4 respondem conforme o contrato, só com os dados do dono do token (testes das rotas; runtime 2 a 4)
+- [x] `PATCH /expenses/{id}` só muda o status, para Pago ou Pendente (testes; runtime 4)
+- [x] Mais de 60 chamadas por minuto com o mesmo token → 429, somando as rotas, e 120 por IP (testes; ajuste da revisão, §12)
+- [x] Perfil: gerar, copiar, listar e revogar, com até 5 ativos (Vitest do componente; runtime 1, 6 a 8)
+- [x] `last_used_at` atualizado no uso (teste; runtime 7 e 10)
+- [x] Testes existentes continuam passando (regressão): backend 339 (308 antes do CR + 31 novos), frontend 181 (171 + 10); `tsc` limpo; ESLint sem erros (os 9 avisos já existiam)
+- [x] Novos testes cobrem a mudança: `test_integration_tokens.py` (6), `test_integration_api.py` (25), `integrationTokens.test.ts` (4), `api.test.ts` (+1), `IntegrationTokens.test.tsx` (5)
+- [x] Fluxo afetado exercitado em runtime antes do merge, com banco local (§11)
+- [x] Revisão de código pré-merge (`/code-review` no diff da branch): 15 findings, 12 corrigidos e 3 justificados (§12)
+- [x] Revisão de segurança (checklist OWASP do CLAUDE.md) executada (§13)
+- [x] Documentos afetados foram atualizados: PRD 3.8, Arquitetura 3.6 (ADR-023), specs/11-integracao-lumi.md, índice 3.5, Deploy Guide (migration 015), CLAUDE.md
 
 > **Regra de conclusão (CR-037):** o Status deste CR só pode ser "Concluído" quando todos os critérios acima estiverem `[x]` ou riscados com justificativa. O CR-T-08 depende do dono e do CR-014 do Lumi e não bloqueia a conclusão.
 
@@ -258,6 +258,55 @@ CREATE INDEX ix_integration_tokens_user_id ON integration_tokens (user_id);
 
 ---
 
+## 12. Revisão de código (2026-10-23)
+
+`/code-review` sobre `master...feat/CR-058-token-integracao-lumi`: 15 findings, 12 corrigidos e 3 justificados (commit `7b73b5e`).
+
+| # | Finding | Decisão |
+|---|---|---|
+| 1 | O limite do slowapi contava cada rota à parte: 60/min em cada uma das seis, ~360/min por token | **Corrigido:** um limite só para o router (`integration_rate_limit`, dependência do router), somando as rotas (teste com chamadas em rotas alternadas) |
+| 2 | A chave era o hash do cabeçalho inteiro: `bearer` minúsculo abria outro contador | **Corrigido:** a chave é o hash do token, lido com `get_authorization_scheme_param` (teste com `bearer`) |
+| 3 | Ano 10000 dava 500 (`date()` fora do intervalo) | **Corrigido:** ano de 2000 até o atual + 1 antes de montar a data (teste) |
+| 4 | Filtro de categoria ou subcategoria inexistente respondia total 0 com 200, e o Lumi diria "R$ 0" | **Corrigido:** 422 para o que não existe; filtro vazio é ignorado (teste) |
+| 5 | O limite rodava depois da autenticação: tokens inventados nunca eram limitados, e um token acima do limite ainda fazia as consultas e gravava `last_used_at` | **Corrigido:** o limite roda antes da autenticação, com 120/min por IP para os tokens inventados (teste com 121 tokens falsos) |
+| 6 | Duplo clique em "Revogar" mandava dois DELETE, e o segundo mostrava "Token não encontrado" | **Corrigido:** o diálogo fecha antes da chamada (teste do componente) |
+| 7 | Horários gravados com `datetime.now()` do servidor: no Railway (UTC), "último uso" apareceria 3 h adiantado; e `_month` usa a data UTC | **Corrigido** na exibição: horários do token em UTC (`utc_now`), devolvidos com o fuso, mostrados no fuso do navegador (teste). **Justificado** no `_month`: "hoje" é a data do servidor em todo o app (RF-05, transição de mês); a diferença é deixar gerar o mês seguinte 3 h antes no último dia do mês |
+| 8 | Limite de 5 tokens é "conta e insere", sem trava: dois POST simultâneos chegam a 6 | **Justificado:** é um limite de organização para um usuário só; o botão fica desligado durante a criação; o pior caso é um token a mais, revogável, sem impacto de segurança |
+| 9 | O POST aceitava qualquer valor (estouro do `numeric(10,2)` dava 500 no PostgreSQL) e qualquer data | **Corrigido:** valor até 50.000 e data de 366 dias atrás até amanhã, 422 fora disso (testes) |
+| 10 | Desmarcar uma conta vencida respondia "Pendente", mas o app mostraria "Atrasado" | **Corrigido:** o status passa pelo RF-05 antes de responder (teste) |
+| 11 | O quadro "Guarde agora" continuava mostrando um token já revogado | **Corrigido:** revogar o token recém-gerado o tira da tela (teste do componente) |
+| 12 | O teste do limite usava uma rota só; faltavam testes do componente | **Corrigido:** teste com rotas alternadas e `IntegrationTokens.test.tsx` (5 testes, `react-dom` + `act`, sem dependência nova) |
+| 13 | `mes_referencia` tirado do corpo (a data), contra a convenção "derivado do path" | **Justificado:** de propósito, como na importação (RF-21): o Lumi não escolhe mês, e o mês vem da data do gasto. A exceção ficou escrita na spec 11 |
+| 14 | Validação do gasto diário copiada da rota do app | **Corrigido:** `services.new_daily_expense`, usada pelas duas rotas (teste da rota do app). O dicionário de `/categories` (duas linhas com as mesmas constantes) ficou nas duas rotas |
+| 15 | Seis decorators copiados em vez de um mecanismo do router | **Corrigido** com o item 1 |
+
+**Depois das correções:** backend 339 testes e frontend 181, `tsc` limpo, sem avisos novos do ESLint. O `limits` (já instalado com o slowapi) virou dependência direta, fixada em `requirements.txt`.
+
+---
+
+## 13. Revisão de segurança (checklist OWASP do CLAUDE.md)
+
+- [x] **Sem segredos no código.** O token é gerado com `secrets.token_urlsafe(32)` e gravado só como SHA-256. Na validação, os tokens de teste foram usados dentro do mesmo script e nunca impressos.
+- [x] **Entradas validadas por Pydantic.**
+  - `IntegrationTokenCreate`: nome de 1 a 40 caracteres, sem só espaços.
+  - `IntegrationExpenseStatusUpdate`: `extra=forbid`, só Pago ou Pendente.
+  - O resumo e o POST têm checagens próprias de período, filtros, valor e data.
+- [x] **Tokens fora do `localStorage`.** O token gerado fica só na memória da página, até fechar o quadro (teste e runtime). O JWT continua como antes.
+- [x] **Dono conferido.**
+  - Leituras e escritas filtram pelo `user_id` do token.
+  - `PATCH` de despesa e revogação de token de outro usuário dão 404 (testes).
+  - O token de integração não abre as rotas do app, e o JWT não abre as de integração.
+- [x] **ORM parametrizado**, sem SQL montado à mão.
+- [x] **CORS e cabeçalhos.** Sem mudança: o Lumi chama de servidor para servidor, sem cookie. O `SecurityHeadersMiddleware` continua em todas as respostas.
+- [x] **Limite de chamadas.** 60/min por token e 120/min por IP, antes da autenticação. O token vale 256 bits aleatórios, o que torna adivinhar inviável, e o limite por IP segura enxurradas.
+- [x] **Dependências.** Nenhum pacote novo instalado: `limits==5.*` já vinha com o `slowapi==0.1.*` e agora está fixado. O `pip-audit` local esbarra no certificado interceptado (problema conhecido); a auditoria roda no CI, no push.
+- [x] **Dados financeiros.**
+  - A API devolve só os campos necessários: despesa sem `recorrente`, `created_at` nem `mes_referencia`; gasto como no app.
+  - O log de acesso do uvicorn mostra caminho e status, nunca o token, que vai no cabeçalho.
+  - Revogar corta o acesso na hora.
+
+---
+
 ## Changelog
 
 | Data | Autor | Descrição |
@@ -265,3 +314,4 @@ CREATE INDEX ix_integration_tokens_user_id ON integration_tokens (user_id);
 | 2026-10-23 | Rafael (via Claude) | CR criado com as decisões do dono para a integração com o Lumi (CR-014 do Lumi) |
 | 2026-10-23 | Rafael (via Claude) | CR aprovado pelo dono; implementação iniciada. CR-T-01: PRD 3.8, Arquitetura 3.6 (ADR-023), specs/11-integracao-lumi.md, índice 3.5, Deploy Guide (migration 015). O resumo do mês ganhou `saldo_apos_diarios` e o limite de meses |
 | 2026-10-23 | Rafael (via Claude) | CR-T-02 a CR-T-06: backend (migration 015, autenticação, gestão, API de integração), seção "Integrações" do Perfil e validação em runtime com banco local (§11), que trouxe dois ajustes na tela. Testes: backend 332 (308 + 24), frontend 176 (171 + 5) |
+| 2026-10-23 | Rafael (via Claude) | CR-T-07: revisão de código (15 findings: 12 corrigidos, 3 justificados, §12) e de segurança (§13); spec 11, PRD (RN-054) e Arquitetura (ADR-023) com os ajustes. Testes: backend 339, frontend 181. Aguardando o dono liberar o merge (publica no Railway) |
