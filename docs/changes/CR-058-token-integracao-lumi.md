@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 2026-10-23
-**Status:** Concluído
+**Status:** Em Implementação (publicação no Railway em conferência)
 **Autor:** Rafael (via Claude)
 **Prioridade:** Média
 
@@ -316,3 +316,4 @@ CREATE INDEX ix_integration_tokens_user_id ON integration_tokens (user_id);
 | 2026-10-23 | Rafael (via Claude) | CR-T-02 a CR-T-06: backend (migration 015, autenticação, gestão, API de integração), seção "Integrações" do Perfil e validação em runtime com banco local (§11), que trouxe dois ajustes na tela. Testes: backend 332 (308 + 24), frontend 176 (171 + 5) |
 | 2026-10-23 | Rafael (via Claude) | CR-T-07: revisão de código (15 findings: 12 corrigidos, 3 justificados, §12) e de segurança (§13); spec 11, PRD (RN-054) e Arquitetura (ADR-023) com os ajustes. Testes: backend 339, frontend 181. Aguardando o dono liberar o merge (publica no Railway) |
 | 2026-10-23 | Rafael (via Claude) | Merge em `master` e publicação no Railway autorizados pelo dono — status: ✅. Fica o CR-T-08: o dono gera o token em produção quando o CR-014 do Lumi estiver pronto |
+| 2026-10-23 | Rafael (via Claude) | **Correção:** o push do merge (`bcb3426`) não publicou no Railway: a última versão no ar continuou a de 2026-09-25, e `GET /api/integration/v1/categories` sem token devolvia 200 com a página do app (com o CR-058, 401). Causa provável: o incidente de segurança do Railway de 2026-10-21, que apagou os tokens do GitHub guardados por ele. O dono reconectou o GitHub ao serviço em 2026-10-23, e o push deste registro publica o CR-058. O status volta a Em Implementação até conferir a publicação (critério "Railway publicado" do CR-T-07) |
