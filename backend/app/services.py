@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from collections import defaultdict
 
 from app import crud
-from app.models import Expense, ExpenseStatus, Income
+from app.models import DailyExpense, Expense, ExpenseStatus, Income
+from app.categories import get_category_for_subcategory, is_valid_payment_method
 from app.utils import add_months
 
 logger = logging.getLogger(__name__)
@@ -798,6 +799,26 @@ def get_daily_expenses_monthly_summary(db: Session, mes_referencia: date, user_i
 
 
 # ========== Integracao com o Lumi (CR-058) ==========
+
+def new_daily_expense(user_id: str, data, mes_referencia: date) -> DailyExpense:
+    """Valida subcategoria e forma de pagamento e monta o gasto diario, para o app (CR-005) e a
+    integracao (CR-058) seguirem as mesmas regras. Invalido: ValueError com a mensagem do 422."""
+    categoria = get_category_for_subcategory(data.subcategoria)
+    if categoria is None:
+        raise ValueError(f"Subcategoria inválida: {data.subcategoria}")
+    if not is_valid_payment_method(data.metodo_pagamento):
+        raise ValueError(f"Método de pagamento inválido: {data.metodo_pagamento}")
+    return DailyExpense(
+        user_id=user_id,
+        mes_referencia=mes_referencia,
+        descricao=data.descricao,
+        valor=data.valor,
+        data=data.data,
+        categoria=categoria,
+        subcategoria=data.subcategoria,
+        metodo_pagamento=data.metodo_pagamento,
+    )
+
 
 def get_daily_expenses_period_summary(
     db: Session,

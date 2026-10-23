@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from app.models import ExpenseStatus
@@ -770,7 +770,7 @@ class IntegrationTokenCreate(BaseModel):
 
 
 class IntegrationTokenResponse(BaseModel):
-    """Token na lista do Perfil: nunca o token em si."""
+    """Token na lista do Perfil: nunca o token em si. Horarios em UTC, com o fuso na resposta."""
     model_config = {"from_attributes": True}
 
     id: str
@@ -778,6 +778,11 @@ class IntegrationTokenResponse(BaseModel):
     prefix: str
     created_at: datetime
     last_used_at: Optional[datetime] = None
+
+    @field_validator("created_at", "last_used_at")
+    @classmethod
+    def as_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        return value.replace(tzinfo=timezone.utc) if value and value.tzinfo is None else value
 
 
 class IntegrationTokenCreated(IntegrationTokenResponse):

@@ -3,15 +3,13 @@
 Rotas do app (JWT do login): gerar, listar e revogar. O token aparece uma vez so,
 na criacao; o banco guarda o hash e o prefixo.
 """
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.auth import generate_integration_token, get_current_user
 from app.database import get_db
-from app.models import IntegrationToken, User
+from app.models import IntegrationToken, User, utc_now
 from app.schemas import IntegrationTokenCreate, IntegrationTokenCreated, IntegrationTokenResponse
 
 router = APIRouter(prefix="/api/integration-tokens", tags=["integration-tokens"])
@@ -59,5 +57,5 @@ def revoke_integration_token(
     row = crud.get_active_integration_token(db, token_id, current_user.id)
     if row is None:
         raise HTTPException(status_code=404, detail="Token não encontrado")
-    row.revoked_at = datetime.now()
+    row.revoked_at = utc_now()
     db.commit()

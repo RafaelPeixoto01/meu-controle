@@ -83,6 +83,7 @@ def test_create_shows_the_token_once_and_stores_only_the_hash(as_user, users, se
     assert body["name"] == "Lumi da mesa"
     assert body["prefix"] == token[3:11]
     assert body["last_used_at"] is None
+    assert body["created_at"].endswith(("Z", "+00:00"))  # UTC com fuso: o navegador converte
     [row] = stored_tokens(session_factory)
     assert row.token_hash == hashlib.sha256(token.encode()).hexdigest()
     assert row.user_id == "user-a"

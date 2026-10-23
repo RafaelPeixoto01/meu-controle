@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import crud
+from app.models import utc_now
 
 # Configuração
 SECRET_KEY = os.environ.get("SECRET_KEY")
@@ -134,7 +135,7 @@ def get_integration_user(
     if user is None:
         raise invalid
 
-    now = datetime.now()
+    now = utc_now()
     if token.last_used_at is None or now - token.last_used_at >= LAST_USED_EVERY:
         token.last_used_at = now
         db.commit()

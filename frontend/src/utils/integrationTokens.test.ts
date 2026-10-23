@@ -7,15 +7,18 @@ import {
   maskedToken,
 } from "./integrationTokens";
 
+const SAO_PAULO = "America/Sao_Paulo";
+
 describe("tokens de integracao do Lumi (CR-058)", () => {
-  it("formata o datetime do backend sem passar por Date (sem deslocar o fuso)", () => {
-    expect(formatDateTimeBR("2026-10-23T14:05:12.123456")).toBe("23/10/2026 14:05");
-    expect(formatDateTimeBR("2026-01-02T00:00:00")).toBe("02/01/2026 00:00");
+  it("converte o UTC do backend para o fuso de quem ve (Railway roda em UTC)", () => {
+    expect(formatDateTimeBR("2026-10-23T16:25:12.123456Z", SAO_PAULO)).toBe("23/10/2026 13:25");
+    expect(formatDateTimeBR("2026-10-23T16:25:12+00:00", SAO_PAULO)).toBe("23/10/2026 13:25");
+    expect(formatDateTimeBR("2026-01-02T02:00:00Z", SAO_PAULO)).toBe("01/01/2026 23:00");
   });
 
   it("ultimo uso ou nunca usado", () => {
     expect(lastUsedLabel(null)).toBe("nunca usado");
-    expect(lastUsedLabel("2026-10-23T09:30:00")).toBe("último uso em 23/10/2026 09:30");
+    expect(lastUsedLabel("2026-10-23T12:30:00Z", SAO_PAULO)).toBe("último uso em 23/10/2026 09:30");
   });
 
   it("a lista mostra so o comeco do token", () => {

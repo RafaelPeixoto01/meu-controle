@@ -5,7 +5,7 @@ from datetime import date
 
 from app.database import get_db
 from app.auth import get_current_user
-from app.models import DailyExpense, User
+from app.models import User
 from app.schemas import (
     DailyExpenseCreate,
     DailyExpenseUpdate,
@@ -54,32 +54,11 @@ def create_daily_expense(
     current_user: User = Depends(get_current_user),
 ):
     """Criar novo gasto diario no mes especificado."""
-    # Validar subcategoria
-    categoria = get_category_for_subcategory(data.subcategoria)
-    if categoria is None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Subcategoria inválida: {data.subcategoria}",
-        )
-
-    # Validar metodo de pagamento
-    if not is_valid_payment_method(data.metodo_pagamento):
-        raise HTTPException(
-            status_code=422,
-            detail=f"Método de pagamento inválido: {data.metodo_pagamento}",
-        )
-
-    mes_referencia = date(year, month, 1)
-    daily_expense = DailyExpense(
-        user_id=current_user.id,
-        mes_referencia=mes_referencia,
-        descricao=data.descricao,
-        valor=data.valor,
-        data=data.data,
-        categoria=categoria,
-        subcategoria=data.subcategoria,
-        metodo_pagamento=data.metodo_pagamento,
-    )
+    # Validacao compartilhada com a API de integracao (CR-058)
+    try:
+        daily_expense = services.new_daily_expense(current_user.id, data, date(year, month, 1))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return crud.create_daily_expense(db, daily_expense)
 
 

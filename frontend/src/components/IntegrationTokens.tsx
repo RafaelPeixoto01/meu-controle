@@ -19,7 +19,7 @@ export default function IntegrationTokens() {
   const { tokens, isLoading, isError, create, isCreating, revoke, isRevoking } =
     useIntegrationTokens();
   const [name, setName] = useState("Lumi");
-  const [newToken, setNewToken] = useState<string | null>(null);
+  const [newToken, setNewToken] = useState<{ id: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [toRevoke, setToRevoke] = useState<IntegrationToken | null>(null);
@@ -32,7 +32,7 @@ export default function IntegrationTokens() {
     setCopied(false);
     try {
       const created = await create(name.trim() || "Lumi");
-      setNewToken(created.token);
+      setNewToken({ id: created.id, token: created.token });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao gerar o token");
     }
@@ -41,7 +41,7 @@ export default function IntegrationTokens() {
   async function handleCopy() {
     if (!newToken) return;
     try {
-      await navigator.clipboard.writeText(newToken);
+      await navigator.clipboard.writeText(newToken.token);
       setCopied(true);
     } catch {
       setError("Não deu para copiar. Selecione o token e copie manualmente.");
@@ -49,14 +49,15 @@ export default function IntegrationTokens() {
   }
 
   async function handleRevoke() {
-    if (!toRevoke) return;
+    const target = toRevoke;
+    if (!target) return;
+    setToRevoke(null); // fecha o dialogo antes da chamada: um segundo clique nao manda outro DELETE
     setError("");
+    if (newToken?.id === target.id) setNewToken(null); // nao deixar copiar um token revogado
     try {
-      await revoke(toRevoke.id);
+      await revoke(target.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao revogar o token");
-    } finally {
-      setToRevoke(null);
     }
   }
 
@@ -80,7 +81,7 @@ export default function IntegrationTokens() {
             Guarde agora: este token não aparece de novo.
           </p>
           <code className="block break-all text-sm bg-white border border-amber-200 rounded-lg p-2 mb-3 select-all">
-            {newToken}
+            {newToken.token}
           </code>
           <div className="flex gap-3">
             <button

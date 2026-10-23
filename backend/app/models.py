@@ -1,6 +1,6 @@
 import uuid
 import enum
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import String, Date, Boolean, Integer, Numeric, Text, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -151,8 +151,14 @@ class RefreshToken(Base):
     user = relationship("User", back_populates="refresh_tokens")
 
 
+def utc_now() -> datetime:
+    """Agora em UTC, sem fuso (como o SQLite guarda): os horarios dos tokens de integracao
+    independem do fuso do servidor e vao para a API com +00:00 (CR-058)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class IntegrationToken(Base):
-    """CR-058: token de integracao do Lumi (RF-22, RN-054). So o hash e gravado."""
+    """CR-058: token de integracao do Lumi (RF-22, RN-054). So o hash e gravado; horarios em UTC."""
     __tablename__ = "integration_tokens"
 
     id: Mapped[str] = mapped_column(
@@ -164,7 +170,7 @@ class IntegrationToken(Base):
     name: Mapped[str] = mapped_column(String(40), nullable=False)
     prefix: Mapped[str] = mapped_column(String(8), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
     last_used_at: Mapped[datetime | None] = mapped_column(nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
 

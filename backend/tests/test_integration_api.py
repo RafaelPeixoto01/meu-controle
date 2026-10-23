@@ -15,7 +15,7 @@ from app.auth import create_access_token, generate_integration_token
 from app.database import Base, get_db
 from app.main import app
 from app.models import DailyExpense, Expense, ExpenseStatus, Income, IntegrationToken, User
-from app.rate_limit import limiter
+from app.rate_limit import limiter, reset_integration_limits
 from app.utils import add_months
 
 TODAY = date.today()
@@ -52,6 +52,7 @@ def users(db):
 @pytest.fixture
 def client(session_factory, users):
     limiter.reset()
+    reset_integration_limits()
 
     def override_get_db():
         session = session_factory()
@@ -169,14 +170,35 @@ def test_last_used_at_is_recorded_at_most_once_a_minute(client, db, users):
     assert row.last_used_at > first - timedelta(minutes=2)
 
 
-def test_rate_limit_of_60_calls_a_minute_per_token(client, db, users):
+def test_rate_limit_of_60_calls_a_minute_per_token_across_all_routes(client, db, users):
     token = issue_token(db, "user-a")
     other = issue_token(db, "user-a")
-    for _ in range(60):
-        assert client.get("/api/integration/v1/categories", headers=bearer(token)).status_code == 200
-    assert client.get("/api/integration/v1/categories", headers=bearer(token)).status_code == 429
-    # o limite e por token, nao por IP
+    summary = "/api/integration/v1/daily-expenses/summary"
+    period = {"de": THIS_MONTH.isoformat(), "ate": THIS_MONTH.isoformat()}
+    for i in range(60):  # metade em cada rota: o limite e um so para o router
+        if i % 2:
+            assert client.get(summary, headers=bearer(token), params=period).status_code == 200
+        else:
+            assert client.get("/api/integration/v1/categories", headers=bearer(token)).status_code == 200
+    month = f"/api/integration/v1/months/{THIS_MONTH.year}/{THIS_MONTH.month}"
+    limited = client.get(month, headers=bearer(token))
+    assert limited.status_code == 429
+    assert limited.json() == {"detail": "Muitas requisições: tente de novo em instantes"}
+    # outra grafia do esquema nao abre um contador novo para o mesmo token
+    lower = client.get(month, headers={"Authorization": f"bearer {token}"})
+    assert lower.status_code == 429
+    # outro token tem o seu contador
     assert client.get("/api/integration/v1/categories", headers=bearer(other)).status_code == 200
+
+
+def test_rate_limit_runs_before_auth_and_per_ip(client, db, users):
+    """Tokens inventados nunca contam por token; o limite por IP (120/min) os segura."""
+    statuses = [
+        client.get("/api/integration/v1/categories", headers=bearer(f"mc_inventado-{i}")).status_code
+        for i in range(121)
+    ]
+    assert statuses[:120] == [401] * 120
+    assert statuses[120] == 429
 
 
 # ---------- rotas ----------
@@ -214,7 +236,15 @@ def test_create_daily_expense_in_the_month_of_its_date(client, db, users):
 
 @pytest.mark.parametrize(
     "change",
-    [{"subcategoria": "Padoca"}, {"metodo_pagamento": "Cheque"}, {"valor": 0}, {"descricao": ""}],
+    [
+        {"subcategoria": "Padoca"},
+        {"metodo_pagamento": "Cheque"},
+        {"valor": 0},
+        {"descricao": ""},
+        {"valor": 50_000.01},  # valor mal ouvido
+        {"data": (TODAY + timedelta(days=2)).isoformat()},  # data futura
+        {"data": (TODAY - timedelta(days=367)).isoformat()},  # data antiga demais
+    ],
 )
 def test_create_daily_expense_validation(client, db, users, change):
     payload = {
@@ -262,6 +292,18 @@ def test_period_summary_limits(client, db, users):
     assert client.get(url, headers=bearer(token), params=max_period).status_code == 200
 
 
+def test_period_summary_refuses_unknown_filters_and_ignores_empty_ones(client, db, users):
+    token = issue_token(db, "user-a")
+    add_daily(db, "user-a", THIS_MONTH, 100.0, "Supermercado", "Alimentação")
+    url = "/api/integration/v1/daily-expenses/summary"
+    period = {"de": THIS_MONTH.isoformat(), "ate": THIS_MONTH.isoformat()}
+    for bad in ({"categoria": "Alimentacao"}, {"subcategoria": "Mercado"}):
+        response = client.get(url, headers=bearer(token), params=period | bad)
+        assert response.status_code == 422  # um total zero enganaria o Lumi
+    empty = client.get(url, headers=bearer(token), params=period | {"categoria": "", "subcategoria": ""})
+    assert empty.status_code == 200 and empty.json()["total"] == 100.0
+
+
 def test_month_summary_has_both_free_balances(client, db, users):
     token = issue_token(db, "user-a")
     add_expense(db, "user-a", "Aluguel", 1500.0)
@@ -302,6 +344,7 @@ def test_months_beyond_the_next_are_refused(client, db, users):
         assert client.get(near, headers=bearer(token)).status_code == 200
     assert client.get("/api/integration/v1/months/2026/13", headers=bearer(token)).status_code == 422
     assert client.get("/api/integration/v1/expenses/1999/1", headers=bearer(token)).status_code == 422
+    assert client.get("/api/integration/v1/months/10000/1", headers=bearer(token)).status_code == 422
 
 
 def test_expenses_of_the_month_only_from_the_owner(client, db, users):
@@ -341,3 +384,44 @@ def test_patch_changes_only_the_status_of_own_expenses(client, db, users):
     db.expire_all()
     assert db.get(Expense, alheia).status == ExpenseStatus.PENDENTE.value
     assert float(db.get(Expense, luz).valor) == 230.0
+
+
+def test_unpaying_an_overdue_expense_answers_atrasado(client, db, users):
+    """Pendente com vencimento passado volta como Atrasado (RF-05): o que o app vai mostrar."""
+    token = issue_token(db, "user-a")
+    vencida = Expense(
+        user_id="user-a",
+        mes_referencia=THIS_MONTH,
+        nome="Condomínio",
+        valor=600.0,
+        vencimento=TODAY - timedelta(days=1),
+        recorrente=True,
+        status=ExpenseStatus.PAGO.value,
+    )
+    db.add(vencida)
+    db.commit()
+
+    response = client.patch(
+        f"/api/integration/v1/expenses/{vencida.id}", headers=bearer(token), json={"status": "Pendente"}
+    )
+
+    assert response.status_code == 200 and response.json()["status"] == "Atrasado"
+
+
+def test_app_daily_expense_route_keeps_its_validation(client, db, users):
+    """A rota do app usa a mesma validacao compartilhada com a integracao."""
+    jwt = {"Authorization": f"Bearer {create_access_token({'sub': 'user-a', 'email': 'a@example.com'})}"}
+    url = f"/api/daily-expenses/{THIS_MONTH.year}/{THIS_MONTH.month}"
+    payload = {
+        "descricao": "Café",
+        "valor": 8.5,
+        "data": THIS_MONTH.isoformat(),
+        "subcategoria": "Café",
+        "metodo_pagamento": "Pix",
+    }
+    created = client.post(url, headers=jwt, json=payload)
+    assert created.status_code == 201 and created.json()["categoria"] == "Alimentação"
+    bad = client.post(url, headers=jwt, json=payload | {"subcategoria": "Cafezinho"})
+    assert bad.status_code == 422 and bad.json() == {"detail": "Subcategoria inválida: Cafezinho"}
+    bad = client.post(url, headers=jwt, json=payload | {"metodo_pagamento": "Cheque"})
+    assert bad.json() == {"detail": "Método de pagamento inválido: Cheque"}
