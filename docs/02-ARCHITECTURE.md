@@ -1,9 +1,9 @@
 # Arquitetura — Meu Controle
 
-**Versao:** 3.5
-**Data:** 2026-09-25
-**PRD Ref:** 01-PRD v3.7
-**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao), CR-055 (Deteccao de Planejado Ja Pago), CR-056 (Historico e Desfazer da Importacao — ADR-022), CR-057 (Reconciliacao de Total da Importacao)
+**Versao:** 3.6
+**Data:** 2026-10-23
+**PRD Ref:** 01-PRD v3.8
+**CR Ref:** CR-002 (Multi-usuario e Autenticacao), CR-005 (Gastos Diarios), CR-010 (Hardening de Seguranca), CR-016 (Categorizacao de Despesas), CR-019 (Dashboard Visual), CR-026 (Score de Saude Financeira), CR-033 (Alertas e Notificacoes Inteligentes), CR-046/CR-047 (Importacao de Extratos — F07, ADR-018), CR-052 (Upload Assincrono da Importacao — ADR-021), CR-054 (Memoria de Categorizacao da Importacao), CR-055 (Deteccao de Planejado Ja Pago), CR-056 (Historico e Desfazer da Importacao — ADR-022), CR-057 (Reconciliacao de Total da Importacao), CR-058 (Token e API de Integracao para o Lumi — ADR-023)
 
 ---
 
@@ -152,7 +152,9 @@ Personal Finance/
 │           ├── daily_expenses.py            # CR-005: CRUD gastos diarios (5 endpoints)
 │           ├── dashboard.py                # CR-019: endpoints de agregacao para dashboard visual
 │           ├── alerts.py                  # CR-033: GET /api/alerts, PATCH seen/dismiss, GET/PUT config
-│           └── imports.py                 # CR-046: upload/pending/get/confirm/delete; CR-056: historico, undo-preview, undo
+│           ├── imports.py                 # CR-046: upload/pending/get/confirm/delete; CR-056: historico, undo-preview, undo
+│           ├── integration_tokens.py      # CR-058: gerar, listar e revogar tokens de integracao (JWT)
+│           └── integration.py             # CR-058: API de integracao para o Lumi (/api/integration/v1, so com token de integracao)
 ├── frontend/
 │   ├── package.json
 │   ├── tsconfig.json
@@ -222,6 +224,7 @@ erDiagram
     USER ||--o| CONFIGURACAO_ALERTAS : "has one"
     USER ||--o{ IMPORT_BATCH : "has many"
     IMPORT_BATCH ||--o{ IMPORT_TRANSACTION : "has many"
+    USER ||--o{ INTEGRATION_TOKEN : "has many"
 
     USER {
         string id PK
@@ -357,6 +360,16 @@ erDiagram
         string expense_id_atualizado
         datetime created_at
         datetime updated_at
+    }
+    INTEGRATION_TOKEN {
+        string id PK
+        string user_id FK
+        string name
+        string prefix
+        string token_hash UK
+        datetime created_at
+        datetime last_used_at
+        datetime revoked_at
     }
 ```
 
@@ -598,6 +611,23 @@ Diario do que cada confirm gravou — fonte da verdade do desfazer (RN-051, ADR-
 
 > **Index:** `ix_import_effects_batch (batch_id)`. Um efeito por lancamento por lote: tocado duas vezes no mesmo confirm, vale o primeiro registro (o que guarda o estado de antes do lote).
 
+#### IntegrationToken (`integration_tokens`) — CR-058
+
+Credencial do usuario para o Lumi acessar a API de integracao (RF-22, RN-054, ADR-023).
+
+| Campo        | Tipo        | Restricoes                          | Descricao |
+|--------------|-------------|-------------------------------------|-----------|
+| id           | String(36)  | PK, UUID                            | Identificador unico |
+| user_id      | String(36)  | NOT NULL, FK→users.id, CASCADE      | Dono do token (isolamento) |
+| name         | String(40)  | NOT NULL                            | Nome dado pelo usuario (padrao "Lumi") |
+| prefix       | String(8)   | NOT NULL                            | 8 primeiros caracteres depois de `mc_`, para identificar na lista |
+| token_hash   | String(64)  | NOT NULL, UNIQUE                    | SHA-256 do token; o token em si nunca e gravado |
+| created_at   | DateTime    | NOT NULL, default now()             | Criacao |
+| last_used_at | DateTime    | Nullable                            | Ultimo uso na API de integracao |
+| revoked_at   | DateTime    | Nullable                            | Revogacao; revogado nao vale mais |
+
+> **Index:** `ix_integration_tokens_user_id (user_id)`. Ate 5 ativos (`revoked_at` nulo) por usuario.
+
 ### Relacionamentos
 
 ```
@@ -610,6 +640,7 @@ Usuario (1) ---- possui ----> AlertaEstado (N)
 Usuario (1) ---- possui ----> ConfiguracaoAlertas (1)
 Usuario (1) ---- possui ----> ImportBatch (N)
 Usuario (1) ---- possui ----> ImportCategoryRule (N)
+Usuario (1) ---- possui ----> IntegrationToken (N)   (CR-058)
 ImportBatch (1) ---- possui ----> ImportTransaction (N)
 ImportBatch (1) ---- registra ---> ImportEffect (N)   (CR-056; entidade_id aponta para GastoDiario ou Despesa, sem FK)
 Despesa (N) ---- pertence a ----> Mes de referencia (1)
@@ -621,7 +652,7 @@ AlertaEstado (N) ---- pertence a ----> Mes de referencia (1)
 
 > **Isolamento de dados (CR-002):** Cada usuario so pode ver, criar, editar e deletar seus proprios dados. Todas as queries CRUD filtram por `user_id`. Operacoes de update/delete verificam ownership antes de executar.
 
-> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios, score historico, alertas, configuracoes de alertas, lotes/transacoes de importacao e refresh tokens sao automaticamente removidos (`ON DELETE CASCADE`).
+> **Cascade delete:** Se um usuario for deletado, todas suas despesas, receitas, gastos diarios, score historico, alertas, configuracoes de alertas, lotes/transacoes de importacao, refresh tokens e tokens de integracao sao automaticamente removidos (`ON DELETE CASCADE`).
 
 ---
 
@@ -671,6 +702,7 @@ AlertaEstado (N) ---- pertence a ----> Mes de referencia (1)
 - **Armazenamento frontend (CR-010):** Access token em `localStorage` (incluso automaticamente via wrapper `request()` em `api.ts`). Refresh token em HttpOnly cookie — inacessivel via JavaScript, enviado automaticamente pelo browser nas chamadas a `/api/auth/refresh` e `/api/auth/logout`.
 - **Security headers (CR-010):** `SecurityHeadersMiddleware` adiciona `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` em todas as respostas.
 - **CORS (CR-010):** Headers restritos a `["Authorization", "Content-Type"]`. Origins configuravel via env var `ALLOWED_ORIGINS` (CSV, default `http://localhost:5173`).
+- **Token de integracao (CR-058, ADR-023):** `mc_` + `secrets.token_urlsafe(32)`, gravado so como SHA-256. `get_integration_user` (em `auth.py`) so aceita esse formato, nas rotas `/api/integration/v1`; o JWT do login e recusado ali, e o token de integracao nao passa no `get_current_user` (nao e um JWT). Limite de 60/min por token (slowapi, chave = hash do token).
 
 ### Estilo de Codigo
 
@@ -985,6 +1017,17 @@ Fase 1 nao inclui testes automatizados. Verificacao manual conforme checklist de
   - `entidade_id` sem FK: o diario precisa sobreviver ao usuario apagar o lancamento.
   - Regras aprendidas (CR-054) ficam fora do diario — o undo nao as reverte.
 
+### ADR-023: Token de integracao com escopo proprio para o Lumi, em vez de JWT de longa duracao (CR-058)
+
+- **Status:** Aceito
+- **Contexto:** O Lumi (companion de voz do autor, projeto ai-companion-esp32) precisa lancar e consultar gastos sem abrir o app. A API so aceita o JWT do login (15 min) com refresh em cookie HttpOnly — inviavel para um servidor sem guardar a senha, e quem entra pelo Google nem tem senha.
+- **Decisao:** Token de integracao por usuario, gerado no Perfil, mostrado uma vez e guardado so como hash, revogavel. Ele so abre uma API de integracao **propria e versionada** (`/api/integration/v1`) com as seis operacoes de que o Lumi precisa; as rotas do app continuam so com JWT. Decisao do autor em 2026-10-23, junto com o CR-014 do Lumi.
+- **Alternativas descartadas:** JWT de longa duracao assinado com a `SECRET_KEY` (nao revogavel sem lista de bloqueio; abriria todas as rotas); o Lumi fazer login com a senha (guardaria a senha e nao funciona para conta so Google); aceitar o token nas rotas atuais com escopo por rota (espalharia a checagem de escopo pelo app e acoplaria o Lumi as rotas do frontend).
+- **Consequencias:**
+  - Um contrato estavel para o Lumi, separado das rotas que o frontend muda; mudancas incompativeis viram `/v2`.
+  - O token nao expira sozinho (uso continuo); a revogacao e manual, e `last_used_at` ajuda a perceber uso estranho.
+  - Limite de chamadas por token, nao por IP: o Lumi roda numa unica origem (Railway).
+
 ---
 
 ## 9. Deploy e Infraestrutura
@@ -1087,4 +1130,4 @@ npm outdated                       # Lista pacotes com versao mais nova disponiv
 
 ---
 
-*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Atualizado para v2.8 em 2026-03-16 (CR-026: Score de Saude Financeira — ScoreHistorico model, ER diagram, health_score.py, routers/score.py). Atualizado para v2.9 em 2026-07-08 (CR-035: requirements-dev.txt na politica de pinning; CI GitHub Actions documentado no Deploy Guide secao 9). Atualizado para v2.10 em 2026-07-09 (CR-039: Vitest+jsdom e ESLint na stack; recharts corrigido para 3.x). Atualizado para v2.11 em 2026-07-15 (CR-041: pip-audit na auditoria via CI; backend/.env.example como template de env vars; .claude/ versionado). Atualizado para v2.12 em 2026-07-15 (CR-042: fastapi 0.139/starlette 1.3, python-jose 3.5, python-dotenv 1.2, pytest 9 — correcao de 15 advisories; ecdsa registrado como risco aceito). Atualizado para v3.4 em 2026-09-25 (CR-056: historico e desfazer da importacao — ImportEffect/`import_effects`, `confirmado_em`/`revertido_em` em ImportBatch, status `revertido`/`revertida`, `import_undo.py`, ADR-022). Atualizado para v3.5 em 2026-09-25 (CR-057: `total_debitos_documento`/`total_debitos_extraido` em ImportBatch e `natureza` em ImportTransaction — reconciliacao de total, migration 014). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005, CR-010, CR-026, CR-035, CR-039, CR-041, CR-042, CR-056 e CR-057.*
+*Documento criado em 2026-02-08. Atualizado para v2.0 em 2026-02-09 (CR-002: Multi-usuario e Autenticacao). Atualizado para v2.1 em 2026-02-11 (Adicionada secao Deploy e Infraestrutura). Atualizado para v2.2 em 2026-02-11 (P2-2: Secao Gestao de Dependencias). Atualizado para v2.3 em 2026-02-11 (CR-003: Design System no ADR-009). Atualizado para v2.4 em 2026-02-17 (CR-005: Gastos Diarios — DailyExpense model, ER diagram, folder structure, novos arquivos). Atualizado para v2.5 em 2026-02-26 (CR-010: Hardening de Seguranca — SECRET_KEY obrigatorio, HttpOnly cookie para refresh token, CORS restrito, SecurityHeadersMiddleware, ADR-015 revisado). Atualizado para v2.8 em 2026-03-16 (CR-026: Score de Saude Financeira — ScoreHistorico model, ER diagram, health_score.py, routers/score.py). Atualizado para v2.9 em 2026-07-08 (CR-035: requirements-dev.txt na politica de pinning; CI GitHub Actions documentado no Deploy Guide secao 9). Atualizado para v2.10 em 2026-07-09 (CR-039: Vitest+jsdom e ESLint na stack; recharts corrigido para 3.x). Atualizado para v2.11 em 2026-07-15 (CR-041: pip-audit na auditoria via CI; backend/.env.example como template de env vars; .claude/ versionado). Atualizado para v2.12 em 2026-07-15 (CR-042: fastapi 0.139/starlette 1.3, python-jose 3.5, python-dotenv 1.2, pytest 9 — correcao de 15 advisories; ecdsa registrado como risco aceito). Atualizado para v3.4 em 2026-09-25 (CR-056: historico e desfazer da importacao — ImportEffect/`import_effects`, `confirmado_em`/`revertido_em` em ImportBatch, status `revertido`/`revertida`, `import_undo.py`, ADR-022). Atualizado para v3.5 em 2026-09-25 (CR-057: `total_debitos_documento`/`total_debitos_extraido` em ImportBatch e `natureza` em ImportTransaction — reconciliacao de total, migration 014). Atualizado para v3.6 em 2026-10-23 (CR-058: IntegrationToken/`integration_tokens`, migration 015, `routers/integration_tokens.py` e `routers/integration.py`, `get_integration_user`, ADR-023). Baseado em SPEC.md v1.0, PRD_MeuControle.md v1.0, CR-002, CR-003, CR-005, CR-010, CR-026, CR-035, CR-039, CR-041, CR-042, CR-056, CR-057 e CR-058.*

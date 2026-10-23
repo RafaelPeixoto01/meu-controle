@@ -2,7 +2,7 @@
 
 **Versão:** 1.0
 **Data:** 2026-10-23
-**Status:** Rascunho
+**Status:** Em Implementação
 **Autor:** Rafael (via Claude)
 **Prioridade:** Média
 
@@ -87,9 +87,11 @@ Prefixo `/api/integration/v1`. O JWT do login é recusado (401), e o token de in
 | `GET` | `/categories` | Lista para a IA escolher a subcategoria | `{categorias: {categoria: [subcategorias]}, metodos_pagamento: [...]}` (o mesmo de `/api/daily-expenses/categories`) |
 | `POST` | `/daily-expenses` | "Anota 45 de padaria no Pix" | Body `DailyExpenseCreate` (`descricao`, `valor`, `data`, `subcategoria`, `metodo_pagamento`); `mes_referencia` = mês de `data`; as mesmas validações da rota atual. 201 com o gasto |
 | `GET` | `/daily-expenses/summary?de=AAAA-MM-DD&ate=AAAA-MM-DD[&categoria=][&subcategoria=]` | "Quanto gastei com mercado este mês?" | `{de, ate, total, quantidade, por_categoria: {..}, por_subcategoria: {..}}`; até 93 dias por consulta (422 acima disso) |
-| `GET` | `/months/{year}/{month}` | "Como estou este mês?" | `{mes_referencia, total_receitas, total_despesas, saldo_livre, total_pago, total_pendente, total_atrasado, total_gastos_diarios}`, com as definições de hoje (saldo livre = receitas − despesas planejadas) |
+| `GET` | `/months/{year}/{month}` | "Como estou este mês?" | `{mes_referencia, total_receitas, total_despesas, total_gastos_diarios, saldo_livre, saldo_apos_diarios, total_pago, total_pendente, total_atrasado}`: o saldo livre da Visão Mensal (receitas − planejadas) e o do Dashboard (− gastos diários) |
 | `GET` | `/expenses/{year}/{month}` | "A conta de luz já foi paga?" | `[{id, nome, valor, vencimento, status, categoria, subcategoria, parcela_atual, parcela_total}]`: as despesas planejadas do mês, com a transição de mês e o status automático de sempre (RF-05) |
 | `PATCH` | `/expenses/{id}` | "Marca a internet como paga" | Body `{status: "Pago" \| "Pendente"}`: só o status. Dono conferido (404 se não é do usuário) |
+
+Os meses de `/months` e `/expenses` vão até o mês seguinte ao atual (422 depois disso): as duas rotas geram o mês vazio, como abrir o mês no app (RF-06), e o limite evita gerar meses distantes. Detalhes em `docs/specs/11-integracao-lumi.md`.
 
 Fora da v1: apagar ou editar gasto diário, receitas, importação, análise de IA, parcelas, score.
 
@@ -234,3 +236,4 @@ CREATE INDEX ix_integration_tokens_user_id ON integration_tokens (user_id);
 | Data | Autor | Descrição |
 |---|---|---|
 | 2026-10-23 | Rafael (via Claude) | CR criado com as decisões do dono para a integração com o Lumi (CR-014 do Lumi) |
+| 2026-10-23 | Rafael (via Claude) | CR aprovado pelo dono; implementação iniciada. CR-T-01: PRD 3.8, Arquitetura 3.6 (ADR-023), specs/11-integracao-lumi.md, índice 3.5, Deploy Guide (migration 015). O resumo do mês ganhou `saldo_apos_diarios` e o limite de meses |

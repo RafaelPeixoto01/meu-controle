@@ -163,6 +163,8 @@ Todos os itens da secao 3.1, mais:
 
 > **Estado atual:** a migration `010` (CR-049) ja foi aplicada em producao antecipadamente, fora do fluxo de deploy. O `alembic upgrade head` do proximo deploy sera no-op para ela. Colunas nullable, sem impacto no codigo em execucao.
 
+> **Migration `015` (CR-058):** cria `integration_tokens` (tokens de integração do Lumi, só o hash). Não destrutiva e sem relação com as tabelas existentes, além da FK para `users`. O downgrade (`alembic downgrade 014`) apaga os tokens, e o Lumi perde o acesso até um token novo; nenhum dado financeiro é afetado. Nenhuma variável de ambiente nova.
+
 > **Migration `014` (CR-057):** adiciona `total_debitos_documento`/`total_debitos_extraido` (Numeric(12,2)) em `import_batches` e `natureza` (String(10)) em `import_transactions`, todas nullable. Nao destrutiva e compativel com o codigo anterior; sem backfill (lote antigo fica sem conferencia). O downgrade (`alembic downgrade 013`) so remove os campos da conferencia — nenhum dado financeiro e afetado.
 >
 > **Migration `013` (CR-056):** cria `import_effects` (diario do que cada confirm gravou) e adiciona `confirmado_em`/`revertido_em` (nullable) em `import_batches`. Nao destrutiva e compativel com o codigo anterior. Lotes confirmados **antes** do deploy ficam com `confirmado_em` nulo e nao podem ser desfeitos — nao ha backfill possivel, porque o que eles gravaram nunca foi registrado. O downgrade (`alembic downgrade 012`) descarta o diario e as duas colunas: os lotes confirmados ate ali deixam de ser desfaziveis, e nenhum dado financeiro e afetado. Lotes `revertido`/transacoes `revertida` continuam na tabela e sao inofensivos ao codigo antigo (`/pending` filtra por status; a dedup so conta `confirmada`).
