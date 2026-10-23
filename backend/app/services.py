@@ -795,3 +795,51 @@ def get_daily_expenses_monthly_summary(db: Session, mes_referencia: date, user_i
         "total_mes": round(total_mes, 2),
         "dias": dias,
     }
+
+
+# ========== Integracao com o Lumi (CR-058) ==========
+
+def get_daily_expenses_period_summary(
+    db: Session,
+    user_id: str,
+    de: date,
+    ate: date,
+    categoria: str | None = None,
+    subcategoria: str | None = None,
+) -> dict:
+    """Total, quantidade e totais por categoria e subcategoria dos gastos diarios entre `de` e
+    `ate` (inclusive), pela data do gasto."""
+    gastos = crud.get_daily_expenses_between(db, user_id, de, ate, categoria, subcategoria)
+    por_categoria: dict[str, float] = {}
+    por_subcategoria: dict[str, float] = {}
+    for gasto in gastos:
+        valor = float(gasto.valor)
+        por_categoria[gasto.categoria] = por_categoria.get(gasto.categoria, 0.0) + valor
+        por_subcategoria[gasto.subcategoria] = por_subcategoria.get(gasto.subcategoria, 0.0) + valor
+    return {
+        "de": de,
+        "ate": ate,
+        "total": round(sum(float(g.valor) for g in gastos), 2),
+        "quantidade": len(gastos),
+        "por_categoria": {k: round(v, 2) for k, v in por_categoria.items()},
+        "por_subcategoria": {k: round(v, 2) for k, v in por_subcategoria.items()},
+    }
+
+
+def get_integration_month(db: Session, mes_referencia: date, user_id: str) -> dict:
+    """Resumo do mes para o Lumi: os totais da Visao Mensal (gera o mes e atualiza o status, como
+    abrir o mes no app) mais os gastos diarios e o saldo do Dashboard."""
+    monthly = get_monthly_summary(db, mes_referencia, user_id)
+    gastos_diarios = crud.get_daily_expenses_by_month(db, mes_referencia, user_id)
+    total_gastos_diarios = round(sum(float(g.valor) for g in gastos_diarios), 2)
+    return {
+        "mes_referencia": mes_referencia,
+        "total_receitas": monthly["total_receitas"],
+        "total_despesas": monthly["total_despesas"],
+        "total_gastos_diarios": total_gastos_diarios,
+        "saldo_livre": monthly["saldo_livre"],
+        "saldo_apos_diarios": round(monthly["saldo_livre"] - total_gastos_diarios, 2),
+        "total_pago": monthly["total_pago"],
+        "total_pendente": monthly["total_pendente"],
+        "total_atrasado": monthly["total_atrasado"],
+    }

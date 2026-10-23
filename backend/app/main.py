@@ -14,7 +14,7 @@ from slowapi import _rate_limit_exceeded_handler  # CR-044
 from slowapi.errors import RateLimitExceeded  # CR-044
 
 from app.rate_limit import limiter  # CR-044
-from app.routers import expenses, incomes, months, auth, users, daily_expenses, dashboard, score, ai_analysis, alerts, imports  # CR-002: auth, users; CR-005: daily_expenses; CR-019: dashboard; CR-026: score; CR-032: ai_analysis; CR-033: alerts; CR-046: imports
+from app.routers import expenses, incomes, months, auth, users, daily_expenses, dashboard, score, ai_analysis, alerts, imports, integration_tokens, integration  # CR-002: auth, users; CR-005: daily_expenses; CR-019: dashboard; CR-026: score; CR-032: ai_analysis; CR-033: alerts; CR-046: imports; CR-058: integration_tokens, integration
 
 _IS_PRODUCTION = os.environ.get("ENVIRONMENT", "development").lower() != "development"
 
@@ -95,6 +95,8 @@ app.include_router(score.router)           # CR-026: score de saude financeira
 app.include_router(ai_analysis.router)    # CR-032: analise financeira por IA
 app.include_router(alerts.router)         # CR-033: alertas inteligentes
 app.include_router(imports.router)        # CR-046: importacao de extratos/faturas (F07)
+app.include_router(integration_tokens.router)  # CR-058: tokens de integracao do Lumi (Perfil, JWT)
+app.include_router(integration.router)     # CR-058: API de integracao para o Lumi (token de integracao)
 
 
 @app.get("/api/health")

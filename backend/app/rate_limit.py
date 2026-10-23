@@ -9,7 +9,16 @@ do processo; reseta a cada deploy/restart — aceitavel para anti-brute-force.
 Chave por IP de origem (get_remote_address). Sem default_limits: os limites sao
 aplicados por rota via @limiter.limit(...), nao globalmente.
 """
+import hashlib
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
+
+
+def integration_token_key(request) -> str:
+    """CR-058: limite da API de integracao por token, nao por IP (o Lumi chama de uma origem so).
+    A chave e o hash do cabecalho: o token nunca fica no armazenamento do limitador."""
+    header = request.headers.get("authorization", "")
+    return "integration:" + hashlib.sha256(header.encode()).hexdigest()

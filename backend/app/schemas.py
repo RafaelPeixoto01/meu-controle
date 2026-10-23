@@ -752,3 +752,86 @@ class ImportConfirmResponse(BaseModel):
     planejados_criados: int = 0  # CR-049: parcelas criadas a partir de parcelamentos
     planejados_atualizados: int
     descartadas: int
+
+
+# ========== Integracao com o Lumi (CR-058) ==========
+
+class IntegrationTokenCreate(BaseModel):
+    """Gerar token de integracao no Perfil."""
+    name: str = Field("Lumi", min_length=1, max_length=40)
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Nome do token vazio")
+        return value
+
+
+class IntegrationTokenResponse(BaseModel):
+    """Token na lista do Perfil: nunca o token em si."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    name: str
+    prefix: str
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+
+
+class IntegrationTokenCreated(IntegrationTokenResponse):
+    """Resposta da criacao: a unica vez em que o token aparece."""
+    token: str
+
+
+class IntegrationExpenseStatusUpdate(BaseModel):
+    """PATCH da API de integracao: so o status, para Pago ou Pendente."""
+    model_config = {"extra": "forbid"}
+
+    status: ExpenseStatus
+
+    @field_validator("status")
+    @classmethod
+    def only_paid_or_pending(cls, value: ExpenseStatus) -> ExpenseStatus:
+        if value not in (ExpenseStatus.PAGO, ExpenseStatus.PENDENTE):
+            raise ValueError("Status deve ser Pago ou Pendente")
+        return value
+
+
+class IntegrationExpense(BaseModel):
+    """Despesa planejada na API de integracao."""
+    model_config = {"from_attributes": True}
+
+    id: str
+    nome: str
+    valor: float
+    vencimento: date
+    status: str
+    categoria: Optional[str] = None
+    subcategoria: Optional[str] = None
+    parcela_atual: Optional[int] = None
+    parcela_total: Optional[int] = None
+
+
+class IntegrationPeriodSummary(BaseModel):
+    """Resumo de gastos diarios por periodo (pela data do gasto)."""
+    de: date
+    ate: date
+    total: float
+    quantidade: int
+    por_categoria: dict[str, float]
+    por_subcategoria: dict[str, float]
+
+
+class IntegrationMonth(BaseModel):
+    """Resumo do mes: o saldo livre da Visao Mensal e o do Dashboard."""
+    mes_referencia: date
+    total_receitas: float
+    total_despesas: float
+    total_gastos_diarios: float
+    saldo_livre: float
+    saldo_apos_diarios: float
+    total_pago: float
+    total_pendente: float
+    total_atrasado: float
