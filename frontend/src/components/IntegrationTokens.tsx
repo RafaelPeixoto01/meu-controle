@@ -169,6 +169,7 @@ export default function IntegrationTokens() {
       <ConfirmDialog
         isOpen={toRevoke !== null}
         title="Revogar token"
+        confirmLabel="Revogar"
         message={`O token "${toRevoke?.name ?? ""}" deixa de funcionar na hora, e o Lumi perde o acesso até receber um token novo.`}
         onConfirm={() => void handleRevoke()}
         onCancel={() => setToRevoke(null)}

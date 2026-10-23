@@ -15,6 +15,7 @@ export function useIntegrationTokens() {
   const query = useQuery<IntegrationToken[]>({
     queryKey: ["integration-tokens", user?.id],
     queryFn: fetchIntegrationTokens,
+    staleTime: 0, // "ultimo uso" muda fora da tela (o Lumi): busca de novo ao abrir o Perfil
     enabled: !!user,
   });
 

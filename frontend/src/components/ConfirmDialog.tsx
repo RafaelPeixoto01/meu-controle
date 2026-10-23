@@ -5,6 +5,7 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   checkboxLabel?: string;
+  confirmLabel?: string; // CR-058: padrao "Excluir"
   onConfirm: (isChecked: boolean) => void;
   onCancel: () => void;
 }
@@ -14,6 +15,7 @@ export default function ConfirmDialog({
   title,
   message,
   checkboxLabel,
+  confirmLabel = "Excluir",
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -70,7 +72,7 @@ export default function ConfirmDialog({
               active:scale-[0.98]
               transition-all duration-150"
           >
-            Excluir
+            {confirmLabel}
           </button>
         </div>
       </div>
